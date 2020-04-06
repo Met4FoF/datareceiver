@@ -22,14 +22,13 @@ import time
 from multiprocessing import Queue
 import copy
 import json
-import copy
 
 # for live plotting
 import matplotlib.pyplot as plt
 import matplotlib.animation
 import numpy as np
 
-matplotlib.use('Qt5Agg')
+#matplotlib.use('Qt5Agg')
 
 
 class DataReceiver:
@@ -75,6 +74,7 @@ class DataReceiver:
         #start thread for data processing
         thread = threading.Thread(target=self.run, name="Datareceiver_thread", args=())
         thread.start()
+        print("Data receiver now running wating for Packates on interfaces: "+str(host_ip))
 
     def stop(self):
         print("Stopping DataReceiver")
