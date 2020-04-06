@@ -65,6 +65,7 @@ class DataReceiver:
             print("Unexpected error:", sys.exc_info()[0])
             raise ("Unexpected error:", sys.exc_info()[0])
         self.flags["Networtinited"] = True
+        self.packestlosforsensor={}
         self.AllSensors = {}
         self.ActiveSensors = {}
         self.msgcount = 0
@@ -72,9 +73,9 @@ class DataReceiver:
         self.Datarate = 0
         self._stop_event = threading.Event()
         #start thread for data processing
-        thread = threading.Thread(target=self.run, name="Datareceiver_thread", args=())
-        thread.start()
-        print("Data receiver now running wating for Packates on interfaces: "+str(host_ip))
+        self.thread = threading.Thread(target=self.run, name="Datareceiver_thread", args=())
+        self.thread.start()
+        print("Data receiver now running wating for Packates")
 
     def stop(self):
         print("Stopping DataReceiver")
@@ -119,7 +120,13 @@ class DataReceiver:
                         try:
                             self.AllSensors[SensorID].buffer.put_nowait(message)
                         except:
-                            print("packet lost for sensor ID:" + str(SensorID))
+                            tmp=self.packestlosforsensor[SensorID]=self.packestlosforsensor[SensorID]+1
+                            if tmp==1:
+                                print("!!!! FATAL PERFORMANCE PROBLEMS !!!!")
+                                print("FIRSTTIME packet lost for sensor ID:" + str(SensorID))
+                                print("DROP MESSAGES ARE ONLY PRINTETD EVERY 1000 DROPS FROM NOW ON !!!!!!!! ")
+                            if tmp%1000==0:
+                                print("oh no lost an other  thousand packets :(")
                     else:
                         self.AllSensors[SensorID] = Sensor(SensorID)
                         print(
@@ -128,6 +135,7 @@ class DataReceiver:
                             + "==>dec:"
                             + str(SensorID)
                         )
+                        self.packestlosforsensor[SensorID]=0#initing lost packet counter
                     self.msgcount = self.msgcount + 1
 
                     if self.msgcount % self.params["PacketrateUpdateCount"] == 0:
@@ -359,7 +367,7 @@ class Sensor:
         5: "MAX_SCALE",
     }
     # TODO implement multi therading and callbacks
-    def __init__(self, ID, BufferSize=1e4):
+    def __init__(self, ID, BufferSize=25e5):
         self.Description = SensorDescription(ID, "Name not Set")
         self.buffer = Queue(int(BufferSize))
         self.buffersize = BufferSize
