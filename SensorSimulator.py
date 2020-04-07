@@ -7,11 +7,12 @@ import time
 import numpy as np
 
 class SensorSimulator:
-    def __init__(self,updateratehz=1000,tagetip="127.0.0.1",port=7654,id=0x00000001,resolutionbit=8):
+    def __init__(self,updateratehz=1000,tagetip="127.0.0.1",port=7654,id=0x00000001,resolutionbit=8,paramupdateratehz=0.5):
         self.flags = {"Networtinited": False}
         self.params = {"TargetIp": tagetip,
                        "Port": port,
                        "UpdateRateHz": updateratehz,
+                       "ParamUpdateRateHz":paramupdateratehz,
                        "ID":id,
                        "resolutionbit":resolutionbit}
         self.socket = socket.socket(
@@ -27,15 +28,20 @@ class SensorSimulator:
 
     def run(self):
         firsttime=time.time()
-        DeltaT=1/self.params["UpdateRateHz"]
-        nexttime=firsttime+DeltaT
+        delta_t_data=1/self.params["UpdateRateHz"]
+        next_time_data=firsttime+ delta_t_data
+        delta_t_dscp=1/self.params["ParamUpdateRateHz"]
+        next_time_dscp=firsttime+ delta_t_dscp
 
         while not self._stop_event.is_set():
             # TODO improve time scheduling
-            if nexttime-time.time()<0:
+            if next_time_data-time.time()<0:
                 self.sendDataMsg()
+                next_time_data=next_time_data+delta_t_data
+            if next_time_dscp-time.time()<0:
                 self.sendDescription()
-                nexttime=nexttime+DeltaT
+                print("description sent")
+                next_time_dscp=next_time_dscp+delta_t_dscp
 
             #+geting actual time
 
@@ -59,10 +65,10 @@ class SensorSimulator:
         res=2**self.params["resolutionbit"]
         tmp=(nsecs/1e9)*(res-1)-res/2
         qunatizedint=int(tmp)
-        qunatizedfloat=qunatizedint/res
-        protodata.Data_01 = np.sin(qunatizedfloat)
-        protodata.Data_02 = np.cos(qunatizedfloat)
-        protodata.Data_03 = (qunatizedfloat)
+        qunatizedfloat=qunatizedint/res*2
+        protodata.Data_01 = np.sin(qunatizedfloat*np.pi)
+        protodata.Data_02 = np.cos(qunatizedfloat*np.pi)
+        protodata.Data_03 = qunatizedfloat
         protodata.Data_04 = abs(qunatizedfloat)
         binproto = protodata.SerializeToString()
         # add DATA peramble for data Pacet
@@ -71,33 +77,37 @@ class SensorSimulator:
         self.socket.sendto(binarymessage, (self.params["TargetIp"], self.params["Port"]))
         self.packetssend = self.packetssend + 1
         if self.packetssend%self.params["UpdateRateHz"]==0:
-            print(str(self.packetssend)+" Packets send")
+            print(str(self.packetssend)+" Packets sent")
         return
 
     def sendDescription(self):
         res=2**self.params["resolutionbit"]
         max=((res-1)-res/2)/res
         min=((res/2)-res)/res
-        Descripton={
+        Description={
             0: ["Sin","Cos","Sawtooth","Triangle"],#0: "PHYSICAL_QUANTITY",
             1: ["A.U.","A.U.","A.U.","A.U."],# 1: "UNIT",
             3: [res,res,res,res],#3: "RESOLUTION",
-            4: [np.sin(max),np.cos(max),max,abs(max)],
-            5: [np.sin(min),np.cos(min),max,abs(min)]
+            4: [np.sin(max),np.cos(max),max,abs(max)],# 4: "MIN_SCALE",
+            5: [np.sin(min),np.cos(min),max,abs(min)]#'5: "MAX_SCALE",
         }
-        DescriptionTypNames = {
-
-
-            2: "UNCERTAINTY_TYPE",
-            3: "RESOLUTION",
-            4: "MIN_SCALE",
-            5: "MAX_SCALE",
-        }
-        for desckeys in Descripton.keys():
-            ProtoDescription = messages_pb2.DescriptionMessage()
-            ProtoDescription.Sensor_name="Sensor Simulation"
-            ProtoDescription.Description_Type=desckeys
-            binproto = protodescription.SerializeToString()
+        DescriptonType ={0:'str',1:'str',3:'float',4:'float',5:'float'}
+        for desckeys in Description.keys():
+            proto_description = messages_pb2.DescriptionMessage()
+            proto_description.Sensor_name="Sensor Simulation"
+            proto_description.id=self.params["ID"]
+            proto_description.Description_Type=desckeys
+            if DescriptonType[desckeys]=='str':
+                proto_description.str_Data_01 = Description[desckeys][0]
+                proto_description.str_Data_02 = Description[desckeys][1]
+                proto_description.str_Data_03 = Description[desckeys][2]
+                proto_description.str_Data_04 = Description[desckeys][3]
+            if DescriptonType[desckeys]=='float':
+                proto_description.f_Data_01=Description[desckeys][0]
+                proto_description.f_Data_02 = Description[desckeys][1]
+                proto_description.f_Data_03 = Description[desckeys][2]
+                proto_description.f_Data_04 = Description[desckeys][3]
+            binproto = proto_description.SerializeToString()
             binarymessage = b"DSCP"
             binarymessage = binarymessage + _VarintBytes(len(binproto)) + binproto
 
