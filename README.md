@@ -95,6 +95,23 @@ int MPU9250::getDescription(DescriptionMessage * Message,DescriptionMessage_DESC
 ```
 of the [MPU9250 in the driver](https://github.com/Met4FoF/Met4FoF-SmartUpUnit/blob/SSU_V2/Src/MPU9250.cpp)
 
+### Data structure in UDP messages.
+
+Protobuff does not encode the message type into binary format. This must be transmitted differently or must always be the same by the software layout.
+The smartup unit transmits the data type as a 4 byte ASCI encoded keyword at the beginning of each packet of messages.
+The keywords are ```DSCP``` for descriptions and ```DATA``` for data messages
+Udp packets can usually transfer a payload of up to 1500 bytes in length. To save network resources and microcontroller processing time the protbuff messages are packed.  The length of each message is encoded as varint32 before the messages.
+![dataaligment](doc/msg_deli.png "UDP data aligment")
+
+### UDP Data processing by Datareceiver
+![DR_flow](doc/DR_flow.png "Data processing by Datareceiver")
+
+As soon as the datareiceiver has been started all messages arriving on the network interface of the receiver are processed continuously. The messages are unpacked and deserialized. Then the sensor ID is read from the message. If ID this is unknown, a new sensor class instance (and therefore also a new task) is spwand and added to the list of known sensors ```DataReceiver.Allsensors```. In any case the message will be sent to the SensorTask via the [multiprocessing.queue](https://docs.python.org/2/library/multiprocessing.html) in a Dict with the type of the message
+
+### Dataprocessing with in the sensor task
+![Sensor_task](doc/Sensor_loop.png "Dataprocessing with in the sensor task")
+The Sensor Task continuously pops message dicts from the queue. Description messages are used to update the sensor description of the sensor instance.
+If one of the flags "DumpToFileASCII" or "DumpToFileProto" is set, the corresponding dump file is opened. Afterwards every message is written into the file until the flag is removed. If a callback is set it will be called with the description and the message. See the section callback. TODO Callback Section 
 ## Additional information
 
 Additional information around code writing and software development in the project you can find in the repository's [wiki](https://github.com/Met4FoF/Code/wiki), in the [coding conventions](conventions/README.md) and in our related [Blog post](https://www.ptb.de/empir2018/met4fof/information-communication/blog/detail-view/?tx_news_pi1%5Bnews%5D=38&tx_news_pi1%5Bcontroller%5D=News&tx_news_pi1%5Baction%5D=detail&cHash=ce963c7573572d40ef0f496449ef8aff) on the [project homepage](https://www.ptb.de/empir2018/met4fof/home/).
