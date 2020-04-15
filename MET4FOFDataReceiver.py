@@ -76,6 +76,8 @@ class DataReceiver:
         self.thread = threading.Thread(target=self.run, name="Datareceiver_thread", args=())
         self.thread.start()
         print("Data receiver now running wating for Packates")
+    def __repr__(self):
+        return('Datareceiver liestening at ip '+str(self.params["IP"])+' Port '+str(self.params["Port"])+'\n Active Snesors are:'+str(self.AllSensors))
 
     def stop(self):
         print("Stopping DataReceiver")
@@ -401,7 +403,8 @@ class Sensor:
             self.lastPacketTimestamp - datetime.now()
         )  # will b 0 but has deltaTime type witch is intended
         self.datarate = 0
-
+    def __repr__(self):
+        return(hex(self.Description.ID)+' '+self.Description.SensorName)
     def StartDumpingToFileASCII(self, filename=""):
         # check if the path is valid
         # if(os.path.exists(os.path.dirname(os.path.abspath('data/dump.csv')))):
