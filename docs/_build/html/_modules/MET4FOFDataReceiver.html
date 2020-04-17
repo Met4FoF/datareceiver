@@ -36,7 +36,7 @@
 <span class="sd">Created on Wed Sep  4 09:20:12 2019</span>
 
 <span class="sd">Data receiver for Met4FoF Protobuff Data</span>
-<span class="sd">@author: seeger01</span>
+<span class="sd">@author: Benedikt.Seeger@ptb.de</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span> <span class="nn">sys</span>
@@ -64,8 +64,12 @@
 
 
 <div class="viewcode-block" id="DataReceiver"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataReceiver">[docs]</a><span class="k">class</span> <span class="nc">DataReceiver</span><span class="p">:</span>
-    <span class="sd">&quot;&quot;&quot;Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task&quot;&quot;&quot;</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">IP</span><span class="p">,</span> <span class="n">Port</span><span class="o">=</span><span class="mi">7</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task</span>
+
+<span class="sd">    .. image:: ../doc/DR_flow.png</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">IP</span><span class="p">,</span> <span class="n">Port</span><span class="o">=</span><span class="mi">7654</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 
 
@@ -321,8 +325,8 @@
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        CHID : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        CHID : intger</span>
+<span class="sd">            ID of the channel startig with 1.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -340,33 +344,13 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_complete</span> <span class="o">=</span> <span class="kc">False</span>
 
     <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
-
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        key : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-
-<span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># if key=&#39;SpecialKey&#39;:</span>
         <span class="c1"># self.Description[&#39;SpecialKey&#39;]</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
 
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-
+<span class="sd">        Prints the Quantity and unit of the channel.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="p">(</span>
             <span class="s2">&quot;Channel: &quot;</span>
@@ -380,15 +364,14 @@
     <span class="c1"># todo override set methode</span>
 <div class="viewcode-block" id="ChannelDescription.setDescription"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.ChannelDescription.setDescription">[docs]</a>    <span class="k">def</span> <span class="nf">setDescription</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Sets an spefic key of an channel description</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        key : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        value : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-
+<span class="sd">        key : string</span>
+<span class="sd">            PHYSICAL_QUANTITY&quot;,UNIT,RESOLUTION,MIN_SCALE or MAX_SCALE.</span>
+<span class="sd">        value : string or intger</span>
+<span class="sd">            valuie coresponding to the key.</span>
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        None.</span>
@@ -412,10 +395,10 @@
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        ID : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        SensorName : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        ID : uint32</span>
+<span class="sd">            ID of the Sensor.</span>
+<span class="sd">        SensorName : sting</span>
+<span class="sd">            Name of the sensor.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -431,16 +414,16 @@
 
 <div class="viewcode-block" id="SensorDescription.setChannelParam"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.SensorDescription.setChannelParam">[docs]</a>    <span class="k">def</span> <span class="nf">setChannelParam</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">CHID</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Set parametes for an specific channel.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        CHID : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        key : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        value : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        CHID : intger</span>
+<span class="sd">            ID of the channel startig with 1.</span>
+<span class="sd">        key : string</span>
+<span class="sd">            PHYSICAL_QUANTITY&quot;,UNIT,RESOLUTION,MIN_SCALE or MAX_SCALE.</span>
+<span class="sd">        value : string or intger</span>
+<span class="sd">            valuie coresponding to the key.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -476,17 +459,17 @@
 
     <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Reutrns the description for an channel callable by Channel ID eg 1, Channel name eg. Data_01 or Physical PHYSICAL_QUANTITY eg. Acceleration_x.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        key : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        key : sting or int</span>
+<span class="sd">            Channel ID eg 1, Channel name eg. Data_01 or Physical PHYSICAL_QUANTITY eg. Acceleration_x.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
-<span class="sd">        TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        ChannelDescription</span>
+<span class="sd">            The description of the channel.</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># if key=&#39;SpecialKey&#39;:</span>
@@ -495,24 +478,29 @@
 
 <div class="viewcode-block" id="SensorDescription.asDict"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.SensorDescription.asDict">[docs]</a>    <span class="k">def</span> <span class="nf">asDict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        ChannelDescription as dict.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
-<span class="sd">        RetunDict : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        ReturnDict : dict</span>
+<span class="sd">            ChannelDescription as dict.</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">RetunDict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">SensorName</span><span class="p">}</span>
+        <span class="n">ReturnDict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">SensorName</span><span class="p">}</span>
         <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">Description</span><span class="p">)</span>
-            <span class="n">RetunDict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+            <span class="n">ReturnDict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
                 <span class="p">{</span><span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s2">&quot;CHID&quot;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">Description</span><span class="p">}</span>
             <span class="p">)</span>
-        <span class="k">return</span> <span class="n">RetunDict</span></div></div>
+        <span class="k">return</span> <span class="n">ReturnDict</span></div></div>
 
 
 <div class="viewcode-block" id="Sensor"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor">[docs]</a><span class="k">class</span> <span class="nc">Sensor</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors</span>
+
+<span class="sd">    .. image:: ../doc/Sensor_loop.png</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">StrFieldNames</span> <span class="o">=</span> <span class="p">[</span>
         <span class="s2">&quot;str_Data_01&quot;</span><span class="p">,</span>
         <span class="s2">&quot;str_Data_02&quot;</span><span class="p">,</span>
@@ -557,17 +545,16 @@
         <span class="mi">4</span><span class="p">:</span> <span class="s2">&quot;MIN_SCALE&quot;</span><span class="p">,</span>
         <span class="mi">5</span><span class="p">:</span> <span class="s2">&quot;MAX_SCALE&quot;</span><span class="p">,</span>
     <span class="p">}</span>
-    <span class="c1"># TODO implement multi therading and callbacks</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">BufferSize</span><span class="o">=</span><span class="mf">25e5</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Constructor for the Sensor class</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        ID : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        BufferSize : TYPE, optional</span>
-<span class="sd">            DESCRIPTION. The default is 25e5.</span>
+<span class="sd">        ID : uint32</span>
+<span class="sd">            ID of the Sensor.</span>
+<span class="sd">        BufferSize : integer, optional</span>
+<span class="sd">            Size of the Data Queue The default is 25e5.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -609,7 +596,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">datarate</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        prints the Id and sensor name.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -619,12 +606,12 @@
         <span class="k">return</span><span class="p">(</span><span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39; &#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">SensorName</span><span class="p">)</span>
 <div class="viewcode-block" id="Sensor.StartDumpingToFileASCII"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StartDumpingToFileASCII">[docs]</a>    <span class="k">def</span> <span class="nf">StartDumpingToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Activate dumping Messages in a file ASCII encoded ; seperated.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        filename : TYPE, optional</span>
-<span class="sd">            DESCRIPTION. The default is &quot;&quot;.</span>
+<span class="sd">        filename : path</span>
+<span class="sd">            path to the dumpfile.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -655,7 +642,7 @@
 
 <div class="viewcode-block" id="Sensor.StopDumpingToFileASCII"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StopDumpingToFileASCII">[docs]</a>    <span class="k">def</span> <span class="nf">StopDumpingToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Stops dumping to file ASCII encoded.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -668,12 +655,13 @@
 
 <div class="viewcode-block" id="Sensor.StartDumpingToFileProto"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StartDumpingToFileProto">[docs]</a>    <span class="k">def</span> <span class="nf">StartDumpingToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Activate dumping Messages in a file ProtBuff encoded \\n seperated.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        filename : TYPE, optional</span>
-<span class="sd">            DESCRIPTION. The default is &quot;&quot;.</span>
+<span class="sd">        filename : path</span>
+<span class="sd">            path to the dumpfile.</span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -702,7 +690,7 @@
 
 <div class="viewcode-block" id="Sensor.StopDumpingToFileProto"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StopDumpingToFileProto">[docs]</a>    <span class="k">def</span> <span class="nf">StopDumpingToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Stops dumping to file Protobuff encoded.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -713,11 +701,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;DumpFileNameProto&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
 
+
 <div class="viewcode-block" id="Sensor.run"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
-
-<span class="sd">        Returns</span>
+<span class="sd">        Starts the Sensor loop.</span>
 <span class="sd">        -------</span>
 <span class="sd">        None.</span>
 

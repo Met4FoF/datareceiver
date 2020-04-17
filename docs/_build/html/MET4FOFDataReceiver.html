@@ -33,7 +33,7 @@
 <span id="met4fofdatareceiver-module"></span><h1>MET4FOFDataReceiver module<a class="headerlink" href="#module-MET4FOFDataReceiver" title="Permalink to this headline">¶</a></h1>
 <p>Created on Wed Sep  4 09:20:12 2019</p>
 <p>Data receiver for Met4FoF Protobuff Data
-&#64;author: seeger01</p>
+&#64;author: <a class="reference external" href="mailto:Benedikt&#46;Seeger&#37;&#52;&#48;ptb&#46;de">Benedikt<span>&#46;</span>Seeger<span>&#64;</span>ptb<span>&#46;</span>de</a></p>
 <dl class="class">
 <dt id="MET4FOFDataReceiver.AliasDict">
 <em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">AliasDict</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#AliasDict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.AliasDict" title="Permalink to this definition">¶</a></dt>
@@ -52,11 +52,12 @@
 <dl class="method">
 <dt id="MET4FOFDataReceiver.ChannelDescription.setDescription">
 <code class="descname">setDescription</code><span class="sig-paren">(</span><em>key</em>, <em>value</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#ChannelDescription.setDescription"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.ChannelDescription.setDescription" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="docutils">
-<dt>key <span class="classifier-delimiter">:</span> <span class="classifier">TYPE</span></dt>
-<dd>DESCRIPTION.</dd>
-<dt>value <span class="classifier-delimiter">:</span> <span class="classifier">TYPE</span></dt>
-<dd>DESCRIPTION.</dd>
+<dd><p>Sets an spefic key of an channel description</p>
+<dl class="docutils">
+<dt>key <span class="classifier-delimiter">:</span> <span class="classifier">string</span></dt>
+<dd>PHYSICAL_QUANTITY”,UNIT,RESOLUTION,MIN_SCALE or MAX_SCALE.</dd>
+<dt>value <span class="classifier-delimiter">:</span> <span class="classifier">string or intger</span></dt>
+<dd>valuie coresponding to the key.</dd>
 </dl>
 <p>None.</p>
 </dd></dl>
@@ -83,9 +84,10 @@
 
 <dl class="class">
 <dt id="MET4FOFDataReceiver.DataReceiver">
-<em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">DataReceiver</code><span class="sig-paren">(</span><em>IP</em>, <em>Port=7</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataReceiver"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataReceiver" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">DataReceiver</code><span class="sig-paren">(</span><em>IP</em>, <em>Port=7654</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataReceiver"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataReceiver" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task</p>
+<img alt="_images/DR_flow.png" src="_images/DR_flow.png" />
 <dl class="method">
 <dt id="MET4FOFDataReceiver.DataReceiver.run">
 <code class="descname">run</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataReceiver.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataReceiver.run" title="Permalink to this definition">¶</a></dt>
@@ -106,6 +108,8 @@
 <dt id="MET4FOFDataReceiver.Sensor">
 <em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">Sensor</code><span class="sig-paren">(</span><em>ID</em>, <em>BufferSize=2500000.0</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#Sensor"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.Sensor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors</p>
+<img alt="_images/Sensor_loop.png" src="_images/Sensor_loop.png" />
 <dl class="attribute">
 <dt id="MET4FOFDataReceiver.Sensor.DescriptionTypNames">
 <code class="descname">DescriptionTypNames</code><em class="property"> = {0: 'PHYSICAL_QUANTITY', 1: 'UNIT', 2: 'UNCERTAINTY_TYPE', 3: 'RESOLUTION', 4: 'MIN_SCALE', 5: 'MAX_SCALE'}</em><a class="headerlink" href="#MET4FOFDataReceiver.Sensor.DescriptionTypNames" title="Permalink to this definition">¶</a></dt>
@@ -129,9 +133,10 @@
 <dl class="method">
 <dt id="MET4FOFDataReceiver.Sensor.StartDumpingToFileASCII">
 <code class="descname">StartDumpingToFileASCII</code><span class="sig-paren">(</span><em>filename=''</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#Sensor.StartDumpingToFileASCII"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.Sensor.StartDumpingToFileASCII" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="docutils">
-<dt>filename <span class="classifier-delimiter">:</span> <span class="classifier">TYPE, optional</span></dt>
-<dd>DESCRIPTION. The default is “”.</dd>
+<dd><p>Activate dumping Messages in a file ASCII encoded ; seperated.</p>
+<dl class="docutils">
+<dt>filename <span class="classifier-delimiter">:</span> <span class="classifier">path</span></dt>
+<dd>path to the dumpfile.</dd>
 </dl>
 <p>None.</p>
 </dd></dl>
@@ -139,9 +144,10 @@
 <dl class="method">
 <dt id="MET4FOFDataReceiver.Sensor.StartDumpingToFileProto">
 <code class="descname">StartDumpingToFileProto</code><span class="sig-paren">(</span><em>filename=''</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#Sensor.StartDumpingToFileProto"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.Sensor.StartDumpingToFileProto" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="docutils">
-<dt>filename <span class="classifier-delimiter">:</span> <span class="classifier">TYPE, optional</span></dt>
-<dd>DESCRIPTION. The default is “”.</dd>
+<dd><p>Activate dumping Messages in a file ProtBuff encoded n seperated.</p>
+<dl class="docutils">
+<dt>filename <span class="classifier-delimiter">:</span> <span class="classifier">path</span></dt>
+<dd>path to the dumpfile.</dd>
 </dl>
 <p>None.</p>
 </dd></dl>
@@ -149,13 +155,15 @@
 <dl class="method">
 <dt id="MET4FOFDataReceiver.Sensor.StopDumpingToFileASCII">
 <code class="descname">StopDumpingToFileASCII</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#Sensor.StopDumpingToFileASCII"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.Sensor.StopDumpingToFileASCII" title="Permalink to this definition">¶</a></dt>
-<dd><p>None.</p>
+<dd><p>Stops dumping to file ASCII encoded.</p>
+<p>None.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="MET4FOFDataReceiver.Sensor.StopDumpingToFileProto">
 <code class="descname">StopDumpingToFileProto</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#Sensor.StopDumpingToFileProto"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.Sensor.StopDumpingToFileProto" title="Permalink to this definition">¶</a></dt>
-<dd><p>None.</p>
+<dd><p>Stops dumping to file Protobuff encoded.</p>
+<p>None.</p>
 </dd></dl>
 
 <dl class="attribute">
@@ -202,22 +210,24 @@
 <dl class="method">
 <dt id="MET4FOFDataReceiver.SensorDescription.asDict">
 <code class="descname">asDict</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#SensorDescription.asDict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.SensorDescription.asDict" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="docutils">
-<dt>RetunDict <span class="classifier-delimiter">:</span> <span class="classifier">TYPE</span></dt>
-<dd>DESCRIPTION.</dd>
+<dd><p>ChannelDescription as dict.</p>
+<dl class="docutils">
+<dt>ReturnDict <span class="classifier-delimiter">:</span> <span class="classifier">dict</span></dt>
+<dd>ChannelDescription as dict.</dd>
 </dl>
 </dd></dl>
 
 <dl class="method">
 <dt id="MET4FOFDataReceiver.SensorDescription.setChannelParam">
 <code class="descname">setChannelParam</code><span class="sig-paren">(</span><em>CHID</em>, <em>key</em>, <em>value</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#SensorDescription.setChannelParam"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.SensorDescription.setChannelParam" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="docutils">
-<dt>CHID <span class="classifier-delimiter">:</span> <span class="classifier">TYPE</span></dt>
-<dd>DESCRIPTION.</dd>
-<dt>key <span class="classifier-delimiter">:</span> <span class="classifier">TYPE</span></dt>
-<dd>DESCRIPTION.</dd>
-<dt>value <span class="classifier-delimiter">:</span> <span class="classifier">TYPE</span></dt>
-<dd>DESCRIPTION.</dd>
+<dd><p>Set parametes for an specific channel.</p>
+<dl class="docutils">
+<dt>CHID <span class="classifier-delimiter">:</span> <span class="classifier">intger</span></dt>
+<dd>ID of the channel startig with 1.</dd>
+<dt>key <span class="classifier-delimiter">:</span> <span class="classifier">string</span></dt>
+<dd>PHYSICAL_QUANTITY”,UNIT,RESOLUTION,MIN_SCALE or MAX_SCALE.</dd>
+<dt>value <span class="classifier-delimiter">:</span> <span class="classifier">string or intger</span></dt>
+<dd>valuie coresponding to the key.</dd>
 </dl>
 <p>None.</p>
 </dd></dl>

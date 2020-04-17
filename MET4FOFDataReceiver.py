@@ -32,7 +32,11 @@ import numpy as np
 
 
 class DataReceiver:
-    """Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task"""
+    """Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task
+
+    .. image:: ../doc/DR_flow.png
+
+    """
     def __init__(self, IP, Port=7654):
         """
 
@@ -256,7 +260,7 @@ class DataReceiver:
 
     def __del__(self):
         """
-        just for securtiy clos the socket if __del__ is called.
+        just for securtiy closes the socket if __del__ is called.
 
         Returns
         -------
@@ -314,7 +318,7 @@ class ChannelDescription:
 
     def __repr__(self):
         """
-        Prints the Quantity and unit of the channel.
+        Prints the quantity and unit of the channel.
         """
         return (
             "Channel: "
@@ -328,7 +332,7 @@ class ChannelDescription:
     # todo override set methode
     def setDescription(self, key, value):
         """
-        Sets an spefic key of an channel description
+        Sets an spefic key of an channel description.
 
         Parameters
         ----------
@@ -460,7 +464,11 @@ class SensorDescription:
 
 
 class Sensor:
-    """Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors"""
+    """Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors
+
+    .. image:: ../doc/Sensor_loop.png
+
+    """
     StrFieldNames = [
         "str_Data_01",
         "str_Data_02",
@@ -661,12 +669,10 @@ class Sensor:
         self.params["DumpFileNameProto"] = ""
         self.DumpfileProto.close()
 
-#TODO MEHR DOKU
+
     def run(self):
         """
-
-
-        Returns
+        Starts the Sensor loop.
         -------
         None.
 
@@ -817,12 +823,12 @@ class Sensor:
 
     def SetCallback(self, callback):
         """
-
+        Sets an callback function signature musste be: callback(message["ProtMsg"], self.Description)
 
         Parameters
         ----------
-        callback : TYPE
-            DESCRIPTION.
+        callback : function
+            callback function signature musste be: callback(message["ProtMsg"], self.Description).
 
         Returns
         -------
@@ -834,7 +840,7 @@ class Sensor:
 
     def UnSetCallback(self,):
         """
-
+        deactivates the callback.
 
         Returns
         -------
