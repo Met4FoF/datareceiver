@@ -1,0 +1,1214 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>MET4FOFDataReceiver &#8212; Met4FoF Datareceiver 0.1 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for MET4FOFDataReceiver</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Created on Wed Sep  4 09:20:12 2019</span>
+
+<span class="sd">Data receiver for Met4FoF Protobuff Data</span>
+<span class="sd">@author: seeger01</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">messages_pb2</span>
+<span class="kn">import</span> <span class="nn">google.protobuf</span> <span class="k">as</span> <span class="nn">pb</span>
+<span class="kn">from</span> <span class="nn">google.protobuf.internal.encoder</span> <span class="k">import</span> <span class="n">_VarintBytes</span>
+<span class="kn">from</span> <span class="nn">google.protobuf.internal.decoder</span> <span class="k">import</span> <span class="n">_DecodeVarint32</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">multiprocessing</span> <span class="k">import</span> <span class="n">Queue</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">json</span>
+
+<span class="c1"># for live plotting</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">matplotlib.animation</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="c1">#matplotlib.use(&#39;Qt5Agg&#39;)</span>
+
+
+<div class="viewcode-block" id="DataReceiver"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataReceiver">[docs]</a><span class="k">class</span> <span class="nc">DataReceiver</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">IP</span><span class="p">,</span> <span class="n">Port</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        IP : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        Port : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        </span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        an</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Networtinited&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;IP&quot;</span><span class="p">:</span> <span class="n">IP</span><span class="p">,</span> <span class="s2">&quot;Port&quot;</span><span class="p">:</span> <span class="n">Port</span><span class="p">,</span> <span class="s2">&quot;PacketrateUpdateCount&quot;</span><span class="p">:</span> <span class="mi">10000</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span>
+            <span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_DGRAM</span>  <span class="c1"># Internet</span>
+        <span class="p">)</span>  <span class="c1"># UDP</span>
+
+        <span class="c1"># Try to open the UDP connection</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">bind</span><span class="p">((</span><span class="n">IP</span><span class="p">,</span> <span class="n">Port</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;OS error: </span><span class="si">{0}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">err</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">err</span><span class="o">.</span><span class="n">errno</span> <span class="o">==</span> <span class="mi">99</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span>
+                    <span class="s2">&quot;most likely no network card of the system has the ip address&quot;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">IP</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s2">&quot; check this with &gt;&gt;&gt; ifconfig on linux or with &gt;&gt;&gt; ipconfig on Windows&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">err</span><span class="o">.</span><span class="n">errno</span> <span class="o">==</span> <span class="mi">98</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span>
+                    <span class="s2">&quot;an other task is blocking the connection on linux use &gt;&gt;&gt; sudo netstat -ltnp | grep -w &#39;:&quot;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">Port</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s2">&quot;&#39; on windows use in PowerShell &gt;&gt;&gt; Get-Process -Id (Get-NetTCPConnection -LocalPort &quot;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">Port</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s2">&quot;).OwningProcess&quot;</span>
+                <span class="p">)</span>
+            <span class="k">raise</span> <span class="p">(</span><span class="n">err</span><span class="p">)</span>
+            <span class="c1"># we need to raise an exception to prevent __init__ from returning</span>
+            <span class="c1"># otherwise a broken class instance will be created</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Unexpected error:&quot;</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">raise</span> <span class="p">(</span><span class="s2">&quot;Unexpected error:&quot;</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;Networtinited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">packestlosforsensor</span><span class="o">=</span><span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ActiveSensors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">msgcount</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Datarate</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="c1">#start thread for data processing</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Datareceiver_thread&quot;</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Data receiver now running wating for Packates&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span><span class="p">(</span><span class="s1">&#39;Datareceiver liestening at ip &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;IP&quot;</span><span class="p">])</span><span class="o">+</span><span class="s1">&#39; Port &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Port&quot;</span><span class="p">])</span><span class="o">+</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1"> Active Snesors are:&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">))</span>
+
+<div class="viewcode-block" id="DataReceiver.stop"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataReceiver.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Stopping DataReceiver&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+        <span class="c1"># wait 1 second to ensure that all ques are empty before closing them</span>
+        <span class="c1"># other wise SIGPIPE is raised by os</span>
+        <span class="c1"># IMPORVEMNT use signals for this</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="DataReceiver.run"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataReceiver.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># implement stop routine</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+            <span class="n">data</span><span class="p">,</span> <span class="n">addr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">recvfrom</span><span class="p">(</span><span class="mi">1500</span><span class="p">)</span>  <span class="c1"># buffer size is 1024 bytes</span>
+            <span class="n">wasValidData</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">wasValidDescription</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">ProtoData</span> <span class="o">=</span> <span class="n">messages_pb2</span><span class="o">.</span><span class="n">DataMessage</span><span class="p">()</span>
+            <span class="n">ProtoDescription</span> <span class="o">=</span> <span class="n">messages_pb2</span><span class="o">.</span><span class="n">DescriptionMessage</span><span class="p">()</span>
+            <span class="n">SensorID</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">BytesProcessed</span> <span class="o">=</span> <span class="mi">4</span>  <span class="c1"># we need an offset of 4 sice</span>
+            <span class="k">if</span> <span class="n">data</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span> <span class="o">==</span> <span class="sa">b</span><span class="s2">&quot;DATA&quot;</span><span class="p">:</span>
+                <span class="k">while</span> <span class="n">BytesProcessed</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+                    <span class="n">msg_len</span><span class="p">,</span> <span class="n">new_pos</span> <span class="o">=</span> <span class="n">_DecodeVarint32</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">BytesProcessed</span><span class="p">)</span>
+                    <span class="n">BytesProcessed</span> <span class="o">=</span> <span class="n">new_pos</span>
+
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">msg_buf</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">new_pos</span> <span class="p">:</span> <span class="n">new_pos</span> <span class="o">+</span> <span class="n">msg_len</span><span class="p">]</span>
+                        <span class="n">ProtoData</span><span class="o">.</span><span class="n">ParseFromString</span><span class="p">(</span><span class="n">msg_buf</span><span class="p">)</span>
+                        <span class="n">wasValidData</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="n">SensorID</span> <span class="o">=</span> <span class="n">ProtoData</span><span class="o">.</span><span class="n">id</span>
+                        <span class="n">message</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;ProtMsg&quot;</span><span class="p">:</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">ProtoData</span><span class="p">),</span> <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="s2">&quot;Data&quot;</span><span class="p">}</span>
+                        <span class="n">BytesProcessed</span> <span class="o">+=</span> <span class="n">msg_len</span>
+                    <span class="k">except</span><span class="p">:</span>
+                        <span class="k">pass</span>  <span class="c1"># ? no exception for wrong data type !!</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">wasValidData</span> <span class="ow">or</span> <span class="n">wasValidDescription</span><span class="p">):</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;INVALID PROTODATA&quot;</span><span class="p">)</span>
+                        <span class="k">pass</span>  <span class="c1"># invalid data leave parsing routine</span>
+
+                    <span class="k">if</span> <span class="n">SensorID</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">[</span><span class="n">SensorID</span><span class="p">]</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">put_nowait</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+                        <span class="k">except</span><span class="p">:</span>
+                            <span class="n">tmp</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">packestlosforsensor</span><span class="p">[</span><span class="n">SensorID</span><span class="p">]</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">packestlosforsensor</span><span class="p">[</span><span class="n">SensorID</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span>
+                            <span class="k">if</span> <span class="n">tmp</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span>
+                                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;!!!! FATAL PERFORMANCE PROBLEMS !!!!&quot;</span><span class="p">)</span>
+                                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;FIRSTTIME packet lost for sensor ID:&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">SensorID</span><span class="p">))</span>
+                                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DROP MESSAGES ARE ONLY PRINTETD EVERY 1000 DROPS FROM NOW ON !!!!!!!! &quot;</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="n">tmp</span><span class="o">%</span><span class="mi">1000</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span>
+                                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;oh no lost an other  thousand packets :(&quot;</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">[</span><span class="n">SensorID</span><span class="p">]</span> <span class="o">=</span> <span class="n">Sensor</span><span class="p">(</span><span class="n">SensorID</span><span class="p">)</span>
+                        <span class="nb">print</span><span class="p">(</span>
+                            <span class="s2">&quot;FOUND NEW SENSOR WITH ID=hex&quot;</span>
+                            <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="n">SensorID</span><span class="p">)</span>
+                            <span class="o">+</span> <span class="s2">&quot;==&gt;dec:&quot;</span>
+                            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">SensorID</span><span class="p">)</span>
+                        <span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">packestlosforsensor</span><span class="p">[</span><span class="n">SensorID</span><span class="p">]</span><span class="o">=</span><span class="mi">0</span><span class="c1">#initing lost packet counter</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">msgcount</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">msgcount</span> <span class="o">+</span> <span class="mi">1</span>
+
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">msgcount</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PacketrateUpdateCount&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span>
+                            <span class="s2">&quot;received &quot;</span>
+                            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PacketrateUpdateCount&quot;</span><span class="p">])</span>
+                            <span class="o">+</span> <span class="s2">&quot; packets&quot;</span>
+                        <span class="p">)</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                            <span class="n">timeDIFF</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span>
+                            <span class="n">timeDIFF</span> <span class="o">=</span> <span class="n">timeDIFF</span><span class="o">.</span><span class="n">seconds</span> <span class="o">+</span> <span class="n">timeDIFF</span><span class="o">.</span><span class="n">microseconds</span> <span class="o">*</span> <span class="mf">1e-6</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">Datarate</span> <span class="o">=</span> <span class="p">(</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PacketrateUpdateCount&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="n">timeDIFF</span>
+                            <span class="p">)</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Update rate is &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Datarate</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot; Hz&quot;</span><span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="n">data</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span> <span class="o">==</span> <span class="sa">b</span><span class="s2">&quot;DSCP&quot;</span><span class="p">:</span>
+                <span class="k">while</span> <span class="n">BytesProcessed</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+                    <span class="n">msg_len</span><span class="p">,</span> <span class="n">new_pos</span> <span class="o">=</span> <span class="n">_DecodeVarint32</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">BytesProcessed</span><span class="p">)</span>
+                    <span class="n">BytesProcessed</span> <span class="o">=</span> <span class="n">new_pos</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">msg_buf</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">new_pos</span> <span class="p">:</span> <span class="n">new_pos</span> <span class="o">+</span> <span class="n">msg_len</span><span class="p">]</span>
+                        <span class="n">ProtoDescription</span><span class="o">.</span><span class="n">ParseFromString</span><span class="p">(</span><span class="n">msg_buf</span><span class="p">)</span>
+                        <span class="c1"># print(msg_buf)</span>
+                        <span class="n">wasValidData</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="n">SensorID</span> <span class="o">=</span> <span class="n">ProtoDescription</span><span class="o">.</span><span class="n">id</span>
+                        <span class="n">message</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;ProtMsg&quot;</span><span class="p">:</span> <span class="n">ProtoDescription</span><span class="p">,</span> <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="s2">&quot;Description&quot;</span><span class="p">}</span>
+                        <span class="n">BytesProcessed</span> <span class="o">+=</span> <span class="n">msg_len</span>
+                    <span class="k">except</span><span class="p">:</span>
+                        <span class="k">pass</span>  <span class="c1"># ? no exception for wrong data type !!</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">wasValidData</span> <span class="ow">or</span> <span class="n">wasValidDescription</span><span class="p">):</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;INVALID PROTODATA&quot;</span><span class="p">)</span>
+                        <span class="k">pass</span>  <span class="c1"># invalid data leave parsing routine</span>
+
+                    <span class="k">if</span> <span class="n">SensorID</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">[</span><span class="n">SensorID</span><span class="p">]</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">put_nowait</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+                        <span class="k">except</span><span class="p">:</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;packet lost for sensor ID:&quot;</span> <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="n">SensorID</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">AllSensors</span><span class="p">[</span><span class="n">SensorID</span><span class="p">]</span> <span class="o">=</span> <span class="n">Sensor</span><span class="p">(</span><span class="n">SensorID</span><span class="p">)</span>
+                        <span class="nb">print</span><span class="p">(</span>
+                            <span class="s2">&quot;FOUND NEW SENSOR WITH ID=hex&quot;</span>
+                            <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="n">SensorID</span><span class="p">)</span>
+                            <span class="o">+</span> <span class="s2">&quot; dec==&gt;:&quot;</span>
+                            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">SensorID</span><span class="p">)</span>
+                        <span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">msgcount</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">msgcount</span> <span class="o">+</span> <span class="mi">1</span>
+
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">msgcount</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PacketrateUpdateCount&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span>
+                            <span class="s2">&quot;received &quot;</span>
+                            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PacketrateUpdateCount&quot;</span><span class="p">])</span>
+                            <span class="o">+</span> <span class="s2">&quot; packets&quot;</span>
+                        <span class="p">)</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                            <span class="n">timeDIFF</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span>
+                            <span class="n">timeDIFF</span> <span class="o">=</span> <span class="n">timeDIFF</span><span class="o">.</span><span class="n">seconds</span> <span class="o">+</span> <span class="n">timeDIFF</span><span class="o">.</span><span class="n">microseconds</span> <span class="o">*</span> <span class="mf">1e-6</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">Datarate</span> <span class="o">=</span> <span class="p">(</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PacketrateUpdateCount&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="n">timeDIFF</span>
+                            <span class="p">)</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Update rate is &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Datarate</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot; Hz&quot;</span><span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">lastTimestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;unrecognized packed preamble&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">[:</span><span class="mi">5</span><span class="p">]))</span></div>
+
+    <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<span class="c1">### classes to proces sensor descriptions</span>
+<div class="viewcode-block" id="AliasDict"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.AliasDict">[docs]</a><span class="k">class</span> <span class="nc">AliasDict</span><span class="p">(</span><span class="nb">dict</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">dict</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="o">.</span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">key</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="o">.</span><span class="fm">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">key</span><span class="p">),</span> <span class="n">value</span><span class="p">)</span>
+
+<div class="viewcode-block" id="AliasDict.add_alias"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.AliasDict.add_alias">[docs]</a>    <span class="k">def</span> <span class="nf">add_alias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">alias</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">[</span><span class="n">alias</span><span class="p">]</span> <span class="o">=</span> <span class="n">key</span></div></div>
+
+
+<div class="viewcode-block" id="ChannelDescription"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.ChannelDescription">[docs]</a><span class="k">class</span> <span class="nc">ChannelDescription</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">CHID</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        CHID : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Description</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;CHID&quot;</span><span class="p">:</span> <span class="n">CHID</span><span class="p">,</span>
+            <span class="s2">&quot;PHYSICAL_QUANTITY&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;UNIT&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;RESOLUTION&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;MIN_SCALE&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;MAX_SCALE&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_complete</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        key : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># if key=&#39;SpecialKey&#39;:</span>
+        <span class="c1"># self.Description[&#39;SpecialKey&#39;]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="s2">&quot;Channel: &quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="s2">&quot;CHID&quot;</span><span class="p">])</span>
+            <span class="o">+</span> <span class="s2">&quot; ==&gt;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="s2">&quot;PHYSICAL_QUANTITY&quot;</span><span class="p">])</span>
+            <span class="o">+</span> <span class="s2">&quot; in &quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="s2">&quot;UNIT&quot;</span><span class="p">])</span>
+        <span class="p">)</span>
+
+    <span class="c1"># todo override set methode</span>
+<div class="viewcode-block" id="ChannelDescription.setDescription"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.ChannelDescription.setDescription">[docs]</a>    <span class="k">def</span> <span class="nf">setDescription</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        key : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        value : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="s2">&quot;PHYSICAL_QUANTITY&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="kc">False</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="s2">&quot;UNIT&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="kc">False</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="s2">&quot;RESOLUTION&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="kc">False</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="s2">&quot;MIN_SCALE&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="kc">False</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">[</span><span class="s2">&quot;MAX_SCALE&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="kc">False</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_complete</span> <span class="o">=</span> <span class="kc">True</span></div></div>
+
+
+<div class="viewcode-block" id="SensorDescription"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.SensorDescription">[docs]</a><span class="k">class</span> <span class="nc">SensorDescription</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">SensorName</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ID : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        SensorName : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ID</span> <span class="o">=</span> <span class="n">ID</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">SensorName</span> <span class="o">=</span> <span class="n">SensorName</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_complete</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span> <span class="o">=</span> <span class="n">AliasDict</span><span class="p">([])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ChannelCount</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ChannelsComplte</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="SensorDescription.setChannelParam"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.SensorDescription.setChannelParam">[docs]</a>    <span class="k">def</span> <span class="nf">setChannelParam</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">CHID</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        CHID : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        key : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        value : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">wasComplete</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="n">CHID</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">:</span>
+            <span class="n">wasComplete</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span>
+                <span class="n">CHID</span>
+            <span class="p">]</span><span class="o">.</span><span class="n">_complete</span>  <span class="c1"># read if channel was completed before</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">CHID</span><span class="p">]</span><span class="o">.</span><span class="n">setDescription</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;PHYSICAL_QUANTITY&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="o">.</span><span class="n">add_alias</span><span class="p">(</span>
+                    <span class="n">CHID</span><span class="p">,</span> <span class="n">value</span>
+                <span class="p">)</span>  <span class="c1"># make channels callable by their Quantity</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;PHYSICAL_QUANTITY&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="o">.</span><span class="n">add_alias</span><span class="p">(</span>
+                    <span class="n">CHID</span><span class="p">,</span> <span class="n">value</span>
+                <span class="p">)</span>  <span class="c1"># make channels callable by their Quantity</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">CHID</span><span class="p">]</span> <span class="o">=</span> <span class="n">ChannelDescription</span><span class="p">(</span><span class="n">CHID</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">CHID</span><span class="p">]</span><span class="o">.</span><span class="n">setDescription</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="o">.</span><span class="n">add_alias</span><span class="p">(</span>
+                <span class="n">CHID</span><span class="p">,</span> <span class="s2">&quot;Data_&quot;</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="si">{:02d}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">CHID</span><span class="p">)</span>
+            <span class="p">)</span>  <span class="c1"># make channels callable by ther Data_xx name</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ChannelCount</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ChannelCount</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">wasComplete</span> <span class="o">==</span> <span class="kc">False</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">CHID</span><span class="p">]</span><span class="o">.</span><span class="n">_complete</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ChannelsComplte</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ChannelsComplte</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ChannelsComplte</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ChannelCount</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_complete</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Description completed&quot;</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        key : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># if key=&#39;SpecialKey&#39;:</span>
+        <span class="c1"># self.Description[&#39;SpecialKey&#39;]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+<div class="viewcode-block" id="SensorDescription.asDict"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.SensorDescription.asDict">[docs]</a>    <span class="k">def</span> <span class="nf">asDict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        RetunDict : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">RetunDict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">SensorName</span><span class="p">}</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">Description</span><span class="p">)</span>
+            <span class="n">RetunDict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="p">{</span><span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="s2">&quot;CHID&quot;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">Channels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">Description</span><span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">RetunDict</span></div></div>
+
+
+<div class="viewcode-block" id="Sensor"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor">[docs]</a><span class="k">class</span> <span class="nc">Sensor</span><span class="p">:</span>
+    <span class="n">StrFieldNames</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;str_Data_01&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_02&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_03&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_04&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_05&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_06&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_07&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_08&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_09&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_10&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_11&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_12&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_13&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_14&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_15&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;str_Data_16&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="n">FFieldNames</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;f_Data_01&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_02&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_03&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_04&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_05&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_06&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_07&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_08&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_09&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_10&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_11&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_12&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_13&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_14&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_15&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;f_Data_16&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="n">DescriptionTypNames</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="mi">0</span><span class="p">:</span> <span class="s2">&quot;PHYSICAL_QUANTITY&quot;</span><span class="p">,</span>
+        <span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;UNIT&quot;</span><span class="p">,</span>
+        <span class="mi">2</span><span class="p">:</span> <span class="s2">&quot;UNCERTAINTY_TYPE&quot;</span><span class="p">,</span>
+        <span class="mi">3</span><span class="p">:</span> <span class="s2">&quot;RESOLUTION&quot;</span><span class="p">,</span>
+        <span class="mi">4</span><span class="p">:</span> <span class="s2">&quot;MIN_SCALE&quot;</span><span class="p">,</span>
+        <span class="mi">5</span><span class="p">:</span> <span class="s2">&quot;MAX_SCALE&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="c1"># TODO implement multi therading and callbacks</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">BufferSize</span><span class="o">=</span><span class="mf">25e5</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ID : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        BufferSize : TYPE, optional</span>
+<span class="sd">            DESCRIPTION. The default is 25e5.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Description</span> <span class="o">=</span> <span class="n">SensorDescription</span><span class="p">(</span><span class="n">ID</span><span class="p">,</span> <span class="s2">&quot;Name not Set&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">buffer</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">BufferSize</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">buffersize</span> <span class="o">=</span> <span class="n">BufferSize</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;DumpToFile&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;PrintProcessedCounts&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;callbackSet&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="n">ID</span><span class="p">,</span> <span class="s2">&quot;BufferSize&quot;</span><span class="p">:</span> <span class="n">BufferSize</span><span class="p">,</span> <span class="s2">&quot;DumpFileName&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DescriptionsProcessed</span> <span class="o">=</span> <span class="n">AliasDict</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;PHYSICAL_QUANTITY&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;UNIT&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;UNCERTAINTY_TYPE&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;RESOLUTION&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;MIN_SCALE&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;MAX_SCALE&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">DescriptionsProcessed</span><span class="o">.</span><span class="n">add_alias</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DescriptionTypNames</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">i</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span>
+            <span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Sensor_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">ID</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_thread&quot;</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">()</span>
+        <span class="p">)</span>
+        <span class="c1"># self.thread.daemon = True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ProcessedPacekts</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lastPacketTimestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">deltaT</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lastPacketTimestamp</span> <span class="o">-</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+        <span class="p">)</span>  <span class="c1"># will b 0 but has deltaTime type witch is intended</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">datarate</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span><span class="p">(</span><span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39; &#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">SensorName</span><span class="p">)</span>
+<div class="viewcode-block" id="Sensor.StartDumpingToFileASCII"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StartDumpingToFileASCII">[docs]</a>    <span class="k">def</span> <span class="nf">StartDumpingToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        filename : TYPE, optional</span>
+<span class="sd">            DESCRIPTION. The default is &quot;&quot;.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># check if the path is valid</span>
+        <span class="c1"># if(os.path.exists(os.path.dirname(os.path.abspath(&#39;data/dump.csv&#39;)))):</span>
+        <span class="k">if</span> <span class="n">filename</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="s2">&quot;data/&quot;</span>
+                <span class="o">+</span> <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y%m</span><span class="si">%d</span><span class="s2">%H%M%S&quot;</span><span class="p">)</span>
+                <span class="o">+</span> <span class="s2">&quot;_&quot;</span>
+                <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">SensorName</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
+                <span class="o">+</span> <span class="s2">&quot;_&quot;</span>
+                <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span>
+                <span class="o">+</span> <span class="s2">&quot;.dump&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileASCII</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span>
+        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">asDict</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileASCII</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileASCII</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileASCII</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+            <span class="s2">&quot;id;sample_number;unix_time;unix_time_nsecs;time_uncertainty;Data_01;Data_02;Data_03;Data_04;Data_05;Data_06;Data_07;Data_08;Data_09;Data_10;Data_11;Data_12;Data_13;Data_14;Data_15;Data_16</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;DumpFileNameASCII&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">filename</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;DumpToFileASCII&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="Sensor.StopDumpingToFileASCII"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StopDumpingToFileASCII">[docs]</a>    <span class="k">def</span> <span class="nf">StopDumpingToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;DumpToFileASCII&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;DumpFileNameASCII&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileASCII</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Sensor.StartDumpingToFileProto"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StartDumpingToFileProto">[docs]</a>    <span class="k">def</span> <span class="nf">StartDumpingToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        filename : TYPE, optional</span>
+<span class="sd">            DESCRIPTION. The default is &quot;&quot;.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># check if the path is valid</span>
+        <span class="c1"># if(os.path.exists(os.path.dirname(os.path.abspath(&#39;data/dump.csv&#39;)))):</span>
+        <span class="k">if</span> <span class="n">filename</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="s2">&quot;data/&quot;</span>
+                <span class="o">+</span> <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y%m</span><span class="si">%d</span><span class="s2">%H%M%S&quot;</span><span class="p">)</span>
+                <span class="o">+</span> <span class="s2">&quot;_&quot;</span>
+                <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">SensorName</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
+                <span class="o">+</span> <span class="s2">&quot;_&quot;</span>
+                <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span>
+                <span class="o">+</span> <span class="s2">&quot;.protodump&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span>
+        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">asDict</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;ab&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;DumpFileNameProto&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">filename</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;DumpToFileProto&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="Sensor.StopDumpingToFileProto"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StopDumpingToFileProto">[docs]</a>    <span class="k">def</span> <span class="nf">StopDumpingToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;DumpToFileProto&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;DumpFileNameProto&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Sensor.run"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+            <span class="c1"># problem when we are closing the queue this function is waiting for data and raises EOF error if we delet the q</span>
+            <span class="c1"># work around adding time out so self.buffer.get is returning after a time an thestop_event falg can be checked</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+                <span class="c1"># self.deltaT = (</span>
+                <span class="c1">#    tmpTime - self.lastPacketTimestamp</span>
+                <span class="c1"># )  # will b 0 but has deltaTime type witch is intended</span>
+                <span class="c1"># self.datarate = 1 / (self.deltaT.seconds + 1e-6 * self.deltaT.microseconds)</span>
+                <span class="c1"># self.lastPacketTimestamp = datetime.now()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ProcessedPacekts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ProcessedPacekts</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;PrintProcessedCounts&quot;</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ProcessedPacekts</span> <span class="o">%</span> <span class="mi">10000</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span>
+                            <span class="s2">&quot;processed 10000 packets in receiver for Sensor ID:&quot;</span>
+                            <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">])</span>
+                            <span class="o">+</span> <span class="s2">&quot; Packets in Que &quot;</span>
+                            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">qsize</span><span class="p">())</span>
+                            <span class="o">+</span> <span class="s2">&quot; --&gt;&quot;</span>
+                            <span class="o">+</span> <span class="nb">str</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">qsize</span><span class="p">()</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffersize</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span>
+                            <span class="o">+</span> <span class="s2">&quot;%&quot;</span>
+                        <span class="p">)</span>
+                <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Description&quot;</span><span class="p">:</span>
+                    <span class="n">Description</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;ProtMsg&quot;</span><span class="p">]</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="p">(</span>
+                            <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DescriptionsProcessed</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+                            <span class="ow">and</span> <span class="n">Description</span><span class="o">.</span><span class="n">IsInitialized</span><span class="p">()</span>
+                        <span class="p">):</span>
+                            <span class="c1"># run only if no description packed has been procesed ever</span>
+                            <span class="c1"># self.Description.SensorName=message.Sensor_name</span>
+                            <span class="nb">print</span><span class="p">(</span>
+                                <span class="s2">&quot;Found new &quot;</span>
+                                <span class="o">+</span> <span class="n">Description</span><span class="o">.</span><span class="n">Sensor_name</span>
+                                <span class="o">+</span> <span class="s2">&quot; sensor with ID:&quot;</span>
+                                <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">])</span>
+                            <span class="p">)</span>
+                            <span class="c1"># print(str(Description.Description_Type))</span>
+                        <span class="k">if</span> <span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">DescriptionsProcessed</span><span class="p">[</span><span class="n">Description</span><span class="o">.</span><span class="n">Description_Type</span><span class="p">]</span>
+                            <span class="o">==</span> <span class="kc">False</span>
+                        <span class="p">):</span>
+
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">SensorName</span> <span class="o">==</span> <span class="s2">&quot;Name not Set&quot;</span><span class="p">:</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">SensorName</span> <span class="o">=</span> <span class="n">Description</span><span class="o">.</span><span class="n">Sensor_name</span>
+                            <span class="c1"># we havent processed thiss message before now do that</span>
+                            <span class="k">if</span> <span class="n">Description</span><span class="o">.</span><span class="n">Description_Type</span> <span class="ow">in</span> <span class="p">[</span>
+                                <span class="mi">0</span><span class="p">,</span>
+                                <span class="mi">1</span><span class="p">,</span>
+                                <span class="mi">2</span><span class="p">,</span>
+                            <span class="p">]:</span>  <span class="c1"># [&quot;PHYSICAL_QUANTITY&quot;,&quot;UNIT&quot;,&quot;UNCERTAINTY_TYPE&quot;]</span>
+                                <span class="c1"># print(Description)</span>
+                                <span class="c1"># string Processing</span>
+
+                                <span class="n">FieldNumber</span> <span class="o">=</span> <span class="mi">1</span>
+                                <span class="k">for</span> <span class="n">StrField</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">StrFieldNames</span><span class="p">:</span>
+                                    <span class="k">if</span> <span class="n">Description</span><span class="o">.</span><span class="n">HasField</span><span class="p">(</span><span class="n">StrField</span><span class="p">):</span>
+                                        <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">setChannelParam</span><span class="p">(</span>
+                                            <span class="n">FieldNumber</span><span class="p">,</span>
+                                            <span class="bp">self</span><span class="o">.</span><span class="n">DescriptionTypNames</span><span class="p">[</span>
+                                                <span class="n">Description</span><span class="o">.</span><span class="n">Description_Type</span>
+                                            <span class="p">],</span>
+                                            <span class="n">Description</span><span class="o">.</span><span class="fm">__getattribute__</span><span class="p">(</span><span class="n">StrField</span><span class="p">),</span>
+                                        <span class="p">)</span>
+                                        <span class="c1"># print(str(FieldNumber)+&#39; &#39;+Description.__getattribute__(StrField))</span>
+                                    <span class="n">FieldNumber</span> <span class="o">=</span> <span class="n">FieldNumber</span> <span class="o">+</span> <span class="mi">1</span>
+
+                                <span class="bp">self</span><span class="o">.</span><span class="n">DescriptionsProcessed</span><span class="p">[</span>
+                                    <span class="n">Description</span><span class="o">.</span><span class="n">Description_Type</span>
+                                <span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                                <span class="c1"># print(self.DescriptionsProcessed)</span>
+                            <span class="k">if</span> <span class="n">Description</span><span class="o">.</span><span class="n">Description_Type</span> <span class="ow">in</span> <span class="p">[</span>
+                                <span class="mi">3</span><span class="p">,</span>
+                                <span class="mi">4</span><span class="p">,</span>
+                                <span class="mi">5</span><span class="p">,</span>
+                            <span class="p">]:</span>  <span class="c1"># [&quot;RESOLUTION&quot;,&quot;MIN_SCALE&quot;,&quot;MAX_SCALE&quot;]</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">DescriptionsProcessed</span><span class="p">[</span>
+                                    <span class="n">Description</span><span class="o">.</span><span class="n">Description_Type</span>
+                                <span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                                <span class="n">FieldNumber</span> <span class="o">=</span> <span class="mi">1</span>
+                                <span class="k">for</span> <span class="n">FloatField</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">FFieldNames</span><span class="p">:</span>
+                                    <span class="k">if</span> <span class="n">Description</span><span class="o">.</span><span class="n">HasField</span><span class="p">(</span><span class="n">FloatField</span><span class="p">):</span>
+                                        <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">setChannelParam</span><span class="p">(</span>
+                                            <span class="n">FieldNumber</span><span class="p">,</span>
+                                            <span class="bp">self</span><span class="o">.</span><span class="n">DescriptionTypNames</span><span class="p">[</span>
+                                                <span class="n">Description</span><span class="o">.</span><span class="n">Description_Type</span>
+                                            <span class="p">],</span>
+                                            <span class="n">Description</span><span class="o">.</span><span class="fm">__getattribute__</span><span class="p">(</span><span class="n">FloatField</span><span class="p">),</span>
+                                        <span class="p">)</span>
+                                        <span class="c1"># print(str(FieldNumber)+&#39; &#39;+str(Description.__getattribute__(FloatField)))</span>
+                                    <span class="n">FieldNumber</span> <span class="o">=</span> <span class="n">FieldNumber</span> <span class="o">+</span> <span class="mi">1</span>
+                                <span class="c1"># print(self.DescriptionsProcessed)</span>
+                                <span class="c1"># string Processing</span>
+                    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span>
+                            <span class="s2">&quot; Sensor id:&quot;</span>
+                            <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">])</span>
+                            <span class="o">+</span> <span class="s2">&quot;Exception in user Description parsing:&quot;</span>
+                        <span class="p">)</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
+                        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">(</span><span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;callbackSet&quot;</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Data&quot;</span><span class="p">:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">callback</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;ProtMsg&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="p">)</span>
+                        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                            <span class="nb">print</span><span class="p">(</span>
+                                <span class="s2">&quot; Sensor id:&quot;</span>
+                                <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">])</span>
+                                <span class="o">+</span> <span class="s2">&quot;Exception in user callback:&quot;</span>
+                            <span class="p">)</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
+                            <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">(</span><span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
+                            <span class="k">pass</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;DumpToFileProto&quot;</span><span class="p">]:</span>
+                     <span class="k">if</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;Type&#39;</span><span class="p">]</span><span class="o">==</span><span class="s1">&#39;Data&#39;</span><span class="p">):</span>
+                         <span class="k">try</span><span class="p">:</span>
+                             <span class="bp">self</span><span class="o">.</span><span class="n">__dumpMsgToFileProto</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;ProtMsg&#39;</span><span class="p">])</span>
+                         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                             <span class="nb">print</span> <span class="p">(</span><span class="s2">&quot; Sensor id:&quot;</span><span class="o">+</span><span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">])</span><span class="o">+</span><span class="s2">&quot;Exception in user datadump:&quot;</span><span class="p">)</span>
+                             <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+                             <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">(</span><span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+                             <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+                             <span class="k">pass</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;DumpToFileASCII&quot;</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Data&quot;</span><span class="p">:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">__dumpMsgToFileASCII</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;ProtMsg&quot;</span><span class="p">])</span>
+                        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                            <span class="nb">print</span><span class="p">(</span>
+                                <span class="s2">&quot; Sensor id:&quot;</span>
+                                <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">])</span>
+                                <span class="o">+</span> <span class="s2">&quot;Exception in user datadump:&quot;</span>
+                            <span class="p">)</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
+                            <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">(</span><span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
+                            <span class="k">pass</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="Sensor.SetCallback"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.SetCallback">[docs]</a>    <span class="k">def</span> <span class="nf">SetCallback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">callback</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        callback : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;callbackSet&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">callback</span> <span class="o">=</span> <span class="n">callback</span></div>
+
+<div class="viewcode-block" id="Sensor.UnSetCallback"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.UnSetCallback">[docs]</a>    <span class="k">def</span> <span class="nf">UnSetCallback</span><span class="p">(</span><span class="bp">self</span><span class="p">,):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="s2">&quot;callbackSet&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">callback</span> <span class="o">=</span> <span class="n">doNothingCb</span></div>
+
+<div class="viewcode-block" id="Sensor.stop"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Stopping Sensor &quot;</span> <span class="o">+</span> <span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">]))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+        <span class="c1"># sleeping until run function is exiting due to timeout</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+        <span class="c1"># thrash all data in queue</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Sensor.join"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.join">[docs]</a>    <span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        *args : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        **kwargs : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">__dumpMsgToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        message : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileASCII</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">sample_number</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">unix_time</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">unix_time_nsecs</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">time_uncertainty</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_01</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_02</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_03</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_04</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_05</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_06</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_07</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_08</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_09</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_10</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_11</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_12</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_13</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_14</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_15</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;;&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">Data_16</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__dumpMsgToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        message : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">ByteSize</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">_VarintBytes</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">SerializeToString</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="doNothingCb"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.doNothingCb">[docs]</a><span class="k">def</span> <span class="nf">doNothingCb</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    </span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    None.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">pass</span></div>
+
+
+<span class="c1"># USAGE</span>
+<span class="c1"># create Buffer instance with ExampleBuffer=DataBuffer(1000)</span>
+<span class="c1"># Bind Sensor Callback to Buffer PushData function</span>
+<span class="c1"># DR.AllSensors[$IDOFSENSOR].SetCallback(ExampleBuffer.PushData)</span>
+<span class="c1"># wait until buffer is Full</span>
+<span class="c1"># Data can be acessed over the atribute ExampleBuffer.Buffer[0]</span>
+<div class="viewcode-block" id="DataBuffer"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataBuffer">[docs]</a><span class="k">class</span> <span class="nc">DataBuffer</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">BufferLength</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        BufferLength : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">BufferLength</span> <span class="o">=</span> <span class="n">BufferLength</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">BufferLength</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Datasetpushed</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">FullmesaggePrinted</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y3</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y4</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y5</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y6</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y7</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y8</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y9</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y10</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y11</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y12</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y13</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">ion</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">BufferLength</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Acceleration in m/s²&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Rotational speed in rad/s&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Mag. flux dens in µT&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Temp. in °C&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Analog V in V&quot;</span><span class="p">)</span>
+        <span class="c1"># self.line1, = self.ax[0].plot(self.x,np.zeros(BufferLength))</span>
+        <span class="c1"># self.line1.set_xdata(self.x)</span>
+        <span class="c1"># self.ax.set_ylim(-160,160)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<div class="viewcode-block" id="DataBuffer.PushData"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataBuffer.PushData">[docs]</a>    <span class="k">def</span> <span class="nf">PushData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">Description</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        </span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        message : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        Description : TYPE</span>
+<span class="sd">            DESCRIPTION.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">Datasetpushed</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Description</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">Description</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">Datasetpushed</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">BufferLength</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Datasetpushed</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">message</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_01</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y2</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_02</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y3</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_03</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y4</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_04</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y5</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_05</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y6</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_06</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y7</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_07</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y8</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_08</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y9</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_09</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y10</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_10</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y11</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_11</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y12</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_12</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y13</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">Data_13</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Datasetpushed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Datasetpushed</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Acceleration in m/s²&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Rotational speed in rad/s&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Mag. flux dens in µT&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Temp. in °C&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Analog V in V&quot;</span><span class="p">)</span>
+            <span class="c1"># self.line1.set_ydata(self.y1)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y1</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y3</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y4</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y5</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y6</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y7</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y8</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y9</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y10</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y11</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y12</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y13</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">draw</span><span class="p">()</span>
+            <span class="c1"># flush Buffer</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Buffer</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">BufferLength</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Datasetpushed</span> <span class="o">=</span> <span class="mi">0</span></div></div>
+
+
+<span class="c1"># Example for DSCP Messages</span>
+<span class="c1"># Quant b&#39;\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x00&quot;\x0eX Acceleration*\x0eY Acceleration2\x0eZ Acceleration:\x12X Angular velocityB\x12Y Angular velocityJ\x12Z Angular velocityR\x17X Magnetic flux densityZ\x17Y Magnetic flux densityb\x17Z Magnetic flux densityj\x0bTemperature&#39;</span>
+<span class="c1"># Unit  b&#39;\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x01&quot;\x17\\metre\\second\\tothe{-2}*\x17\\metre\\second\\tothe{-2}2\x17\\metre\\second\\tothe{-2}:\x18\\radian\\second\\tothe{-1}B\x18\\radian\\second\\tothe{-1}J\x18\\radian\\second\\tothe{-1}R\x0c\\micro\\teslaZ\x0c\\micro\\teslab\x0c\\micro\\teslaj\rdegreecelsius&#39;</span>
+<span class="c1"># Res   b&#39;\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x03\xa5\x01\x00\x00\x80G\xad\x01\x00\x00\x80G\xb5\x01\x00\x00\x80G\xbd\x01\x00\x00\x80G\xc5\x01\x00\x00\x80G\xcd\x01\x00\x00\x80G\xd5\x01\x00\xf0\x7fG\xdd\x01\x00\xf0\x7fG\xe5\x01\x00\xf0\x7fG\xed\x01\x00\x00\x80G&#39;</span>
+<span class="c1"># Min   b&#39;\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x04\xa5\x01\x16\xea\x1c\xc3\xad\x01\x16\xea\x1c\xc3\xb5\x01\x16\xea\x1c\xc3\xbd\x01\xe3\xa0\x0b\xc2\xc5\x01\xe3\xa0\x0b\xc2\xcd\x01\xe3\xa0\x0b\xc2\xd5\x01\x00\x00\x00\x80\xdd\x01\x00\x00\x00\x80\xe5\x01\x00\x00\x00\x80\xed\x01\xf3j\x9a\xc2&#39;</span>
+<span class="c1"># Max   b&#39;\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x05\xa5\x01\xdc\xe8\x1cC\xad\x01\xdc\xe8\x1cC\xb5\x01\xdc\xe8\x1cC\xbd\x01\xcc\x9f\x0bB\xc5\x01\xcc\x9f\x0bB\xcd\x01\xcc\x9f\x0bB\xd5\x01\x00\x00\x00\x00\xdd\x01\x00\x00\x00\x00\xe5\x01\x00\x00\x00\x00\xed\x01\x02)\xeeB&#39;</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">DR</span><span class="o">=</span><span class="n">DataReceiver</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span><span class="mi">7654</span><span class="p">)</span>
+<span class="c1"># func_stats = yappi.get_func_stats()</span>
+<span class="c1"># func_stats.save(&#39;./callgrind.out.&#39;, &#39;CALLGRIND&#39;)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Met4FoF Datareceiver</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Benedikt Seeger.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
