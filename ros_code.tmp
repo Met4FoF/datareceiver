@@ -1,0 +1,33 @@
+def initRos():
+    # todo make the imports golbaly
+    import rospy
+    from std_msgs.msg import String
+    from sensor_msgs.msg import Imu
+    from sensor_msgs.msg import MagneticField
+
+    pub_imu = rospy.Publisher("IMU0", Imu, queue_size=20)
+    pub_mag = rospy.Publisher("MAG0", MagneticField, queue_size=20)
+    rospy.init_node("imu_publisher1", anonymous=True)
+
+
+def RosCallbackIMU(message, Description):
+    imu_msg = Imu()
+    imu_msg.header.frame_id = "IMU"
+    imu_msg.header.seq = message.sample_number
+    imu_msg.header.stamp = rospy.Time(message.unix_time, message.unix_time_nsecs)
+    imu_msg.linear_acceleration.x = message.Data_01
+    imu_msg.linear_acceleration.y = message.Data_02
+    imu_msg.linear_acceleration.z = message.Data_03
+    imu_msg.angular_velocity.x = message.Data_04
+    imu_msg.angular_velocity.y = message.Data_05
+    imu_msg.angular_velocity.z = message.Data_06
+    pub_imu.publish(imu_msg)
+
+    mag_msg = MagneticField()
+    mag_msg.header.frame_id = "IMU"
+    mag_msg.header.seq = message.sample_number
+    mag_msg.header.stamp = rospy.Time(message.unix_time, message.unix_time_nsecs)
+    mag_msg.magnetic_field.x = message.Data_07
+    mag_msg.magnetic_field.y = message.Data_08
+    mag_msg.magnetic_field.z = message.Data_09
+    pub_mag.publish(mag_msg)
