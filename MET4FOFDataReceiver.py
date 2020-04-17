@@ -4,7 +4,7 @@
 Created on Wed Sep  4 09:20:12 2019
 
 Data receiver for Met4FoF Protobuff Data
-@author: seeger01
+@author: Benedikt.Seeger@ptb.de
 """
 
 import sys
@@ -32,24 +32,24 @@ import numpy as np
 
 
 class DataReceiver:
-    def __init__(self, IP, Port):
+    """Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task"""
+    def __init__(self, IP, Port=7654):
         """
-        
+
 
         Parameters
         ----------
-        IP : TYPE
-            DESCRIPTION.
-        Port : TYPE
-            DESCRIPTION.
+        IP : string
+            Either an spefic IP Adress like "192.168.0.200" or "" for all interfaces.
+        Port : intger
+            UDP Port for the incoming data 7654 is default.
 
         Raises
         ------
-        
-            DESCRIPTION.
-        an
-            DESCRIPTION.
-
+        socket.error:[errno 99] cannot assign requested address and namespace in python
+            The Set IP does not match any networkintrefaces ip.
+        socket.error:[Errno 98] Address already in use
+            an other task is using the set port and interface.
         Returns
         -------
         None.
@@ -100,7 +100,7 @@ class DataReceiver:
         print("Data receiver now running wating for Packates")
     def __repr__(self):
         """
-        
+        Prints IP and Port as well as list of all sensors (self.AllSensors).
 
         Returns
         -------
@@ -111,7 +111,7 @@ class DataReceiver:
 
     def stop(self):
         """
-        
+        Stops the Datareceiver task and closes the UDP socket.
 
         Returns
         -------
@@ -130,7 +130,7 @@ class DataReceiver:
 
     def run(self):
         """
-        
+        Spwans the Datareceiver task.
 
         Returns
         -------
@@ -256,7 +256,7 @@ class DataReceiver:
 
     def __del__(self):
         """
-        
+        just for securtiy clos the socket if __del__ is called.
 
         Returns
         -------
@@ -285,12 +285,12 @@ class AliasDict(dict):
 class ChannelDescription:
     def __init__(self, CHID):
         """
-        
+
 
         Parameters
         ----------
-        CHID : TYPE
-            DESCRIPTION.
+        CHID : intger
+            ID of the channel startig with 1.
 
         Returns
         -------
@@ -308,33 +308,13 @@ class ChannelDescription:
         self._complete = False
 
     def __getitem__(self, key):
-        """
-        
-
-        Parameters
-        ----------
-        key : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        TYPE
-            DESCRIPTION.
-
-        """
         # if key='SpecialKey':
         # self.Description['SpecialKey']
         return self.Description[key]
 
     def __repr__(self):
         """
-        
-
-        Returns
-        -------
-        TYPE
-            DESCRIPTION.
-
+        Prints the Quantity and unit of the channel.
         """
         return (
             "Channel: "
@@ -348,15 +328,14 @@ class ChannelDescription:
     # todo override set methode
     def setDescription(self, key, value):
         """
-        
+        Sets an spefic key of an channel description
 
         Parameters
         ----------
-        key : TYPE
-            DESCRIPTION.
-        value : TYPE
-            DESCRIPTION.
-
+        key : string
+            PHYSICAL_QUANTITY",UNIT,RESOLUTION,MIN_SCALE or MAX_SCALE.
+        value : string or intger
+            valuie coresponding to the key.
         Returns
         -------
         None.
@@ -376,14 +355,14 @@ class ChannelDescription:
 class SensorDescription:
     def __init__(self, ID, SensorName):
         """
-        
+
 
         Parameters
         ----------
-        ID : TYPE
-            DESCRIPTION.
-        SensorName : TYPE
-            DESCRIPTION.
+        ID : uint32
+            ID of the Sensor.
+        SensorName : sting
+            Name of the sensor.
 
         Returns
         -------
@@ -399,16 +378,16 @@ class SensorDescription:
 
     def setChannelParam(self, CHID, key, value):
         """
-        
+        Set parametes for an specific channel.
 
         Parameters
         ----------
-        CHID : TYPE
-            DESCRIPTION.
-        key : TYPE
-            DESCRIPTION.
-        value : TYPE
-            DESCRIPTION.
+        CHID : intger
+            ID of the channel startig with 1.
+        key : string
+            PHYSICAL_QUANTITY",UNIT,RESOLUTION,MIN_SCALE or MAX_SCALE.
+        value : string or intger
+            valuie coresponding to the key.
 
         Returns
         -------
@@ -444,17 +423,17 @@ class SensorDescription:
 
     def __getitem__(self, key):
         """
-        
+        Reutrns the description for an channel callable by Channel ID eg 1, Channel name eg. Data_01 or Physical PHYSICAL_QUANTITY eg. Acceleration_x.
 
         Parameters
         ----------
-        key : TYPE
-            DESCRIPTION.
+        key : sting or int
+            Channel ID eg 1, Channel name eg. Data_01 or Physical PHYSICAL_QUANTITY eg. Acceleration_x.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
+        ChannelDescription
+            The description of the channel.
 
         """
         # if key='SpecialKey':
@@ -463,24 +442,25 @@ class SensorDescription:
 
     def asDict(self):
         """
-        
+        ChannelDescription as dict.
 
         Returns
         -------
-        RetunDict : TYPE
-            DESCRIPTION.
+        ReturnDict : dict
+            ChannelDescription as dict.
 
         """
-        RetunDict = {"Name": self.SensorName}
+        ReturnDict = {"Name": self.SensorName}
         for key in self.Channels:
             print(self.Channels[key].Description)
-            RetunDict.update(
+            ReturnDict.update(
                 {self.Channels[key]["CHID"]: self.Channels[key].Description}
             )
-        return RetunDict
+        return ReturnDict
 
 
 class Sensor:
+    """Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors"""
     StrFieldNames = [
         "str_Data_01",
         "str_Data_02",
@@ -525,17 +505,16 @@ class Sensor:
         4: "MIN_SCALE",
         5: "MAX_SCALE",
     }
-    # TODO implement multi therading and callbacks
     def __init__(self, ID, BufferSize=25e5):
         """
-        
+        Constructor for the Sensor class
 
         Parameters
         ----------
-        ID : TYPE
-            DESCRIPTION.
-        BufferSize : TYPE, optional
-            DESCRIPTION. The default is 25e5.
+        ID : uint32
+            ID of the Sensor.
+        BufferSize : integer, optional
+            Size of the Data Queue The default is 25e5.
 
         Returns
         -------
@@ -577,7 +556,7 @@ class Sensor:
         self.datarate = 0
     def __repr__(self):
         """
-        
+        prints the Id and sensor name.
 
         Returns
         -------
@@ -587,12 +566,12 @@ class Sensor:
         return(hex(self.Description.ID)+' '+self.Description.SensorName)
     def StartDumpingToFileASCII(self, filename=""):
         """
-        
+        Activate dumping Messages in a file ASCII encoded ; seperated.
 
         Parameters
         ----------
-        filename : TYPE, optional
-            DESCRIPTION. The default is "".
+        filename : path
+            path to the dumpfile.
 
         Returns
         -------
@@ -623,7 +602,7 @@ class Sensor:
 
     def StopDumpingToFileASCII(self):
         """
-        
+        Stops dumping to file ASCII encoded.
 
         Returns
         -------
@@ -636,12 +615,13 @@ class Sensor:
 
     def StartDumpingToFileProto(self, filename=""):
         """
-        
+        Activate dumping Messages in a file ProtBuff encoded \\n seperated.
 
         Parameters
         ----------
-        filename : TYPE, optional
-            DESCRIPTION. The default is "".
+        filename : path
+            path to the dumpfile.
+
 
         Returns
         -------
@@ -670,7 +650,7 @@ class Sensor:
 
     def StopDumpingToFileProto(self):
         """
-        
+        Stops dumping to file Protobuff encoded.
 
         Returns
         -------
@@ -681,9 +661,10 @@ class Sensor:
         self.params["DumpFileNameProto"] = ""
         self.DumpfileProto.close()
 
+#TODO MEHR DOKU
     def run(self):
         """
-        
+
 
         Returns
         -------
@@ -836,7 +817,7 @@ class Sensor:
 
     def SetCallback(self, callback):
         """
-        
+
 
         Parameters
         ----------
@@ -853,7 +834,7 @@ class Sensor:
 
     def UnSetCallback(self,):
         """
-        
+
 
         Returns
         -------
@@ -865,7 +846,7 @@ class Sensor:
 
     def stop(self):
         """
-        
+
 
         Returns
         -------
@@ -886,7 +867,7 @@ class Sensor:
 
     def join(self, *args, **kwargs):
         """
-        
+
 
         Parameters
         ----------
@@ -904,7 +885,7 @@ class Sensor:
 
     def __dumpMsgToFileASCII(self, message):
         """
-        
+
 
         Parameters
         ----------
@@ -963,7 +944,7 @@ class Sensor:
 
     def __dumpMsgToFileProto(self, message):
         """
-        
+
 
         Parameters
         ----------
@@ -981,7 +962,7 @@ class Sensor:
 
 def doNothingCb():
     """
-    
+
 
     Returns
     -------
@@ -1000,7 +981,7 @@ def doNothingCb():
 class DataBuffer:
     def __init__(self, BufferLength):
         """
-        
+
 
         Parameters
         ----------
@@ -1049,7 +1030,7 @@ class DataBuffer:
 
     def PushData(self, message, Description):
         """
-        
+
 
         Parameters
         ----------

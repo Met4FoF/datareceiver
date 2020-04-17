@@ -64,24 +64,24 @@
 
 
 <div class="viewcode-block" id="DataReceiver"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataReceiver">[docs]</a><span class="k">class</span> <span class="nc">DataReceiver</span><span class="p">:</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">IP</span><span class="p">,</span> <span class="n">Port</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">IP</span><span class="p">,</span> <span class="n">Port</span><span class="o">=</span><span class="mi">7</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        IP : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        Port : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        IP : string</span>
+<span class="sd">            Either an spefic IP Adress like &quot;192.168.0.200&quot; or &quot;&quot; for all interfaces.</span>
+<span class="sd">        Port : intger</span>
+<span class="sd">            UDP Port for the incoming data 7654 is default.</span>
 
 <span class="sd">        Raises</span>
 <span class="sd">        ------</span>
-<span class="sd">        </span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        an</span>
-<span class="sd">            DESCRIPTION.</span>
-
+<span class="sd">        socket.error:[errno 99] cannot assign requested address and namespace in python</span>
+<span class="sd">            The Set IP does not match any networkintrefaces ip.</span>
+<span class="sd">        socket.error:[Errno 98] Address already in use</span>
+<span class="sd">            an other task is using the set port and interface.</span>
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        None.</span>
@@ -132,7 +132,7 @@
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Data receiver now running wating for Packates&quot;</span><span class="p">)</span>
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+<span class="sd">        Prints IP and Port as well as list of all sensors (self.AllSensors).</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -143,7 +143,7 @@
 
 <div class="viewcode-block" id="DataReceiver.stop"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataReceiver.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+<span class="sd">        Stops the Datareceiver task and closes the UDP socket.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -162,7 +162,7 @@
 
 <div class="viewcode-block" id="DataReceiver.run"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataReceiver.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+<span class="sd">        Spwans the Datareceiver task.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -288,7 +288,7 @@
 
     <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+<span class="sd">        just for securtiy clos the socket if __del__ is called.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -317,7 +317,7 @@
 <div class="viewcode-block" id="ChannelDescription"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.ChannelDescription">[docs]</a><span class="k">class</span> <span class="nc">ChannelDescription</span><span class="p">:</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">CHID</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -341,7 +341,7 @@
 
     <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -360,7 +360,7 @@
 
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -380,7 +380,7 @@
     <span class="c1"># todo override set methode</span>
 <div class="viewcode-block" id="ChannelDescription.setDescription"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.ChannelDescription.setDescription">[docs]</a>    <span class="k">def</span> <span class="nf">setDescription</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -408,7 +408,7 @@
 <div class="viewcode-block" id="SensorDescription"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.SensorDescription">[docs]</a><span class="k">class</span> <span class="nc">SensorDescription</span><span class="p">:</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">SensorName</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -431,7 +431,7 @@
 
 <div class="viewcode-block" id="SensorDescription.setChannelParam"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.SensorDescription.setChannelParam">[docs]</a>    <span class="k">def</span> <span class="nf">setChannelParam</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">CHID</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -476,7 +476,7 @@
 
     <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -495,7 +495,7 @@
 
 <div class="viewcode-block" id="SensorDescription.asDict"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.SensorDescription.asDict">[docs]</a>    <span class="k">def</span> <span class="nf">asDict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -560,7 +560,7 @@
     <span class="c1"># TODO implement multi therading and callbacks</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">BufferSize</span><span class="o">=</span><span class="mf">25e5</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -609,7 +609,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">datarate</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -619,7 +619,7 @@
         <span class="k">return</span><span class="p">(</span><span class="nb">hex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39; &#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">Description</span><span class="o">.</span><span class="n">SensorName</span><span class="p">)</span>
 <div class="viewcode-block" id="Sensor.StartDumpingToFileASCII"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StartDumpingToFileASCII">[docs]</a>    <span class="k">def</span> <span class="nf">StartDumpingToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -655,7 +655,7 @@
 
 <div class="viewcode-block" id="Sensor.StopDumpingToFileASCII"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StopDumpingToFileASCII">[docs]</a>    <span class="k">def</span> <span class="nf">StopDumpingToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -668,7 +668,7 @@
 
 <div class="viewcode-block" id="Sensor.StartDumpingToFileProto"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StartDumpingToFileProto">[docs]</a>    <span class="k">def</span> <span class="nf">StartDumpingToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -702,7 +702,7 @@
 
 <div class="viewcode-block" id="Sensor.StopDumpingToFileProto"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.StopDumpingToFileProto">[docs]</a>    <span class="k">def</span> <span class="nf">StopDumpingToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -715,7 +715,7 @@
 
 <div class="viewcode-block" id="Sensor.run"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -868,7 +868,7 @@
 
 <div class="viewcode-block" id="Sensor.SetCallback"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.SetCallback">[docs]</a>    <span class="k">def</span> <span class="nf">SetCallback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">callback</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -885,7 +885,7 @@
 
 <div class="viewcode-block" id="Sensor.UnSetCallback"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.UnSetCallback">[docs]</a>    <span class="k">def</span> <span class="nf">UnSetCallback</span><span class="p">(</span><span class="bp">self</span><span class="p">,):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -897,7 +897,7 @@
 
 <div class="viewcode-block" id="Sensor.stop"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -918,7 +918,7 @@
 
 <div class="viewcode-block" id="Sensor.join"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.join">[docs]</a>    <span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -936,7 +936,7 @@
 
     <span class="k">def</span> <span class="nf">__dumpMsgToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -995,7 +995,7 @@
 
     <span class="k">def</span> <span class="nf">__dumpMsgToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -1013,7 +1013,7 @@
 
 <div class="viewcode-block" id="doNothingCb"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.doNothingCb">[docs]</a><span class="k">def</span> <span class="nf">doNothingCb</span><span class="p">():</span>
     <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    </span>
+
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -1032,7 +1032,7 @@
 <div class="viewcode-block" id="DataBuffer"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataBuffer">[docs]</a><span class="k">class</span> <span class="nc">DataBuffer</span><span class="p">:</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">BufferLength</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -1081,7 +1081,7 @@
 
 <div class="viewcode-block" id="DataBuffer.PushData"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataBuffer.PushData">[docs]</a>    <span class="k">def</span> <span class="nf">PushData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">Description</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        </span>
+
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>

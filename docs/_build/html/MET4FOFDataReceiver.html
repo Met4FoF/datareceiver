@@ -83,18 +83,21 @@
 
 <dl class="class">
 <dt id="MET4FOFDataReceiver.DataReceiver">
-<em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">DataReceiver</code><span class="sig-paren">(</span><em>IP</em>, <em>Port</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataReceiver"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataReceiver" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">DataReceiver</code><span class="sig-paren">(</span><em>IP</em>, <em>Port=7</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataReceiver"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataReceiver" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task</p>
 <dl class="method">
 <dt id="MET4FOFDataReceiver.DataReceiver.run">
 <code class="descname">run</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataReceiver.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataReceiver.run" title="Permalink to this definition">¶</a></dt>
-<dd><p>None.</p>
+<dd><p>Spwans the Datareceiver task.</p>
+<p>None.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="MET4FOFDataReceiver.DataReceiver.stop">
 <code class="descname">stop</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataReceiver.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataReceiver.stop" title="Permalink to this definition">¶</a></dt>
-<dd><p>None.</p>
+<dd><p>Stops the Datareceiver task and closes the UDP socket.</p>
+<p>None.</p>
 </dd></dl>
 
 </dd></dl>
