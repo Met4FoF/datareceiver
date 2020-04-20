@@ -7,7 +7,33 @@ import time
 import numpy as np
 
 class SensorSimulator:
+    """
+    Class for simulationg an MET4FoF compatible Sensor
+    """
     def __init__(self,updateratehz=1000,tagetip="127.0.0.1",port=7654,id=0x00000001,resolutionbit=8,paramupdateratehz=0.5):
+        """
+        
+
+        Parameters
+        ----------
+        updateratehz : integer, optional
+            Data update frequency in Hz. The default is 1000.
+        tagetip : sting, optional
+            IP Adress of the DataReceiver. The default is "127.0.0.1".
+        port : intger, optional
+            UDP Port of the Datareceiver. The default is 7654.
+        id : integer, optional
+            ID of the simulated sensor. The default is 0x00000001.
+        resolutionbit : integer, optional
+            The simulated Sensor data are quantizised in 2^resolutionbit  steps beween min and max. The default is 8.
+        paramupdateratehz : integer, optional
+            Update rate of sensor descriptions. The default is 0.5.
+
+        Returns
+        -------
+        None.
+
+        """
         self.flags = {"Networtinited": False}
         self.params = {"TargetIp": tagetip,
                        "Port": port,
@@ -27,6 +53,14 @@ class SensorSimulator:
 
 
     def run(self):
+        """
+        Starts the sensor simulator Task.
+
+        Returns
+        -------
+        None.
+
+        """
         firsttime=time.time()
         delta_t_data=1/self.params["UpdateRateHz"]
         next_time_data=firsttime+ delta_t_data
@@ -36,10 +70,10 @@ class SensorSimulator:
         while not self._stop_event.is_set():
             # TODO improve time scheduling
             if next_time_data-time.time()<0:
-                self.sendDataMsg()
+                self.__sendDataMsg()
                 next_time_data=next_time_data+delta_t_data
             if next_time_dscp-time.time()<0:
-                self.sendDescription()
+                self.__sendDescription()
                 print("description sent")
                 next_time_dscp=next_time_dscp+delta_t_dscp
 
@@ -47,11 +81,27 @@ class SensorSimulator:
 
 
     def stop(self):
+        """
+        Stops the sensor simulator Task.
+
+        Returns
+        -------
+        None.
+
+        """
         print("Stopping SensorSimulator")
         self._stop_event.set()
 
 
-    def sendDataMsg(self):
+    def __sendDataMsg(self):
+        """
+        Sends out simulated data.
+
+        Returns
+        -------
+        None.
+
+        """
         tmptime = time.time()
         secs = int(np.floor(tmptime))
         nsecs = int((tmptime - secs) * 1e9)
@@ -80,7 +130,15 @@ class SensorSimulator:
             print(str(self.packetssend)+" Packets sent")
         return
 
-    def sendDescription(self):
+    def __sendDescription(self):
+        """
+        Sends out an description.
+
+        Returns
+        -------
+        None.
+
+        """
         res=2**self.params["resolutionbit"]
         max=((res-1)-res/2)/res
         min=((res/2)-res)/res

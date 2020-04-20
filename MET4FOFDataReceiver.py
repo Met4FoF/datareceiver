@@ -852,7 +852,7 @@ class Sensor:
 
     def stop(self):
         """
-
+        Stops the sensor task.
 
         Returns
         -------
@@ -873,14 +873,14 @@ class Sensor:
 
     def join(self, *args, **kwargs):
         """
-
+        Call the stop function
 
         Parameters
         ----------
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
+        *args : args
+            args are discarded.
+        **kwargs : kwargs
+            kwargs are discarded.
 
         Returns
         -------
@@ -891,12 +891,12 @@ class Sensor:
 
     def __dumpMsgToFileASCII(self, message):
         """
-
+        private function to dump MSG as ASCII line \n for new line.
 
         Parameters
         ----------
-        message : TYPE
-            DESCRIPTION.
+        message : protobuff message
+            Data to be dumped.
 
         Returns
         -------
@@ -950,12 +950,12 @@ class Sensor:
 
     def __dumpMsgToFileProto(self, message):
         """
-
+        private function to dump MSG as binaryblob \n for new data packet.
 
         Parameters
         ----------
-        message : TYPE
-            DESCRIPTION.
+        message : protobuff message
+            Data to be dumped.
 
         Returns
         -------
@@ -965,18 +965,6 @@ class Sensor:
         size = message.ByteSize()
         self.DumpfileProto.write(_VarintBytes(size))
         self.DumpfileProto.write(message.SerializeToString())
-
-def doNothingCb():
-    """
-
-
-    Returns
-    -------
-    None.
-
-    """
-    pass
-
 
 # USAGE
 # create Buffer instance with ExampleBuffer=DataBuffer(1000)
@@ -1036,14 +1024,14 @@ class DataBuffer:
 
     def PushData(self, message, Description):
         """
-
+        Pushes an block of data in to the buffer. This function is set as Sensor callback with the function :Sensor.SetCallback`
 
         Parameters
         ----------
-        message : TYPE
-            DESCRIPTION.
-        Description : TYPE
-            DESCRIPTION.
+        message : protobuff message
+            Message to be pushed in the buffer.
+        Description SensorDescription:
+            SensorDescription is discarded.
 
         Returns
         -------
