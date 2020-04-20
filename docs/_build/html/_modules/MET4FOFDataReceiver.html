@@ -292,7 +292,7 @@
 
     <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        just for securtiy clos the socket if __del__ is called.</span>
+<span class="sd">        just for securtiy closes the socket if __del__ is called.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -350,7 +350,7 @@
 
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Prints the Quantity and unit of the channel.</span>
+<span class="sd">        Prints the quantity and unit of the channel.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="p">(</span>
             <span class="s2">&quot;Channel: &quot;</span>
@@ -364,7 +364,7 @@
     <span class="c1"># todo override set methode</span>
 <div class="viewcode-block" id="ChannelDescription.setDescription"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.ChannelDescription.setDescription">[docs]</a>    <span class="k">def</span> <span class="nf">setDescription</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Sets an spefic key of an channel description</span>
+<span class="sd">        Sets an spefic key of an channel description.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -855,12 +855,12 @@
 
 <div class="viewcode-block" id="Sensor.SetCallback"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.SetCallback">[docs]</a>    <span class="k">def</span> <span class="nf">SetCallback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">callback</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Sets an callback function signature musste be: callback(message[&quot;ProtMsg&quot;], self.Description)</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        callback : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        callback : function</span>
+<span class="sd">            callback function signature musste be: callback(message[&quot;ProtMsg&quot;], self.Description).</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -872,7 +872,7 @@
 
 <div class="viewcode-block" id="Sensor.UnSetCallback"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.UnSetCallback">[docs]</a>    <span class="k">def</span> <span class="nf">UnSetCallback</span><span class="p">(</span><span class="bp">self</span><span class="p">,):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        deactivates the callback.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -884,7 +884,7 @@
 
 <div class="viewcode-block" id="Sensor.stop"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.stop">[docs]</a>    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Stops the sensor task.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -905,14 +905,14 @@
 
 <div class="viewcode-block" id="Sensor.join"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.Sensor.join">[docs]</a>    <span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Call the stop function</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        *args : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        **kwargs : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        *args : args</span>
+<span class="sd">            args are discarded.</span>
+<span class="sd">        **kwargs : kwargs</span>
+<span class="sd">            kwargs are discarded.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -923,12 +923,12 @@
 
     <span class="k">def</span> <span class="nf">__dumpMsgToFileASCII</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        private function to dump MSG as ASCII line \n for new line.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        message : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        message : protobuff message</span>
+<span class="sd">            Data to be dumped.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -982,12 +982,12 @@
 
     <span class="k">def</span> <span class="nf">__dumpMsgToFileProto</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        private function to dump MSG as binaryblob \n for new data packet.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        message : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        message : protobuff message</span>
+<span class="sd">            Data to be dumped.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -997,18 +997,6 @@
         <span class="n">size</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">ByteSize</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">_VarintBytes</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">DumpfileProto</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">SerializeToString</span><span class="p">())</span></div>
-
-<div class="viewcode-block" id="doNothingCb"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.doNothingCb">[docs]</a><span class="k">def</span> <span class="nf">doNothingCb</span><span class="p">():</span>
-    <span class="sd">&quot;&quot;&quot;</span>
-
-
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    None.</span>
-
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">pass</span></div>
-
 
 <span class="c1"># USAGE</span>
 <span class="c1"># create Buffer instance with ExampleBuffer=DataBuffer(1000)</span>
@@ -1068,14 +1056,14 @@
 
 <div class="viewcode-block" id="DataBuffer.PushData"><a class="viewcode-back" href="../MET4FOFDataReceiver.html#MET4FOFDataReceiver.DataBuffer.PushData">[docs]</a>    <span class="k">def</span> <span class="nf">PushData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">Description</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
-
+<span class="sd">        Pushes an block of data in to the buffer. This function is set as Sensor callback with the function :Sensor.SetCallback`</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        message : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
-<span class="sd">        Description : TYPE</span>
-<span class="sd">            DESCRIPTION.</span>
+<span class="sd">        message : protobuff message</span>
+<span class="sd">            Message to be pushed in the buffer.</span>
+<span class="sd">        Description SensorDescription:</span>
+<span class="sd">            SensorDescription is discarded.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
