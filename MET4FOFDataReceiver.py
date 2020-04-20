@@ -12,14 +12,10 @@ import traceback
 import os
 import socket
 import threading
-import messages_pb2
-import google.protobuf as pb
-from google.protobuf.internal.encoder import _VarintBytes
-from google.protobuf.internal.decoder import _DecodeVarint32
+import warnings
 from datetime import datetime
-import threading
-import time
 from multiprocessing import Queue
+import time
 import copy
 import json
 
@@ -27,6 +23,12 @@ import json
 import matplotlib.pyplot as plt
 import matplotlib.animation
 import numpy as np
+
+#proptobuff message encoding
+import messages_pb2
+import google.protobuf as pb
+from google.protobuf.internal.encoder import _VarintBytes
+from google.protobuf.internal.decoder import _DecodeVarint32
 
 #matplotlib.use('Qt5Agg')
 
@@ -357,17 +359,25 @@ class ChannelDescription:
 
 
 class SensorDescription:
-    def __init__(self, ID, SensorName):
+    """
+    this class is holding the Sensor description.
+    It's subscriptable by :
+    1. inter number of the channel   eg.g. SensorDescription[1]
+    2. Name of The physical quantity SensorDescription["Temperature"]
+    3. Name of the data field SensorDescription["Data_01"]
+    """
+    def __init__(self, ID=0x00000000, SensorName="undefined",fromDict=None):
         """
 
 
         Parameters
         ----------
         ID : uint32
-            ID of the Sensor.
+            ID of the Sensor.The default is 0x00000000
         SensorName : sting
-            Name of the sensor.
-
+            Name of the sensor.The default is "undefined".
+        fromDict : dict
+            If an Description dict is passed the Channel params will be set accordingly.
         Returns
         -------
         None.
@@ -379,6 +389,26 @@ class SensorDescription:
         self.Channels = AliasDict([])
         self.ChannelCount = 0
         self._ChannelsComplte = 0
+        if type(fromDict) is dict:
+            try:
+                self.ID = fromDict["ID"]
+            except KeyError:
+                warnings.warn("ID not in Dict", RuntimeWarning)
+            try:
+                self.SensorName = fromDict["Name"]
+            except KeyError:
+                warnings.warn("Name not in Dict", RuntimeWarning)
+            for i in range(16):
+                try:
+                    channelDict=fromDict[i]
+                    for key in  channelDict.keys():
+                        if key =='CHID':
+                            pass
+                        else:
+                            self.setChannelParam(channelDict["CHID"],key,channelDict[key])
+                    print("Channel "+str(i)+" read from dict")
+                except KeyError:
+                    pass
 
     def setChannelParam(self, CHID, key, value):
         """
@@ -432,7 +462,7 @@ class SensorDescription:
         Parameters
         ----------
         key : sting or int
-            Channel ID eg 1, Channel name eg. Data_01 or Physical PHYSICAL_QUANTITY eg. Acceleration_x.
+            Channel ID eg 1, Channel name eg. "Data_01" or Physical PHYSICAL_QUANTITY eg. "X Acceleration".
 
         Returns
         -------
@@ -444,6 +474,9 @@ class SensorDescription:
         # self.Description['SpecialKey']
         return self.Channels[key]
 
+    def __repr__(self):
+        return self.asDict()
+
     def asDict(self):
         """
         ChannelDescription as dict.
@@ -454,13 +487,24 @@ class SensorDescription:
             ChannelDescription as dict.
 
         """
-        ReturnDict = {"Name": self.SensorName}
+        ReturnDict = {"Name": self.SensorName,"ID":self.ID}
         for key in self.Channels:
             print(self.Channels[key].Description)
             ReturnDict.update(
                 {self.Channels[key]["CHID"]: self.Channels[key].Description}
             )
         return ReturnDict
+
+    def getUnits(self):
+        units={}
+        for Channel in self.Channels:
+            if self.Channels[Channel]["UNIT"] in units:
+                units[self.Channels[Channel]["UNIT"]].append(Channel)
+            else:
+                units[self.Channels[Channel]["UNIT"]]=[Channel]
+        return units
+
+
 
 
 class Sensor:
@@ -522,7 +566,7 @@ class Sensor:
         ID : uint32
             ID of the Sensor.
         BufferSize : integer, optional
-            Size of the Data Queue The default is 25e5.
+            Size of the Data Queue. The default is 25e5.
 
         Returns
         -------
@@ -1087,6 +1131,114 @@ class DataBuffer:
             self.Buffer = [None] * self.BufferLength
             self.Datasetpushed = 0
 
+# USAGE
+# create Buffer instance with ExampleBuffer=DataBuffer(1000)
+# Bind Sensor Callback to Buffer PushData function
+# DR.AllSensors[$IDOFSENSOR].SetCallback(ExampleBuffer.PushData)
+# wait until buffer is Full
+# Data can be acessed over the atribute ExampleBuffer.Buffer[0]
+class genericPlotter:
+    def __init__(self, BufferLength):
+        """
+
+
+        Parameters
+        ----------
+        BufferLength : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.BufferLength = BufferLength
+        self.Buffer = [None] * BufferLength
+        self.Datasetpushed = 0
+        self.FullmesaggePrinted = False
+        self.x = np.arange(BufferLength)
+        self.Y= np.zeros([16,BufferLength])
+    def PushData(self, message, Description):
+        """
+        Pushes an block of data in to the buffer. This function is set as Sensor callback with the function :Sensor.SetCallback`
+
+        Parameters
+        ----------
+        message : protobuff message
+            Message to be pushed in the buffer.
+        Description SensorDescription:
+            SensorDescription is discarded.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.Datasetpushed == 0:
+            self.Description = copy.deepcopy(Description)
+            self.units = self.Description.getUnits()
+            self.Numofplots=self.units
+            plt.ion()
+            self.fig, self.ax = plt.subplots(self.Numofplots, 1, sharex=True)
+            for ax in self.ax:
+                self.ax.set_xlim(0, self.BufferLength)
+
+                #TODO do more stuff here
+            self.ax[0].set_ylabel("Acceleration in m/s²")
+            self.ax[1].set_ylabel("Rotational speed in rad/s")
+            self.ax[2].set_ylabel("Mag. flux dens in µT")
+            self.ax[3].set_ylabel("Temp. in °C")
+            self.ax[4].set_ylabel("Analog V in V")
+            # self.line1, = self.ax[0].plot(self.x,np.zeros(BufferLength))
+            # self.line1.set_xdata(self.x)
+            # self.ax.set_ylim(-160,160)
+            plt.show()
+        if self.Datasetpushed < self.BufferLength:
+            i = self.Datasetpushed
+            self.Buffer[i] = message
+            self.y1[i] = self.Buffer[i].Data_01
+            self.y2[i] = self.Buffer[i].Data_02
+            self.y3[i] = self.Buffer[i].Data_03
+            self.y4[i] = self.Buffer[i].Data_04
+            self.y5[i] = self.Buffer[i].Data_05
+            self.y6[i] = self.Buffer[i].Data_06
+            self.y7[i] = self.Buffer[i].Data_07
+            self.y8[i] = self.Buffer[i].Data_08
+            self.y9[i] = self.Buffer[i].Data_09
+            self.y10[i] = self.Buffer[i].Data_10
+            self.y11[i] = self.Buffer[i].Data_11
+            self.y12[i] = self.Buffer[i].Data_12
+            self.y13[i] = self.Buffer[i].Data_13
+            self.Datasetpushed = self.Datasetpushed + 1
+        else:
+            self.ax[0].clear()
+            self.ax[1].clear()
+            self.ax[2].clear()
+            self.ax[3].clear()
+            self.ax[4].clear()
+            self.ax[0].set_ylabel("Acceleration in m/s²")
+            self.ax[1].set_ylabel("Rotational speed in rad/s")
+            self.ax[2].set_ylabel("Mag. flux dens in µT")
+            self.ax[3].set_ylabel("Temp. in °C")
+            self.ax[4].set_ylabel("Analog V in V")
+            # self.line1.set_ydata(self.y1)
+            self.ax[0].plot(self.x, self.y1)
+            self.ax[0].plot(self.x, self.y2)
+            self.ax[0].plot(self.x, self.y3)
+            self.ax[1].plot(self.x, self.y4)
+            self.ax[1].plot(self.x, self.y5)
+            self.ax[1].plot(self.x, self.y6)
+            self.ax[2].plot(self.x, self.y7)
+            self.ax[2].plot(self.x, self.y8)
+            self.ax[2].plot(self.x, self.y9)
+            self.ax[3].plot(self.x, self.y10)
+            self.ax[4].plot(self.x, self.y11)
+            self.ax[4].plot(self.x, self.y12)
+            self.ax[4].plot(self.x, self.y13)
+            self.fig.canvas.draw()
+            # flush Buffer
+            self.Buffer = [None] * self.BufferLength
+            self.Datasetpushed = 0
 
 # Example for DSCP Messages
 # Quant b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x00"\x0eX Acceleration*\x0eY Acceleration2\x0eZ Acceleration:\x12X Angular velocityB\x12Y Angular velocityJ\x12Z Angular velocityR\x17X Magnetic flux densityZ\x17Y Magnetic flux densityb\x17Z Magnetic flux densityj\x0bTemperature'
@@ -1096,5 +1248,9 @@ class DataBuffer:
 # Max   b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x05\xa5\x01\xdc\xe8\x1cC\xad\x01\xdc\xe8\x1cC\xb5\x01\xdc\xe8\x1cC\xbd\x01\xcc\x9f\x0bB\xc5\x01\xcc\x9f\x0bB\xcd\x01\xcc\x9f\x0bB\xd5\x01\x00\x00\x00\x00\xdd\x01\x00\x00\x00\x00\xe5\x01\x00\x00\x00\x00\xed\x01\x02)\xeeB'
 if __name__ == "__main__":
     DR=DataReceiver("",7654)
+    time.sleep(5)
+    description=DR.AllSensors[0x19920000].Description
+    dscDict = description.asDict()
+    description.getUnits()
 # func_stats = yappi.get_func_stats()
 # func_stats.save('./callgrind.out.', 'CALLGRIND')
