@@ -24,13 +24,13 @@ import matplotlib.pyplot as plt
 import matplotlib.animation
 import numpy as np
 
-#proptobuff message encoding
+# proptobuff message encoding
 import messages_pb2
 import google.protobuf as pb
 from google.protobuf.internal.encoder import _VarintBytes
 from google.protobuf.internal.decoder import _DecodeVarint32
 
-#matplotlib.use('Qt5Agg')
+# matplotlib.use('Qt5Agg')
 
 
 class DataReceiver:
@@ -39,6 +39,7 @@ class DataReceiver:
     .. image:: ../doc/DR_flow.png
 
     """
+
     def __init__(self, IP, Port=7654):
         """
 
@@ -93,17 +94,20 @@ class DataReceiver:
             print("Unexpected error:", sys.exc_info()[0])
             raise ("Unexpected error:", sys.exc_info()[0])
         self.flags["Networtinited"] = True
-        self.packestlosforsensor={}
+        self.packestlosforsensor = {}
         self.AllSensors = {}
         self.ActiveSensors = {}
         self.msgcount = 0
         self.lastTimestamp = 0
         self.Datarate = 0
         self._stop_event = threading.Event()
-        #start thread for data processing
-        self.thread = threading.Thread(target=self.run, name="Datareceiver_thread", args=())
+        # start thread for data processing
+        self.thread = threading.Thread(
+            target=self.run, name="Datareceiver_thread", args=()
+        )
         self.thread.start()
         print("Data receiver now running wating for Packates")
+
     def __repr__(self):
         """
         Prints IP and Port as well as list of all sensors (self.AllSensors).
@@ -113,7 +117,14 @@ class DataReceiver:
         None.
 
         """
-        return('Datareceiver liestening at ip '+str(self.params["IP"])+' Port '+str(self.params["Port"])+'\n Active Snesors are:'+str(self.AllSensors))
+        return (
+            "Datareceiver liestening at ip "
+            + str(self.params["IP"])
+            + " Port "
+            + str(self.params["Port"])
+            + "\n Active Snesors are:"
+            + str(self.AllSensors)
+        )
 
     def stop(self):
         """
@@ -174,12 +185,19 @@ class DataReceiver:
                         try:
                             self.AllSensors[SensorID].buffer.put_nowait(message)
                         except:
-                            tmp=self.packestlosforsensor[SensorID]=self.packestlosforsensor[SensorID]+1
-                            if tmp==1:
+                            tmp = self.packestlosforsensor[SensorID] = (
+                                self.packestlosforsensor[SensorID] + 1
+                            )
+                            if tmp == 1:
                                 print("!!!! FATAL PERFORMANCE PROBLEMS !!!!")
-                                print("FIRSTTIME packet lost for sensor ID:" + str(SensorID))
-                                print("DROP MESSAGES ARE ONLY PRINTETD EVERY 1000 DROPS FROM NOW ON !!!!!!!! ")
-                            if tmp%1000==0:
+                                print(
+                                    "FIRSTTIME packet lost for sensor ID:"
+                                    + str(SensorID)
+                                )
+                                print(
+                                    "DROP MESSAGES ARE ONLY PRINTETD EVERY 1000 DROPS FROM NOW ON !!!!!!!! "
+                                )
+                            if tmp % 1000 == 0:
                                 print("oh no lost an other  thousand packets :(")
                     else:
                         self.AllSensors[SensorID] = Sensor(SensorID)
@@ -189,7 +207,9 @@ class DataReceiver:
                             + "==>dec:"
                             + str(SensorID)
                         )
-                        self.packestlosforsensor[SensorID]=0#initing lost packet counter
+                        self.packestlosforsensor[
+                            SensorID
+                        ] = 0  # initing lost packet counter
                     self.msgcount = self.msgcount + 1
 
                     if self.msgcount % self.params["PacketrateUpdateCount"] == 0:
@@ -366,7 +386,8 @@ class SensorDescription:
     2. Name of The physical quantity SensorDescription["Temperature"]
     3. Name of the data field SensorDescription["Data_01"]
     """
-    def __init__(self, ID=0x00000000, SensorName="undefined",fromDict=None):
+
+    def __init__(self, ID=0x00000000, SensorName="undefined", fromDict=None):
         """
 
 
@@ -400,13 +421,15 @@ class SensorDescription:
                 warnings.warn("Name not in Dict", RuntimeWarning)
             for i in range(16):
                 try:
-                    channelDict=fromDict[i]
-                    for key in  channelDict.keys():
-                        if key =='CHID':
+                    channelDict = fromDict[i]
+                    for key in channelDict.keys():
+                        if key == "CHID":
                             pass
                         else:
-                            self.setChannelParam(channelDict["CHID"],key,channelDict[key])
-                    print("Channel "+str(i)+" read from dict")
+                            self.setChannelParam(
+                                channelDict["CHID"], key, channelDict[key]
+                            )
+                    print("Channel " + str(i) + " read from dict")
                 except KeyError:
                     pass
 
@@ -475,7 +498,7 @@ class SensorDescription:
         return self.Channels[key]
 
     def __repr__(self):
-        return "Descripton of"+self.SensorName+hex(self.ID)
+        return "Descripton of" + self.SensorName + hex(self.ID)
 
     def asDict(self):
         """
@@ -487,7 +510,7 @@ class SensorDescription:
             ChannelDescription as dict.
 
         """
-        ReturnDict = {"Name": self.SensorName,"ID":self.ID}
+        ReturnDict = {"Name": self.SensorName, "ID": self.ID}
         for key in self.Channels:
             print(self.Channels[key].Description)
             ReturnDict.update(
@@ -496,15 +519,13 @@ class SensorDescription:
         return ReturnDict
 
     def getUnits(self):
-        units={}
+        units = {}
         for Channel in self.Channels:
             if self.Channels[Channel]["UNIT"] in units:
                 units[self.Channels[Channel]["UNIT"]].append(Channel)
             else:
-                units[self.Channels[Channel]["UNIT"]]=[Channel]
+                units[self.Channels[Channel]["UNIT"]] = [Channel]
         return units
-
-
 
 
 class Sensor:
@@ -513,6 +534,7 @@ class Sensor:
     .. image:: ../doc/Sensor_loop.png
 
     """
+
     StrFieldNames = [
         "str_Data_01",
         "str_Data_02",
@@ -557,6 +579,7 @@ class Sensor:
         4: "MIN_SCALE",
         5: "MAX_SCALE",
     }
+
     def __init__(self, ID, BufferSize=25e5):
         """
         Constructor for the Sensor class
@@ -606,6 +629,7 @@ class Sensor:
             self.lastPacketTimestamp - datetime.now()
         )  # will b 0 but has deltaTime type witch is intended
         self.datarate = 0
+
     def __repr__(self):
         """
         prints the Id and sensor name.
@@ -615,7 +639,7 @@ class Sensor:
         None.
 
         """
-        return(hex(self.Description.ID)+' '+self.Description.SensorName)
+        return hex(self.Description.ID) + " " + self.Description.SensorName
 
     def StartDumpingToFileASCII(self, filename=""):
         """
@@ -713,7 +737,6 @@ class Sensor:
         self.flags["DumpToFileProto"] = False
         self.params["DumpFileNameProto"] = ""
         self.DumpfileProto.close()
-
 
     def run(self):
         """
@@ -840,15 +863,19 @@ class Sensor:
                             pass
 
                 if self.flags["DumpToFileProto"]:
-                     if(message['Type']=='Data'):
-                         try:
-                             self.__dumpMsgToFileProto(message['ProtMsg'])
-                         except Exception:
-                             print (" Sensor id:"+hex(self.params["ID"])+"Exception in user datadump:")
-                             print('-'*60)
-                             traceback.print_exc(file=sys.stdout)
-                             print('-'*60)
-                             pass
+                    if message["Type"] == "Data":
+                        try:
+                            self.__dumpMsgToFileProto(message["ProtMsg"])
+                        except Exception:
+                            print(
+                                " Sensor id:"
+                                + hex(self.params["ID"])
+                                + "Exception in user datadump:"
+                            )
+                            print("-" * 60)
+                            traceback.print_exc(file=sys.stdout)
+                            print("-" * 60)
+                            pass
                 if self.flags["DumpToFileASCII"]:
                     if message["Type"] == "Data":
                         try:
@@ -1012,7 +1039,6 @@ class Sensor:
         self.DumpfileProto.write(message.SerializeToString())
 
 
-
 # USAGE
 # create Buffer instance with ExampleBuffer=genericPlotter:(1000)
 # Bind Sensor Callback to Buffer PushData function
@@ -1022,12 +1048,12 @@ class Sensor:
 class genericPlotter:
     def __init__(self, BufferLength):
         """
-
+        Creates an Datebuffer witch is plotting the Sensor data after the buffer is full, one Subplot for every unique physical unit [°C,deg/s,m/s^2,µT]. in the data stream  
 
         Parameters
         ----------
-        BufferLength : TYPE
-            DESCRIPTION.
+        BufferLength : integer
+            Length of the Buffer should fit aprox 2 seconds of dat.
 
         Returns
         -------
@@ -1038,23 +1064,41 @@ class genericPlotter:
         self.Buffer = [None] * BufferLength
         self.Datasetpushed = 0
         self.FullmesaggePrinted = False
-        #TODO change to actual time values""
+        # TODO change to actual time values""
         self.x = np.arange(BufferLength)
-        self.Y= np.zeros([16,BufferLength])
-        self.figInited=False
+        self.Y = np.zeros([16, BufferLength])
+        self.figInited = False
 
     def setUpFig(self):
-        self.units = self.Description.getUnits()# returns dict with DSI-unit Strings as keys and channelist of channels as value
-        self.Numofplots = len(self.units) # numer off different units for one unit one plot
+        """
+        Sets up the figure with subplots and labels cant be called in init since this params arent knowen to init time.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.units = (
+            self.Description.getUnits()
+        )  # returns dict with DSI-unit Strings as keys and channelist of channels as value
+        self.Numofplots = len(
+            self.units
+        )  # numer off different units for one unit one plot
         plt.ion()
-        #setting up subplot
+        # setting up subplot
         self.fig, self.ax = plt.subplots(self.Numofplots, 1, sharex=True)
         for ax in self.ax:
             ax.set_xlim(0, self.BufferLength)
-        self.fig.suptitle("Life plot of "+self.Description.SensorName+" with ID "+hex(self.Description.ID), y=1.0025)
+        self.fig.suptitle(
+            "Life plot of "
+            + self.Description.SensorName
+            + " with ID "
+            + hex(self.Description.ID),
+            y=1.0025,
+        )
         self.titles = []
-        self.unitstr=[]
-        #parsing titles and unit from the description
+        self.unitstr = []
+        # parsing titles and unit from the description
         for unit in self.units:
             self.unitstr.append(unit)
             title = ""
@@ -1068,18 +1112,34 @@ class genericPlotter:
         # self.ax.set_ylim(-160,160)
         plt.show()
 
-    #TODO make convDict external
-    def __getShortunitStr(self,unitstr):
-        convDict={'\\degreecelsius': "°C",
-         '\\micro\\tesla': "µT",
-         '\\radian\\second\\tothe{-1}': "rad/s",
-         '\\metre\\second\\tothe{-2}': "m/s^2"}
-        try:
-            result=convDict[unitstr]
-        except KeyError:
-            result=unitstr
-        return result
+    # TODO make convDict external
+    def __getShortunitStr(self, unitstr):
+        """
+        converts the log DSI compatible unit sting to shorter ones for matplotlib plotting.
+        e.g. '\\metre\\second\\tothe{-2}'--> "m/s^2".
 
+        Parameters
+        ----------
+        unitstr : string
+            DSi compatible string.
+
+        Returns
+        -------
+        result : string
+            Short string for matplotlib plotting.
+
+        """
+        convDict = {
+            "\\degreecelsius": "°C",
+            "\\micro\\tesla": "µT",
+            "\\radian\\second\\tothe{-1}": "rad/s",
+            "\\metre\\second\\tothe{-2}": "m/s^2",
+        }
+        try:
+            result = convDict[unitstr]
+        except KeyError:
+            result = unitstr
+        return result
 
     def PushData(self, message, Description):
         """
@@ -1099,52 +1159,53 @@ class genericPlotter:
         """
         if self.Datasetpushed == 0:
             self.Description = copy.deepcopy(Description)
-            #ok fig was not inited do it now
-            if self.figInited==False:
+            # ok fig was not inited do it now
+            if self.figInited == False:
                 self.setUpFig()
-                self.figInited=True
+                self.figInited = True
         if self.Datasetpushed < self.BufferLength:
-            #Pushing data in to the numpy array for convinience
+            # Pushing data in to the numpy array for convinience
             i = self.Datasetpushed
             self.Buffer[i] = message
-            self.Y[0,i] = self.Buffer[i].Data_01
-            self.Y[1,i] = self.Buffer[i].Data_02
-            self.Y[2,i] = self.Buffer[i].Data_03
-            self.Y[3,i] = self.Buffer[i].Data_04
-            self.Y[4,i] = self.Buffer[i].Data_05
-            self.Y[5,i] = self.Buffer[i].Data_06
-            self.Y[6,i] = self.Buffer[i].Data_07
-            self.Y[7,i] = self.Buffer[i].Data_08
-            self.Y[8,i] = self.Buffer[i].Data_09
-            self.Y[9,i] = self.Buffer[i].Data_10
-            self.Y[10,i] = self.Buffer[i].Data_11
-            self.Y[11,i] = self.Buffer[i].Data_12
-            self.Y[12,i] = self.Buffer[i].Data_13
-            self.Y[13,i] = self.Buffer[i].Data_14
-            self.Y[14,i] = self.Buffer[i].Data_15
-            self.Y[15,i] = self.Buffer[i].Data_16
+            self.Y[0, i] = self.Buffer[i].Data_01
+            self.Y[1, i] = self.Buffer[i].Data_02
+            self.Y[2, i] = self.Buffer[i].Data_03
+            self.Y[3, i] = self.Buffer[i].Data_04
+            self.Y[4, i] = self.Buffer[i].Data_05
+            self.Y[5, i] = self.Buffer[i].Data_06
+            self.Y[6, i] = self.Buffer[i].Data_07
+            self.Y[7, i] = self.Buffer[i].Data_08
+            self.Y[8, i] = self.Buffer[i].Data_09
+            self.Y[9, i] = self.Buffer[i].Data_10
+            self.Y[10, i] = self.Buffer[i].Data_11
+            self.Y[11, i] = self.Buffer[i].Data_12
+            self.Y[12, i] = self.Buffer[i].Data_13
+            self.Y[13, i] = self.Buffer[i].Data_14
+            self.Y[14, i] = self.Buffer[i].Data_15
+            self.Y[15, i] = self.Buffer[i].Data_16
             self.Datasetpushed = self.Datasetpushed + 1
         else:
-            #ok the buffer is full---> do some plotting now
+            # ok the buffer is full---> do some plotting now
 
-            #flush the axis
+            # flush the axis
             for ax in self.ax:
                 ax.clear()
-            #set titles and Y labels
+            # set titles and Y labels
             for i in range(len(self.titles)):
                 self.ax[i].set_title(self.titles[i])
                 self.ax[i].set_ylabel(self.__getShortunitStr(self.unitstr[i]))
-            #actual draw
-            i=0
+            # actual draw
+            i = 0
             for unit in self.units:
                 for channel in self.units[unit]:
-                    self.ax[i].plot(self.x,self.Y[channel-1])
-                i=i+1
+                    self.ax[i].plot(self.x, self.Y[channel - 1])
+                i = i + 1
             # self.line1.set_ydata(self.y1)
             self.fig.canvas.draw()
             # flush Buffer
             self.Buffer = [None] * self.BufferLength
             self.Datasetpushed = 0
+
 
 # Example for DSCP Messages
 # Quant b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x00"\x0eX Acceleration*\x0eY Acceleration2\x0eZ Acceleration:\x12X Angular velocityB\x12Y Angular velocityJ\x12Z Angular velocityR\x17X Magnetic flux densityZ\x17Y Magnetic flux densityb\x17Z Magnetic flux densityj\x0bTemperature'
@@ -1153,11 +1214,15 @@ class genericPlotter:
 # Min   b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x04\xa5\x01\x16\xea\x1c\xc3\xad\x01\x16\xea\x1c\xc3\xb5\x01\x16\xea\x1c\xc3\xbd\x01\xe3\xa0\x0b\xc2\xc5\x01\xe3\xa0\x0b\xc2\xcd\x01\xe3\xa0\x0b\xc2\xd5\x01\x00\x00\x00\x80\xdd\x01\x00\x00\x00\x80\xe5\x01\x00\x00\x00\x80\xed\x01\xf3j\x9a\xc2'
 # Max   b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x05\xa5\x01\xdc\xe8\x1cC\xad\x01\xdc\xe8\x1cC\xb5\x01\xdc\xe8\x1cC\xbd\x01\xcc\x9f\x0bB\xc5\x01\xcc\x9f\x0bB\xcd\x01\xcc\x9f\x0bB\xd5\x01\x00\x00\x00\x00\xdd\x01\x00\x00\x00\x00\xe5\x01\x00\x00\x00\x00\xed\x01\x02)\xeeB'
 if __name__ == "__main__":
-    DR=DataReceiver("",7654)
+    DR = DataReceiver("", 7654)
     time.sleep(5)
-    firstSensorId=list(DR.AllSensors.keys())[0]
-    print("First sensor is"+str(DR.AllSensors[firstSensorId])+" binding generic plotter")
-    GP=genericPlotter(2000)
+    firstSensorId = list(DR.AllSensors.keys())[0]
+    print(
+        "First sensor is"
+        + str(DR.AllSensors[firstSensorId])
+        + " binding generic plotter"
+    )
+    GP = genericPlotter(2000)
     DR.AllSensors[firstSensorId].SetCallback(GP.PushData)
 # func_stats = yappi.get_func_stats()
 # func_stats.save('./callgrind.out.', 'CALLGRIND')
