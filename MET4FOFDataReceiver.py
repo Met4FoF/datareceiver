@@ -475,7 +475,7 @@ class SensorDescription:
         return self.Channels[key]
 
     def __repr__(self):
-        return self.asDict()
+        return "Descripton of"+self.SensorName+hex(self.ID)
 
     def asDict(self):
         """
@@ -616,6 +616,7 @@ class Sensor:
 
         """
         return(hex(self.Description.ID)+' '+self.Description.SensorName)
+
     def StartDumpingToFileASCII(self, filename=""):
         """
         Activate dumping Messages in a file ASCII encoded ; seperated.
@@ -1010,129 +1011,10 @@ class Sensor:
         self.DumpfileProto.write(_VarintBytes(size))
         self.DumpfileProto.write(message.SerializeToString())
 
-# USAGE
-# create Buffer instance with ExampleBuffer=DataBuffer(1000)
-# Bind Sensor Callback to Buffer PushData function
-# DR.AllSensors[$IDOFSENSOR].SetCallback(ExampleBuffer.PushData)
-# wait until buffer is Full
-# Data can be acessed over the atribute ExampleBuffer.Buffer[0]
-class DataBuffer:
-    def __init__(self, BufferLength):
-        """
 
-
-        Parameters
-        ----------
-        BufferLength : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.BufferLength = BufferLength
-        self.Buffer = [None] * BufferLength
-        self.Datasetpushed = 0
-        self.FullmesaggePrinted = False
-        self.x = np.arange(BufferLength)
-        self.y1 = np.zeros(BufferLength)
-        self.y2 = np.zeros(BufferLength)
-        self.y3 = np.zeros(BufferLength)
-        self.y4 = np.zeros(BufferLength)
-        self.y5 = np.zeros(BufferLength)
-        self.y6 = np.zeros(BufferLength)
-        self.y7 = np.zeros(BufferLength)
-        self.y8 = np.zeros(BufferLength)
-        self.y9 = np.zeros(BufferLength)
-        self.y10 = np.zeros(BufferLength)
-        self.y11 = np.zeros(BufferLength)
-        self.y12 = np.zeros(BufferLength)
-        self.y13 = np.zeros(BufferLength)
-        plt.ion()
-        self.fig, self.ax = plt.subplots(5, 1, sharex=True)
-        self.ax[0].set_xlim(0, self.BufferLength)
-        self.ax[1].set_xlim(0, self.BufferLength)
-        self.ax[2].set_xlim(0, self.BufferLength)
-        self.ax[3].set_xlim(0, self.BufferLength)
-        self.ax[4].set_xlim(0, self.BufferLength)
-        self.ax[0].set_ylabel("Acceleration in m/s²")
-        self.ax[1].set_ylabel("Rotational speed in rad/s")
-        self.ax[2].set_ylabel("Mag. flux dens in µT")
-        self.ax[3].set_ylabel("Temp. in °C")
-        self.ax[4].set_ylabel("Analog V in V")
-        # self.line1, = self.ax[0].plot(self.x,np.zeros(BufferLength))
-        # self.line1.set_xdata(self.x)
-        # self.ax.set_ylim(-160,160)
-        plt.show()
-
-    def PushData(self, message, Description):
-        """
-        Pushes an block of data in to the buffer. This function is set as Sensor callback with the function :Sensor.SetCallback`
-
-        Parameters
-        ----------
-        message : protobuff message
-            Message to be pushed in the buffer.
-        Description SensorDescription:
-            SensorDescription is discarded.
-
-        Returns
-        -------
-        None.
-
-        """
-        if self.Datasetpushed == 0:
-            self.Description = copy.deepcopy(Description)
-        if self.Datasetpushed < self.BufferLength:
-            i = self.Datasetpushed
-            self.Buffer[i] = message
-            self.y1[i] = self.Buffer[i].Data_01
-            self.y2[i] = self.Buffer[i].Data_02
-            self.y3[i] = self.Buffer[i].Data_03
-            self.y4[i] = self.Buffer[i].Data_04
-            self.y5[i] = self.Buffer[i].Data_05
-            self.y6[i] = self.Buffer[i].Data_06
-            self.y7[i] = self.Buffer[i].Data_07
-            self.y8[i] = self.Buffer[i].Data_08
-            self.y9[i] = self.Buffer[i].Data_09
-            self.y10[i] = self.Buffer[i].Data_10
-            self.y11[i] = self.Buffer[i].Data_11
-            self.y12[i] = self.Buffer[i].Data_12
-            self.y13[i] = self.Buffer[i].Data_13
-            self.Datasetpushed = self.Datasetpushed + 1
-        else:
-            self.ax[0].clear()
-            self.ax[1].clear()
-            self.ax[2].clear()
-            self.ax[3].clear()
-            self.ax[4].clear()
-            self.ax[0].set_ylabel("Acceleration in m/s²")
-            self.ax[1].set_ylabel("Rotational speed in rad/s")
-            self.ax[2].set_ylabel("Mag. flux dens in µT")
-            self.ax[3].set_ylabel("Temp. in °C")
-            self.ax[4].set_ylabel("Analog V in V")
-            # self.line1.set_ydata(self.y1)
-            self.ax[0].plot(self.x, self.y1)
-            self.ax[0].plot(self.x, self.y2)
-            self.ax[0].plot(self.x, self.y3)
-            self.ax[1].plot(self.x, self.y4)
-            self.ax[1].plot(self.x, self.y5)
-            self.ax[1].plot(self.x, self.y6)
-            self.ax[2].plot(self.x, self.y7)
-            self.ax[2].plot(self.x, self.y8)
-            self.ax[2].plot(self.x, self.y9)
-            self.ax[3].plot(self.x, self.y10)
-            self.ax[4].plot(self.x, self.y11)
-            self.ax[4].plot(self.x, self.y12)
-            self.ax[4].plot(self.x, self.y13)
-            self.fig.canvas.draw()
-            # flush Buffer
-            self.Buffer = [None] * self.BufferLength
-            self.Datasetpushed = 0
 
 # USAGE
-# create Buffer instance with ExampleBuffer=DataBuffer(1000)
+# create Buffer instance with ExampleBuffer=genericPlotter:(1000)
 # Bind Sensor Callback to Buffer PushData function
 # DR.AllSensors[$IDOFSENSOR].SetCallback(ExampleBuffer.PushData)
 # wait until buffer is Full
@@ -1156,8 +1038,49 @@ class genericPlotter:
         self.Buffer = [None] * BufferLength
         self.Datasetpushed = 0
         self.FullmesaggePrinted = False
+        #TODO change to actual time values""
         self.x = np.arange(BufferLength)
         self.Y= np.zeros([16,BufferLength])
+        self.figInited=False
+
+    def setUpFig(self):
+        self.units = self.Description.getUnits()# returns dict with DSI-unit Strings as keys and channelist of channels as value
+        self.Numofplots = len(self.units) # numer off different units for one unit one plot
+        plt.ion()
+        #setting up subplot
+        self.fig, self.ax = plt.subplots(self.Numofplots, 1, sharex=True)
+        for ax in self.ax:
+            ax.set_xlim(0, self.BufferLength)
+        self.fig.suptitle("Life plot of "+self.Description.SensorName+" with ID "+hex(self.Description.ID), y=1.0025)
+        self.titles = []
+        self.unitstr=[]
+        #parsing titles and unit from the description
+        for unit in self.units:
+            self.unitstr.append(unit)
+            title = ""
+            for channel in self.units[unit]:
+                title = title + self.Description[channel]["PHYSICAL_QUANTITY"] + " "
+            self.titles.append(title)
+            for i in range(len(self.titles)):
+                self.ax[i].set_title(self.titles[i])
+        # self.line1, = self.ax[0].plot(self.x,np.zeros(BufferLength))
+        # self.line1.set_xdata(self.x)
+        # self.ax.set_ylim(-160,160)
+        plt.show()
+
+    #TODO make convDict external
+    def __getShortunitStr(self,unitstr):
+        convDict={'\\degreecelsius': "°C",
+         '\\micro\\tesla': "µT",
+         '\\radian\\second\\tothe{-1}': "rad/s",
+         '\\metre\\second\\tothe{-2}': "m/s^2"}
+        try:
+            result=convDict[unitstr]
+        except KeyError:
+            result=unitstr
+        return result
+
+
     def PushData(self, message, Description):
         """
         Pushes an block of data in to the buffer. This function is set as Sensor callback with the function :Sensor.SetCallback`
@@ -1176,65 +1099,48 @@ class genericPlotter:
         """
         if self.Datasetpushed == 0:
             self.Description = copy.deepcopy(Description)
-            self.units = self.Description.getUnits()
-            self.Numofplots=self.units
-            plt.ion()
-            self.fig, self.ax = plt.subplots(self.Numofplots, 1, sharex=True)
-            for ax in self.ax:
-                self.ax.set_xlim(0, self.BufferLength)
-
-                #TODO do more stuff here
-            self.ax[0].set_ylabel("Acceleration in m/s²")
-            self.ax[1].set_ylabel("Rotational speed in rad/s")
-            self.ax[2].set_ylabel("Mag. flux dens in µT")
-            self.ax[3].set_ylabel("Temp. in °C")
-            self.ax[4].set_ylabel("Analog V in V")
-            # self.line1, = self.ax[0].plot(self.x,np.zeros(BufferLength))
-            # self.line1.set_xdata(self.x)
-            # self.ax.set_ylim(-160,160)
-            plt.show()
+            #ok fig was not inited do it now
+            if self.figInited==False:
+                self.setUpFig()
+                self.figInited=True
         if self.Datasetpushed < self.BufferLength:
+            #Pushing data in to the numpy array for convinience
             i = self.Datasetpushed
             self.Buffer[i] = message
-            self.y1[i] = self.Buffer[i].Data_01
-            self.y2[i] = self.Buffer[i].Data_02
-            self.y3[i] = self.Buffer[i].Data_03
-            self.y4[i] = self.Buffer[i].Data_04
-            self.y5[i] = self.Buffer[i].Data_05
-            self.y6[i] = self.Buffer[i].Data_06
-            self.y7[i] = self.Buffer[i].Data_07
-            self.y8[i] = self.Buffer[i].Data_08
-            self.y9[i] = self.Buffer[i].Data_09
-            self.y10[i] = self.Buffer[i].Data_10
-            self.y11[i] = self.Buffer[i].Data_11
-            self.y12[i] = self.Buffer[i].Data_12
-            self.y13[i] = self.Buffer[i].Data_13
+            self.Y[0,i] = self.Buffer[i].Data_01
+            self.Y[1,i] = self.Buffer[i].Data_02
+            self.Y[2,i] = self.Buffer[i].Data_03
+            self.Y[3,i] = self.Buffer[i].Data_04
+            self.Y[4,i] = self.Buffer[i].Data_05
+            self.Y[5,i] = self.Buffer[i].Data_06
+            self.Y[6,i] = self.Buffer[i].Data_07
+            self.Y[7,i] = self.Buffer[i].Data_08
+            self.Y[8,i] = self.Buffer[i].Data_09
+            self.Y[9,i] = self.Buffer[i].Data_10
+            self.Y[10,i] = self.Buffer[i].Data_11
+            self.Y[11,i] = self.Buffer[i].Data_12
+            self.Y[12,i] = self.Buffer[i].Data_13
+            self.Y[13,i] = self.Buffer[i].Data_14
+            self.Y[14,i] = self.Buffer[i].Data_15
+            self.Y[15,i] = self.Buffer[i].Data_16
             self.Datasetpushed = self.Datasetpushed + 1
         else:
-            self.ax[0].clear()
-            self.ax[1].clear()
-            self.ax[2].clear()
-            self.ax[3].clear()
-            self.ax[4].clear()
-            self.ax[0].set_ylabel("Acceleration in m/s²")
-            self.ax[1].set_ylabel("Rotational speed in rad/s")
-            self.ax[2].set_ylabel("Mag. flux dens in µT")
-            self.ax[3].set_ylabel("Temp. in °C")
-            self.ax[4].set_ylabel("Analog V in V")
+            #ok the buffer is full---> do some plotting now
+
+            #flush the axis
+            for ax in self.ax:
+                ax.clear()
+            #set titles and Y labels
+            for i in range(len(self.titles)):
+                self.ax[i].set_title(self.titles[i])
+                self.ax[i].set_ylabel(self.__getShortunitStr(self.unitstr[i]))
+            #actual draw
+            i=0
+            for unit in self.units:
+                for channel in self.units[unit]:
+                    self.ax[i].plot(self.x,self.Y[channel-1])
+                i=i+1
             # self.line1.set_ydata(self.y1)
-            self.ax[0].plot(self.x, self.y1)
-            self.ax[0].plot(self.x, self.y2)
-            self.ax[0].plot(self.x, self.y3)
-            self.ax[1].plot(self.x, self.y4)
-            self.ax[1].plot(self.x, self.y5)
-            self.ax[1].plot(self.x, self.y6)
-            self.ax[2].plot(self.x, self.y7)
-            self.ax[2].plot(self.x, self.y8)
-            self.ax[2].plot(self.x, self.y9)
-            self.ax[3].plot(self.x, self.y10)
-            self.ax[4].plot(self.x, self.y11)
-            self.ax[4].plot(self.x, self.y12)
-            self.ax[4].plot(self.x, self.y13)
             self.fig.canvas.draw()
             # flush Buffer
             self.Buffer = [None] * self.BufferLength
@@ -1249,8 +1155,9 @@ class genericPlotter:
 if __name__ == "__main__":
     DR=DataReceiver("",7654)
     time.sleep(5)
-    description=DR.AllSensors[0x19920000].Description
-    dscDict = description.asDict()
-    description.getUnits()
+    firstSensorId=list(DR.AllSensors.keys())[0]
+    print("First sensor is"+str(DR.AllSensors[firstSensorId])+" binding generic plotter")
+    GP=genericPlotter(2000)
+    DR.AllSensors[firstSensorId].SetCallback(GP.PushData)
 # func_stats = yappi.get_func_stats()
 # func_stats.save('./callgrind.out.', 'CALLGRIND')
