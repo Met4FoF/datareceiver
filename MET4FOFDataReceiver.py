@@ -431,7 +431,19 @@ class SensorDescription:
                             )
                     print("Channel " + str(i) + " read from dict")
                 except KeyError:
-                    pass
+                    #ok maybe the channels are coded as string
+                    try:
+                        channelDict = fromDict[str(i)]
+                        for key in channelDict.keys():
+                            if key == "CHID":
+                                pass
+                            else:
+                                self.setChannelParam(
+                                    channelDict["CHID"], key, channelDict[key]
+                                )
+                        print("Channel " + str(i) + " read from dict")
+                    except KeyError:
+                        pass
 
     def setChannelParam(self, CHID, key, value):
         """
