@@ -105,6 +105,7 @@ class SensorDataPlayer:
             "Port": port,
             "ParamUpdateRateHz": paramupdateratehz,
             "idOverride": idOverride,
+            "fileName":filename
         }
         self.reader = csv.reader(open(filename), delimiter=";")
         fristrow=next(self.reader)
@@ -123,6 +124,7 @@ class SensorDataPlayer:
         self.flags["Networtinited"] = True
         self.msgcount = 0
         self.lastTimestamp = 0
+        self.DataRate=0
         self._stop_event = threading.Event()
         self.thread = threading.Thread(
             target=self.run, name="Sensor Simulator", args=()
@@ -144,6 +146,7 @@ class SensorDataPlayer:
         next_time_dscp = firsttime + delta_t_dscp
         first_time_data=time.time()
         next_time_data = time.time()
+        lastTousandPacktesTimeStamp=time.time()
         while not self._stop_event.is_set():
             # TODO improve time scheduling
             if next_time_data - time.time() < 0:
@@ -151,12 +154,16 @@ class SensorDataPlayer:
                 delta=float(self.line[2]) + (float(self.line[3]) * 1e-9)-self.firstpacket_time
                 next_time_data = first_time_data + delta
                 self.line=next(self.reader)
+                if self.packetssend % 1000 == 0:
+                    sendTime=time.time()
+                    self.DataRate=1000/(sendTime-lastTousandPacktesTimeStamp)
+                    print(str(self.packetssend) + " Packets sent Updaterate is "+str(self.DataRate))
+                    lastTousandPacktesTimeStamp=sendTime
+                self.packetssend = self.packetssend + 1
             if next_time_dscp - time.time() < 0:
                 self.__sendDescription()
                 print("description sent")
                 next_time_dscp = next_time_dscp + delta_t_dscp
-
-            # +geting actual time
 
     def stop(self):
         """
@@ -194,10 +201,6 @@ class SensorDataPlayer:
         self.socket.sendto(
             binarymessage, (self.params["TargetIp"], self.params["Port"])
         )
-        self.packetssend = self.packetssend + 1
-        if self.packetssend % 1000 == 0:
-            print(str(self.packetssend) + " Packets sent")
-        return
 
     def __sendDescription(self):
         """
@@ -232,6 +235,9 @@ class SensorDataPlayer:
                 binarymessage, (self.params["TargetIp"], self.params["Port"])
             )
         return
+
+    def __repr__(self):
+        return "Dataplayer: playing "+str(self.params["fileName"])
 
 if __name__ == "__main__":
     Player=SensorDataPlayer('../data/2020-03-03_Messungen_MPU9250_SN12 Frequenzgang_Firmware_0.3.0/mpu9250_12_10_hz_250_Hz_6wdh.dump')
