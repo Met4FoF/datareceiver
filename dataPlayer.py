@@ -111,8 +111,14 @@ class SensorDataPlayer:
         paramsdictjson=json.loads(fristrow[0])
         self.line = next(self.reader)# discard second line with headers
         self.line = next(self.reader)
+        if idOverride !=0:
+            self.params["ID"]=idOverride
+        else:
+            self.params["ID"]=int(self.line[0])
+        print("Sensor ID is: "+hex(self.params["ID"]))
         self.firstpacket_time=float(self.line[2]) + (float(self.line[3]) * 1e-9)
         self.Description=DR.SensorDescription(fromDict=paramsdictjson)
+        self.Description.ID=self.params["ID"]
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.flags["Networtinited"] = True
         self.msgcount = 0
@@ -205,26 +211,27 @@ class SensorDataPlayer:
         # 0: "PHYSICAL_QUANTITY",1: "UNIT",3: "RESOLUTION",4: "MIN_SCALE",5: "MAX_SCALE",
         DescriptonType = {0: "str", 1: "str", 3: "float", 4: "float", 5: "float"}
         DescriptonKeys = {0: "PHYSICAL_QUANTITY", 1: "UNIT", 3: "RESOLUTION", 4: "MIN_SCALE", 5: "MAX_SCALE"}
-        for desckeys in DescriptonType :
+        for desckeys in DescriptonKeys :
             proto_description = messages_pb2.DescriptionMessage()
-
-            proto_description.Sensor_name = "Sensor Simulation"
-            proto_description.id = self.params["ID"]
+            proto_description.Sensor_name = self.Description.SensorName
+            proto_description.id = self.Description.ID
             proto_description.Description_Type = desckeys
-            if DescriptonType[desckeys] == "str":
-                proto_description.str_Data_01 = Description[desckeys][0]
-                proto_description.str_Data_02 = Description[desckeys][1]
-                proto_description.str_Data_03 = Description[desckeys][2]
-                proto_description.str_Data_04 = Description[desckeys][3]
-            if DescriptonType[desckeys] == "float":
-                proto_description.f_Data_01 = Description[desckeys][0]
-                proto_description.f_Data_02 = Description[desckeys][1]
-                proto_description.f_Data_03 = Description[desckeys][2]
-                proto_description.f_Data_04 = Description[desckeys][3]
+            for i in range(16):
+                try:
+                    descVal=self.Description[i+1][DescriptonKeys[desckeys]]
+                    if DescriptonType[desckeys] == "str":
+                        proto_description.__setattr__(self.strFieldNames[i],descVal)
+                    if DescriptonType[desckeys] == "float":
+                        proto_description.__setattr__(self.fFieldNames[i], descVal)
+                except KeyError:
+                    pass
             binproto = proto_description.SerializeToString()
             binarymessage = b"DSCP"
             binarymessage = binarymessage + _VarintBytes(len(binproto)) + binproto
-
+            self.socket.sendto(
+                binarymessage, (self.params["TargetIp"], self.params["Port"])
+            )
+        return
 
 if __name__ == "__main__":
     Player=SensorDataPlayer('../data/2020-03-03_Messungen_MPU9250_SN12 Frequenzgang_Firmware_0.3.0/mpu9250_12_10_hz_250_Hz_6wdh.dump')
