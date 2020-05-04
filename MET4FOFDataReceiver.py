@@ -12,6 +12,7 @@ import traceback
 import os
 import socket
 import threading
+
 import warnings
 from datetime import datetime
 from multiprocessing import Queue
@@ -96,7 +97,6 @@ class DataReceiver:
         self.flags["Networtinited"] = True
         self.packestlosforsensor = {}
         self.AllSensors = {}
-        self.ActiveSensors = {}
         self.msgcount = 0
         self.lastTimestamp = 0
         self.Datarate = 0
@@ -613,6 +613,8 @@ class Sensor:
         self.buffersize = BufferSize
         self.flags = {
             "DumpToFile": False,
+            "DumpToFileProto":False,
+            "DumpToFileASCII": False,
             "PrintProcessedCounts": True,
             "callbackSet": False,
         }
@@ -636,11 +638,9 @@ class Sensor:
         # self.thread.daemon = True
         self.thread.start()
         self.ProcessedPacekts = 0
-        self.lastPacketTimestamp = datetime.now()
-        self.deltaT = (
-            self.lastPacketTimestamp - datetime.now()
-        )  # will b 0 but has deltaTime type witch is intended
         self.datarate = 0
+        self.timeoutOccured=False
+        self.timeSinceLastPacket = 0
 
     def __repr__(self):
         """
@@ -762,11 +762,7 @@ class Sensor:
             # work around adding time out so self.buffer.get is returning after a time an thestop_event falg can be checked
             try:
                 message = self.buffer.get(timeout=0.1)
-                # self.deltaT = (
-                #    tmpTime - self.lastPacketTimestamp
-                # )  # will b 0 but has deltaTime type witch is intended
-                # self.datarate = 1 / (self.deltaT.seconds + 1e-6 * self.deltaT.microseconds)
-                # self.lastPacketTimestamp = datetime.now()
+                self.timeoutOccured = False
                 self.ProcessedPacekts = self.ProcessedPacekts + 1
                 if self.flags["PrintProcessedCounts"]:
                     if self.ProcessedPacekts % 10000 == 0:
@@ -789,7 +785,7 @@ class Sensor:
                             # run only if no description packed has been procesed ever
                             # self.Description.SensorName=message.Sensor_name
                             print(
-                                "Found new "
+                                "Found new description "
                                 + Description.Sensor_name
                                 + " sensor with ID:"
                                 + str(self.params["ID"])
@@ -902,8 +898,12 @@ class Sensor:
                             traceback.print_exc(file=sys.stdout)
                             print("-" * 60)
                             pass
-            except Exception:
-                pass
+            except Exception as inst:
+                 if self.timeoutOccured == False:
+                     self.timeoutOccured = True
+                     self.timeSinceLastPacket=0
+                 else:
+                     self.timeSinceLastPacket+=0.1
 
     def SetCallback(self, callback):
         """
@@ -1226,7 +1226,7 @@ class genericPlotter:
 # Min   b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x04\xa5\x01\x16\xea\x1c\xc3\xad\x01\x16\xea\x1c\xc3\xb5\x01\x16\xea\x1c\xc3\xbd\x01\xe3\xa0\x0b\xc2\xc5\x01\xe3\xa0\x0b\xc2\xcd\x01\xe3\xa0\x0b\xc2\xd5\x01\x00\x00\x00\x80\xdd\x01\x00\x00\x00\x80\xe5\x01\x00\x00\x00\x80\xed\x01\xf3j\x9a\xc2'
 # Max   b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x05\xa5\x01\xdc\xe8\x1cC\xad\x01\xdc\xe8\x1cC\xb5\x01\xdc\xe8\x1cC\xbd\x01\xcc\x9f\x0bB\xc5\x01\xcc\x9f\x0bB\xcd\x01\xcc\x9f\x0bB\xd5\x01\x00\x00\x00\x00\xdd\x01\x00\x00\x00\x00\xe5\x01\x00\x00\x00\x00\xed\x01\x02)\xeeB'
 if __name__ == "__main__":
-    DR = DataReceiver("", 7654)
+    DR = DataReceiver("192.168.0.200", 7654)
     time.sleep(5)
     firstSensorId = list(DR.AllSensors.keys())[0]
     print(
