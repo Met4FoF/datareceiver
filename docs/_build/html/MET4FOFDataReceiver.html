@@ -65,25 +65,6 @@
 </dd></dl>
 
 <dl class="class">
-<dt id="MET4FOFDataReceiver.DataBuffer">
-<em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">DataBuffer</code><span class="sig-paren">(</span><em>BufferLength</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataBuffer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataBuffer" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<dl class="method">
-<dt id="MET4FOFDataReceiver.DataBuffer.PushData">
-<code class="descname">PushData</code><span class="sig-paren">(</span><em>message</em>, <em>Description</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataBuffer.PushData"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataBuffer.PushData" title="Permalink to this definition">¶</a></dt>
-<dd><p>Pushes an block of data in to the buffer. This function is set as Sensor callback with the function :Sensor.SetCallback`</p>
-<dl class="docutils">
-<dt>message <span class="classifier-delimiter">:</span> <span class="classifier">protobuff message</span></dt>
-<dd>Message to be pushed in the buffer.</dd>
-<dt>Description SensorDescription:</dt>
-<dd>SensorDescription is discarded.</dd>
-</dl>
-<p>None.</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="class">
 <dt id="MET4FOFDataReceiver.DataReceiver">
 <em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">DataReceiver</code><span class="sig-paren">(</span><em>IP</em>, <em>Port=7654</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#DataReceiver"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.DataReceiver" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
@@ -210,8 +191,13 @@
 
 <dl class="class">
 <dt id="MET4FOFDataReceiver.SensorDescription">
-<em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">SensorDescription</code><span class="sig-paren">(</span><em>ID</em>, <em>SensorName</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#SensorDescription"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.SensorDescription" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">SensorDescription</code><span class="sig-paren">(</span><em>ID=0</em>, <em>SensorName='undefined'</em>, <em>fromDict=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#SensorDescription"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.SensorDescription" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>this class is holding the Sensor description.
+It’s subscriptable by :
+1. inter number of the channel   eg.g. SensorDescription[1]
+2. Name of The physical quantity SensorDescription[“Temperature”]
+3. Name of the data field SensorDescription[“Data_01”]</p>
 <dl class="method">
 <dt id="MET4FOFDataReceiver.SensorDescription.asDict">
 <code class="descname">asDict</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#SensorDescription.asDict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.SensorDescription.asDict" title="Permalink to this definition">¶</a></dt>
@@ -221,6 +207,11 @@
 <dd>ChannelDescription as dict.</dd>
 </dl>
 </dd></dl>
+
+<dl class="method">
+<dt id="MET4FOFDataReceiver.SensorDescription.getUnits">
+<code class="descname">getUnits</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#SensorDescription.getUnits"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.SensorDescription.getUnits" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 <dl class="method">
 <dt id="MET4FOFDataReceiver.SensorDescription.setChannelParam">
@@ -234,6 +225,32 @@
 <dt>value <span class="classifier-delimiter">:</span> <span class="classifier">string or intger</span></dt>
 <dd>valuie coresponding to the key.</dd>
 </dl>
+<p>None.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="MET4FOFDataReceiver.genericPlotter">
+<em class="property">class </em><code class="descclassname">MET4FOFDataReceiver.</code><code class="descname">genericPlotter</code><span class="sig-paren">(</span><em>BufferLength</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#genericPlotter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.genericPlotter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="MET4FOFDataReceiver.genericPlotter.PushData">
+<code class="descname">PushData</code><span class="sig-paren">(</span><em>message</em>, <em>Description</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#genericPlotter.PushData"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.genericPlotter.PushData" title="Permalink to this definition">¶</a></dt>
+<dd><p>Pushes an block of data in to the buffer. This function is set as Sensor callback with the function :Sensor.SetCallback`</p>
+<dl class="docutils">
+<dt>message <span class="classifier-delimiter">:</span> <span class="classifier">protobuff message</span></dt>
+<dd>Message to be pushed in the buffer.</dd>
+<dt>Description SensorDescription:</dt>
+<dd>SensorDescription is discarded.</dd>
+</dl>
+<p>None.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="MET4FOFDataReceiver.genericPlotter.setUpFig">
+<code class="descname">setUpFig</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/MET4FOFDataReceiver.html#genericPlotter.setUpFig"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#MET4FOFDataReceiver.genericPlotter.setUpFig" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets up the figure with subplots and labels cant be called in init since this params arent knowen to init time.</p>
 <p>None.</p>
 </dd></dl>
 

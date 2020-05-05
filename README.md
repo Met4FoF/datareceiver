@@ -8,7 +8,10 @@ pip install -r requirements.txt
 ```
 
 # Usage
+## With example DATA
+An example data set can be downloaded here
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3786587.svg)](https://doi.org/10.5281/zenodo.3786587)
 # Principle of Operation
 ## Data format
 The data sent by the smartup unit is serialized with [google protobuff](https://developers.google.com/protocol-buffers).
@@ -111,7 +114,7 @@ As soon as the datareiceiver has been started all messages arriving on the netwo
 ### Dataprocessing with in the sensor task
 ![Sensor_task](doc/Sensor_loop.png "Dataprocessing with in the sensor task")
 The Sensor Task continuously pops message dicts from the queue. Description messages are used to update the sensor description of the sensor instance.
-If one of the flags "DumpToFileASCII" or "DumpToFileProto" is set, the corresponding dump file is opened. Afterwards every message is written into the file until the flag is removed. If a callback is set it will be called with the description and the message. See the section callback. TODO Callback Section 
+If one of the flags "DumpToFileASCII" or "DumpToFileProto" is set, the corresponding dump file is opened. Afterwards every message is written into the file until the flag is removed. If a callback is set it will be called with the description and the message. See the section callback. TODO Callback Section
 ## Additional information
 
 Additional information around code writing and software development in the project you can find in the repository's [wiki](https://github.com/Met4FoF/Code/wiki), in the [coding conventions](conventions/README.md) and in our related [Blog post](https://www.ptb.de/empir2018/met4fof/information-communication/blog/detail-view/?tx_news_pi1%5Bnews%5D=38&tx_news_pi1%5Bcontroller%5D=News&tx_news_pi1%5Baction%5D=detail&cHash=ce963c7573572d40ef0f496449ef8aff) on the [project homepage](https://www.ptb.de/empir2018/met4fof/home/).
