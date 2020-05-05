@@ -8,6 +8,15 @@ pip install -r requirements.txt
 ```
 
 # Usage
+## With a Met4FoF Data Aqusition unit
+1. Set the Ip address of your PC to the UDP target IP address shown on the board, which is probably ```192.168.0.200```.
+2. Create an DataReceiver instance bound to your UDP Target IP
+    ```python
+    DR = DataReceiver("192.168.0.200", 7654)
+    ``` 
+   
+    After some time you should see output like this 
+   
 ## With example DATA
 An example data set can be downloaded here
 
