@@ -9,10 +9,17 @@ pip install -r requirements.txt
 
 # Usage
 ## With a Met4FoF Data Aqusition unit
-1. Connect
-1. Set the Ip address of your PC to the UDP target IP address shown on the board, which is probably ```192.168.0.200```.
+1. Connect the board to the same network your pc
+2. Wait until the Board has obtained an ip Adress via DHCP this will be showen on the LCD Display like this:
 
-2. Create an DataReceiver instance bound to your UDP Target IP
+    ![LCD_display](doc/Board_LCD_small_2.jpg)
+3. Try to connect to the webserver of the board the link will be IPadress/index.html like ```192.168.0.13/index.html``` in the example here.
+  ![LCD_display](doc/webserver.png)
+4. Set the UDP target IP address to the Ip of your pc like ```192.168.0.200``` and set the subnetmask matching
+5. After saving this settings use the black button on the board to perform an soft reset
+6. Check if the settings are perserved after the restart (look at the LCD) if this is not working maybe the cr2032 battery of the board is empty
+
+7. Create an DataReceiver instance bound to your UDP Target IP
     ```python
     DR = DataReceiver("192.168.0.200", 7654)
     ```
