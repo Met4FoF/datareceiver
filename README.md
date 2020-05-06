@@ -9,14 +9,29 @@ pip install -r requirements.txt
 
 # Usage
 ## With a Met4FoF Data Aqusition unit
+1. Connect
 1. Set the Ip address of your PC to the UDP target IP address shown on the board, which is probably ```192.168.0.200```.
+
 2. Create an DataReceiver instance bound to your UDP Target IP
     ```python
     DR = DataReceiver("192.168.0.200", 7654)
-    ``` 
-   
-    After some time you should see output like this 
-   
+    ```
+    After some time you should see output like this
+    ```python
+    Data receiver now running wating for Packates
+    FOUND NEW SENSOR WITH ID=hex0x19920000==>dec:428998656
+    FOUND NEW SENSOR WITH ID=hex0x19920300==>dec:428999424
+    Found new description MPU 9250 sensor with ID:428998656
+    Description completed
+    FOUND NEW SENSOR WITH ID=hex0x19920100 dec==>:428998912
+    Found new description MPU 9250 sensor with ID:428998912
+    Found new description MS5837_02BA sensor with ID:428999424
+    Description completed
+    Description completed
+    received 10000 packets
+    processed 10000 packets in receiver for Sensor ID:0x19920000 Packets in Que 4 >0.00015999999999999999%
+    ```
+
 ## With example DATA
 An example data set can be downloaded here
 
