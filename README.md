@@ -11,7 +11,7 @@ pip install -r requirements.txt
 ## With a Met4FoF Data Aqusition unit
 1. Connect the board to the same network your pc
 2. Wait until the Board has obtained an ip Adress via DHCP this will be showen on the LCD Display like this:
-    <img id="image_canv" src="doc/Board_LCD_small_2.jpg" rotate="90">
+    <img id="image_canv" src="doc/Board_LCD_small_2.jpg" rotate="0">
 3. Try to connect to the webserver of the board the link will be IPadress/index.html like ```192.168.0.13/index.html``` in the example here.
   ![LCD_display](doc/webserver.png)
 4. Set the UDP target IP address to the Ip of your pc like ```192.168.0.200``` and set the subnetmask matching
