@@ -1289,6 +1289,13 @@ class genericPlotter:
         self.callback = doNothingCb
 
 
+def ExampleDataPrinter(Index, Data, Descripton):
+    #set breakpoint below this line to examine data structure
+    print("___DATA PRINTER ____")
+    print("Index "+str(Index))
+    print("Description "+str(Descripton))
+    print("Data "+str(Data))
+
 # Example for DSCP Messages
 # Quant b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x00"\x0eX Acceleration*\x0eY Acceleration2\x0eZ Acceleration:\x12X Angular velocityB\x12Y Angular velocityJ\x12Z Angular velocityR\x17X Magnetic flux densityZ\x17Y Magnetic flux densityb\x17Z Magnetic flux densityj\x0bTemperature'
 # Unit  b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x01"\x17\\metre\\second\\tothe{-2}*\x17\\metre\\second\\tothe{-2}2\x17\\metre\\second\\tothe{-2}:\x18\\radian\\second\\tothe{-1}B\x18\\radian\\second\\tothe{-1}J\x18\\radian\\second\\tothe{-1}R\x0c\\micro\\teslaZ\x0c\\micro\\teslab\x0c\\micro\\teslaj\rdegreecelsius'
@@ -1306,5 +1313,6 @@ if __name__ == "__main__":
     )
     GP = genericPlotter(2000)
     DR.AllSensors[firstSensorId].SetCallback(GP.PushData)
+    GP.SetCallback(ExampleDataPrinter)
 # func_stats = yappi.get_func_stats()
 # func_stats.save('./callgrind.out.', 'CALLGRIND')
