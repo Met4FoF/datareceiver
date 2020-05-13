@@ -43,6 +43,27 @@ pip install -r requirements.txt
 An example data set can be downloaded here
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3786587.svg)](https://doi.org/10.5281/zenodo.3786587)
+
+1. Start Dataplayer from ```dataPlayer.py``` in one python interpreter and replay the .dump file you have downloaded from zenodo.
+  ```python
+  Player=SensorDataPlayer('/path/tp/zenodofile.dump')
+  ```
+2. Create an DataReceiver instance bound to localhost Target IP in an other interpreter
+  ```python
+  DR = DataReceiver("127.0.0.1", 7654)
+  ```
+
+  After some time you should see output like this
+  ```python
+    Data receiver now running wating for Packates
+    FOUND NEW SENSOR WITH ID=hex0x19920000==>dec:428998656
+    Found new description MPU 9250 sensor with ID:428998656
+    Description completed
+    Description completed
+    received 10000 packets
+    processed 10000 packets in receiver for Sensor ID:0x19920000 Packets in Que 4 >0.00015999999999999999%
+    ```
+
 # Principle of Operation
 ## Data format
 The data sent by the smartup unit is serialized with [google protobuff](https://developers.google.com/protocol-buffers).
