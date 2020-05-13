@@ -31,6 +31,8 @@ import google.protobuf as pb
 from google.protobuf.internal.encoder import _VarintBytes
 from google.protobuf.internal.decoder import _DecodeVarint32
 
+from uncertainties import ufloat
+from uncertainties import unumpy
 # matplotlib.use('Qt5Agg')
 
 
@@ -539,6 +541,11 @@ class SensorDescription:
                 units[self.Channels[Channel]["UNIT"]] = [Channel]
         return units
 
+    def getActiveChannelsIDs(self):
+        return self.Channels.keys()
+
+def doNothingCb():
+    pass
 
 class Sensor:
     """Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors
@@ -1076,6 +1083,7 @@ class genericPlotter:
         self.Buffer = [None] * BufferLength
         self.Datasetpushed = 0
         self.FullmesaggePrinted = False
+        self.flags = {"callbackSet" : False}
         # TODO change to actual time values""
         self.x = np.arange(BufferLength)
         self.Y = np.zeros([16, BufferLength])
@@ -1083,7 +1091,7 @@ class genericPlotter:
 
     def setUpFig(self):
         """
-        Sets up the figure with subplots and labels cant be called in init since this params arent knowen to init time.
+        Sets up the figure with subplots and labels cant be called in init since this params are not knowen to init time.
 
         Returns
         -------
@@ -1119,9 +1127,6 @@ class genericPlotter:
             self.titles.append(title)
             for i in range(len(self.titles)):
                 self.ax[i].set_title(self.titles[i])
-        # self.line1, = self.ax[0].plot(self.x,np.zeros(BufferLength))
-        # self.line1.set_xdata(self.x)
-        # self.ax.set_ylim(-160,160)
         plt.show()
 
     # TODO make convDict external
@@ -1142,8 +1147,8 @@ class genericPlotter:
 
         """
         convDict = {
-            "\\degreecelsius": "°C",
-            "\\micro\\tesla": "µT",
+            "\\degreecelsius": "deg C",
+            "\\micro\\tesla": "uT",
             "\\radian\\second\\tothe{-1}": "rad/s",
             "\\metre\\second\\tothe{-2}": "m/s^2",
         }
@@ -1214,9 +1219,72 @@ class genericPlotter:
                 i = i + 1
             # self.line1.set_ydata(self.y1)
             self.fig.canvas.draw()
+            time=np.zeros(self.BufferLength)
+            time_uncer = np.zeros(self.BufferLength)
+
+            #_______ Peprare Data reshaping for agent comunication ________
+            #                     generate time index
+            for i in range(self.BufferLength):
+                time[i]=self.Buffer[i].unix_time+self.Buffer[i].unix_time_nsecs*10e-9
+                time_uncer[i]=self.Buffer[i].time_uncertainty*10e-9
+            self.index=unumpy.uarray(time,time_uncer)
+            activeChannels=self.Description.getActiveChannelsIDs()
+            OutDataDescripton={}
+            for ac in activeChannels:
+                OutDataDescripton[ac-1]=self.Description[ac]
+            coppyMask=np.array(list(activeChannels))
+            timeDescription = {
+                'PHYSICAL_QUANTITY' : "Time",
+                'UNIT' : "unixSeconds",
+                "UNCERTAINTY_TYPE": "2sigma convidence",
+            }
+            OutDescription={"Index":[timeDescription],"Data":OutDataDescripton}
+            coppyMask =coppyMask-1
+            if self.flags["callbackSet"]:
+                try:
+                    self.callback(Index=self.index, Data = self.Y[coppyMask, :], Descripton = OutDescription)
+                except Exception:
+                    print(
+                        " Generic Plotter for  id:"
+                        + hex(self.Description.ID)
+                        + " Exception in user callback:"
+                    )
+                    print("-" * 60)
+                    traceback.print_exc(file=sys.stdout)
+                    print("-" * 60)
+                    pass
             # flush Buffer
             self.Buffer = [None] * self.BufferLength
             self.Datasetpushed = 0
+
+    def SetCallback(self, callback):
+        """
+        Sets an callback function signature musste be: callback(message["ProtMsg"], self.Description)
+
+        Parameters
+        ----------
+        callback : function
+            callback function signature musste be: callback(message["ProtMsg"], self.Description).
+
+        Returns
+        -------
+        None.
+
+        """
+        self.flags["callbackSet"] = True
+        self.callback = callback
+
+    def UnSetCallback(self,):
+        """
+        deactivates the callback.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.flags["callbackSet"] = False
+        self.callback = doNothingCb
 
 
 # Example for DSCP Messages
