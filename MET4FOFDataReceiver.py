@@ -22,14 +22,16 @@ import json
 
 # for live plotting
 import matplotlib.pyplot as plt
-import matplotlib.animation
 import numpy as np
 
 # proptobuff message encoding
-import messages_pb2
-import google.protobuf as pb
 from google.protobuf.internal.encoder import _VarintBytes
 from google.protobuf.internal.decoder import _DecodeVarint32
+CURR_DIR = os.path.dirname(os.path.abspath(__file__))
+print(CURR_DIR)
+sys.path.append(CURR_DIR)
+import messages_pb2
+
 
 from uncertainties import ufloat
 from uncertainties import unumpy
