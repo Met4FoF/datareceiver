@@ -342,6 +342,11 @@ class ChannelDescription:
         # self.Description['SpecialKey']
         return self.Description[key]
 
+    def __setitem__(self, key,item):
+        # if key='SpecialKey':
+        # self.Description['SpecialKey']
+        self.Description[key]=item
+
     def __repr__(self):
         """
         Prints the quantity and unit of the channel.
@@ -512,6 +517,7 @@ class SensorDescription:
         # if key='SpecialKey':
         # self.Description['SpecialKey']
         return self.Channels[key]
+
 
     def __repr__(self):
         return "Descripton of" + self.SensorName + hex(self.ID)
@@ -1240,7 +1246,7 @@ class genericPlotter:
                 'UNIT' : "unixSeconds",
                 "UNCERTAINTY_TYPE": "2sigma convidence",
             }
-            OutDescription={"Index":[timeDescription],"Data":OutDataDescripton}
+            OutDescription={"Index":[timeDescription],"Data":OutDataDescripton,"TimeStamp":self.index[0]}
             coppyMask =coppyMask-1
             if self.flags["callbackSet"]:
                 try:
@@ -1288,6 +1294,51 @@ class genericPlotter:
         self.flags["callbackSet"] = False
         self.callback = doNothingCb
 
+class RealFFTNodeCore:
+    def __init__(self,Name):
+        self.parmas={"Name":Name}
+
+    def pushData(self,Index, Data, Descripton):
+        self.Data=Data
+        self.Index=Index
+        self.Description=Descripton
+        self.doRFFT()
+
+    def doRFFT(self):
+        self.outData=np.fft.rfft(self.Data,axis=0)
+        #TODO add FTT scalfactor right to have power spectral density
+        FFTScalfactor=1
+        self.outData=self.outData*FFTScalfactor
+        deltaT=np.mean(np.diff(self.Index))
+        self.OutIndex=np.fft.rfftfreq(self.Data.shape[0],d=deltaT)
+        #TODO generate description
+        #think abou how to convert unit to fft units
+        for DataChannels in self.Description["Data"]:
+            candesc=self.Description["Data"][DataChannels]
+            candesc["PHYSICAL_QUANTITY"]= candesc["PHYSICAL_QUANTITY"]+" power spectraldensity"
+            candesc["UNIT"]="FFT UNIT" #INUIT^2/sqrt(HZ),
+            candesc["UNCERTAINTY_TYPE"]= False
+            candesc["RESOLUTION"]= candesc["RESOLUTION"]*self.Data.shape[0]
+            candesc["MAX_SCALE"]: np.sqrt(2)*candesc["MAX_SCALE"]-candesc["MIN_SCALE"]# Peak to peak efective value is maximum for an fft bin
+            candesc["MIN_SCALE"]: -1.0*candesc["MAX_SCALE"]
+        freqDescription = {
+        'PHYSICAL_QUANTITY': "Time frequency",
+        'UNIT': "//Herz",
+        "RESOLUTION":self.outData.shape[0],
+        "MIN_SCALE" : self.Index[0],
+        "MAX_scale" : self.Index[-1]
+        }
+        self.Description["Index"]=freqDescription
+        print(self.parmas["Name"])
+        print("___RFFT DONE !!! ____")
+        print("Index " + str(self.OutIndex))
+        print("Description " + str(self.Description))
+        print("Data " + str(self.outData))
+
+
+
+
+
 
 def ExampleDataPrinter(Index, Data, Descripton):
     #set breakpoint below this line to examine data structure
@@ -1313,6 +1364,7 @@ if __name__ == "__main__":
     )
     GP = genericPlotter(2000)
     DR.AllSensors[firstSensorId].SetCallback(GP.PushData)
-    GP.SetCallback(ExampleDataPrinter)
+    RFFTNode=RealFFTNodeCore("Simple Test Node")
+    GP.SetCallback(RFFTNode.pushData)
 # func_stats = yappi.get_func_stats()
 # func_stats.save('./callgrind.out.', 'CALLGRIND')
