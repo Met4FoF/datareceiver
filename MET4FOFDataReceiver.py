@@ -22,15 +22,19 @@ import json
 
 # for live plotting
 import matplotlib.pyplot as plt
-import matplotlib.animation
 import numpy as np
 
 # proptobuff message encoding
-import messages_pb2
-import google.protobuf as pb
 from google.protobuf.internal.encoder import _VarintBytes
 from google.protobuf.internal.decoder import _DecodeVarint32
+CURR_DIR = os.path.dirname(os.path.abspath(__file__))
+print(CURR_DIR)
+sys.path.append(CURR_DIR)
+import messages_pb2
 
+
+from uncertainties import ufloat
+from uncertainties import unumpy
 # matplotlib.use('Qt5Agg')
 
 
@@ -338,6 +342,11 @@ class ChannelDescription:
         # self.Description['SpecialKey']
         return self.Description[key]
 
+    def __setitem__(self, key,item):
+        # if key='SpecialKey':
+        # self.Description['SpecialKey']
+        self.Description[key]=item
+
     def __repr__(self):
         """
         Prints the quantity and unit of the channel.
@@ -509,6 +518,7 @@ class SensorDescription:
         # self.Description['SpecialKey']
         return self.Channels[key]
 
+
     def __repr__(self):
         return "Descripton of" + self.SensorName + hex(self.ID)
 
@@ -539,6 +549,11 @@ class SensorDescription:
                 units[self.Channels[Channel]["UNIT"]] = [Channel]
         return units
 
+    def getActiveChannelsIDs(self):
+        return self.Channels.keys()
+
+def doNothingCb():
+    pass
 
 class Sensor:
     """Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors
@@ -1076,6 +1091,7 @@ class genericPlotter:
         self.Buffer = [None] * BufferLength
         self.Datasetpushed = 0
         self.FullmesaggePrinted = False
+        self.flags = {"callbackSet" : False}
         # TODO change to actual time values""
         self.x = np.arange(BufferLength)
         self.Y = np.zeros([16, BufferLength])
@@ -1083,7 +1099,7 @@ class genericPlotter:
 
     def setUpFig(self):
         """
-        Sets up the figure with subplots and labels cant be called in init since this params arent knowen to init time.
+        Sets up the figure with subplots and labels cant be called in init since this params are not knowen to init time.
 
         Returns
         -------
@@ -1119,9 +1135,6 @@ class genericPlotter:
             self.titles.append(title)
             for i in range(len(self.titles)):
                 self.ax[i].set_title(self.titles[i])
-        # self.line1, = self.ax[0].plot(self.x,np.zeros(BufferLength))
-        # self.line1.set_xdata(self.x)
-        # self.ax.set_ylim(-160,160)
         plt.show()
 
     # TODO make convDict external
@@ -1142,8 +1155,8 @@ class genericPlotter:
 
         """
         convDict = {
-            "\\degreecelsius": "°C",
-            "\\micro\\tesla": "µT",
+            "\\degreecelsius": "deg C",
+            "\\micro\\tesla": "uT",
             "\\radian\\second\\tothe{-1}": "rad/s",
             "\\metre\\second\\tothe{-2}": "m/s^2",
         }
@@ -1214,10 +1227,125 @@ class genericPlotter:
                 i = i + 1
             # self.line1.set_ydata(self.y1)
             self.fig.canvas.draw()
+            time=np.zeros(self.BufferLength)
+            time_uncer = np.zeros(self.BufferLength)
+
+            #_______ Peprare Data reshaping for agent comunication ________
+            #                     generate time index
+            for i in range(self.BufferLength):
+                time[i]=self.Buffer[i].unix_time+self.Buffer[i].unix_time_nsecs*10e-9
+                time_uncer[i]=self.Buffer[i].time_uncertainty*10e-9
+            self.index=unumpy.uarray(time,time_uncer)
+            activeChannels=self.Description.getActiveChannelsIDs()
+            OutDataDescripton={}
+            for ac in activeChannels:
+                OutDataDescripton[ac-1]=self.Description[ac]
+            coppyMask=np.array(list(activeChannels))
+            timeDescription = {
+                'PHYSICAL_QUANTITY' : "Time",
+                'UNIT' : "unixSeconds",
+                "UNCERTAINTY_TYPE": "2sigma convidence",
+            }
+            OutDescription={"Index":[timeDescription],"Data":OutDataDescripton,"TimeStamp":self.index[0]}
+            coppyMask =coppyMask-1
+            if self.flags["callbackSet"]:
+                try:
+                    self.callback(Index=self.index, Data = self.Y[coppyMask, :], Descripton = OutDescription)
+                except Exception:
+                    print(
+                        " Generic Plotter for  id:"
+                        + hex(self.Description.ID)
+                        + " Exception in user callback:"
+                    )
+                    print("-" * 60)
+                    traceback.print_exc(file=sys.stdout)
+                    print("-" * 60)
+                    pass
             # flush Buffer
             self.Buffer = [None] * self.BufferLength
             self.Datasetpushed = 0
 
+    def SetCallback(self, callback):
+        """
+        Sets an callback function signature musste be: callback(message["ProtMsg"], self.Description)
+
+        Parameters
+        ----------
+        callback : function
+            callback function signature musste be: callback(message["ProtMsg"], self.Description).
+
+        Returns
+        -------
+        None.
+
+        """
+        self.flags["callbackSet"] = True
+        self.callback = callback
+
+    def UnSetCallback(self,):
+        """
+        deactivates the callback.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.flags["callbackSet"] = False
+        self.callback = doNothingCb
+
+class RealFFTNodeCore:
+    def __init__(self,Name):
+        self.parmas={"Name":Name}
+
+    def pushData(self,Index, Data, Descripton):
+        self.Data=Data
+        self.Index=Index
+        self.Description=Descripton
+        self.doRFFT()
+
+    def doRFFT(self):
+        self.outData=np.fft.rfft(self.Data,axis=0)
+        #TODO add FTT scalfactor right to have power spectral density
+        FFTScalfactor=1
+        self.outData=self.outData*FFTScalfactor
+        deltaT=np.mean(np.diff(self.Index))
+        self.OutIndex=np.fft.rfftfreq(self.Data.shape[0],d=deltaT)
+        #TODO generate description
+        #think abou how to convert unit to fft units
+        for DataChannels in self.Description["Data"]:
+            candesc=self.Description["Data"][DataChannels]
+            candesc["PHYSICAL_QUANTITY"]= candesc["PHYSICAL_QUANTITY"]+" power spectraldensity"
+            candesc["UNIT"]="FFT UNIT" #INUIT^2/sqrt(HZ),
+            candesc["UNCERTAINTY_TYPE"]= False
+            candesc["RESOLUTION"]= candesc["RESOLUTION"]*self.Data.shape[0]
+            candesc["MAX_SCALE"]: np.sqrt(2)*candesc["MAX_SCALE"]-candesc["MIN_SCALE"]# Peak to peak efective value is maximum for an fft bin
+            candesc["MIN_SCALE"]: -1.0*candesc["MAX_SCALE"]
+        freqDescription = {
+        'PHYSICAL_QUANTITY': "Time frequency",
+        'UNIT': "//Herz",
+        "RESOLUTION":self.outData.shape[0],
+        "MIN_SCALE" : self.Index[0],
+        "MAX_scale" : self.Index[-1]
+        }
+        self.Description["Index"]=freqDescription
+        print(self.parmas["Name"])
+        print("___RFFT DONE !!! ____")
+        print("Index " + str(self.OutIndex))
+        print("Description " + str(self.Description))
+        print("Data " + str(self.outData))
+
+
+
+
+
+
+def ExampleDataPrinter(Index, Data, Descripton):
+    #set breakpoint below this line to examine data structure
+    print("___DATA PRINTER ____")
+    print("Index "+str(Index))
+    print("Description "+str(Descripton))
+    print("Data "+str(Data))
 
 # Example for DSCP Messages
 # Quant b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x00"\x0eX Acceleration*\x0eY Acceleration2\x0eZ Acceleration:\x12X Angular velocityB\x12Y Angular velocityJ\x12Z Angular velocityR\x17X Magnetic flux densityZ\x17Y Magnetic flux densityb\x17Z Magnetic flux densityj\x0bTemperature'
@@ -1236,5 +1364,7 @@ if __name__ == "__main__":
     )
     GP = genericPlotter(2000)
     DR.AllSensors[firstSensorId].SetCallback(GP.PushData)
+    RFFTNode=RealFFTNodeCore("Simple Test Node")
+    GP.SetCallback(RFFTNode.pushData)
 # func_stats = yappi.get_func_stats()
 # func_stats.save('./callgrind.out.', 'CALLGRIND')
