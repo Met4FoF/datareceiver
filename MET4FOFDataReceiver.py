@@ -1357,6 +1357,7 @@ if __name__ == "__main__":
     DR = DataReceiver("192.168.0.200", 7654)
     time.sleep(5)
     firstSensorId = list(DR.AllSensors.keys())[0]
+    secondSensorId = list(DR.AllSensors.keys())[0]
     print(
         "First sensor is"
         + str(DR.AllSensors[firstSensorId])
