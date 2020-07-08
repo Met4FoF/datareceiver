@@ -686,9 +686,7 @@ class Sensor:
         # if(os.path.exists(os.path.dirname(os.path.abspath('data/dump.csv')))):
         if filename == "":
             now = datetime.now()
-            filename = (
-                "data/"
-                + now.strftime("%Y%m%d%H%M%S")
+            filename = (now.strftime("%Y%m%d%H%M%S")
                 + "_"
                 + str(self.Description.SensorName).replace(" ", "_")
                 + "_"
@@ -1355,17 +1353,17 @@ def ExampleDataPrinter(Index, Data, Descripton):
 # Max   b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x05\xa5\x01\xdc\xe8\x1cC\xad\x01\xdc\xe8\x1cC\xb5\x01\xdc\xe8\x1cC\xbd\x01\xcc\x9f\x0bB\xc5\x01\xcc\x9f\x0bB\xcd\x01\xcc\x9f\x0bB\xd5\x01\x00\x00\x00\x00\xdd\x01\x00\x00\x00\x00\xe5\x01\x00\x00\x00\x00\xed\x01\x02)\xeeB'
 if __name__ == "__main__":
     DR = DataReceiver("192.168.0.200", 7654)
-    time.sleep(5)
-    firstSensorId = list(DR.AllSensors.keys())[0]
-    secondSensorId = list(DR.AllSensors.keys())[0]
-    print(
-        "First sensor is"
-        + str(DR.AllSensors[firstSensorId])
-        + " binding generic plotter"
-    )
-    GP = genericPlotter(2000)
-    DR.AllSensors[firstSensorId].SetCallback(GP.PushData)
-    RFFTNode=RealFFTNodeCore("Simple Test Node")
-    GP.SetCallback(RFFTNode.pushData)
+    #time.sleep(5)
+    #firstSensorId = list(DR.AllSensors.keys())[0]
+    #secondSensorId = list(DR.AllSensors.keys())[0]
+    #print(
+    #    "First sensor is"
+    #    + str(DR.AllSensors[firstSensorId])
+    #    + " binding generic plotter"
+    #)
+    #GP = genericPlotter(2000)
+    #DR.AllSensors[firstSensorId].SetCallback(GP.PushData)
+    #RFFTNode=RealFFTNodeCore("Simple Test Node")
+    #GP.SetCallback(RFFTNode.pushData)
 # func_stats = yappi.get_func_stats()
 # func_stats.save('./callgrind.out.', 'CALLGRIND')
