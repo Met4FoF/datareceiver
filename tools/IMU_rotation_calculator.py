@@ -11,6 +11,7 @@ import math as m
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.pyplot import cm
+import scipy.linalg
 
 
 def getAccelrationMeansFromDataSet(filename):
@@ -88,6 +89,27 @@ RotMat=[]
 for i in range(NumOfVectors):
     RotMat.append(rotation_matrix_from_vectors(MPU9250MeanVectors[i],BMA280MeanVectors[i]))
 
+#### Calculate Rotation Matrix
+A = np.zeros([NumOfVectors,3])
+B = np.zeros([NumOfVectors,3])
+for i in range(NumOfVectors):
+    #b (je eine spalte) = A * x(zeilenweise wird das die Rotationsmatrix)
+    A[i,:] = BMA280MeanVectors[i]
+    B[i,:] = MPU9250MeanVectors[i]
+
+# Eigentliche QR-Zerlegung
+
+Q,R = scipy.linalg.qr(A)
+r_matrix = np.zeros([3,3])
+for i  in range(3):
+    #Matlab ---> python
+    # a'   ---->  a.conj().transpose()
+    #A\B    ---> result, resid, rank, s = np.linalg.lstsq(A, B)
+    #r_matrix(i,:)=(R\(Q'*b(:,i)))';
+    tmp1=np.matmul(Q.conj().transpose(),B[:,i])#(Q'*b(:,i))
+    tmp2, resid, rank, s = np.linalg.lstsq(R, tmp1)
+    r_matrix[i,:]=tmp2.conj().transpose()
+
 RotTanja=-np.array([[0.9818,0.0438   ,0.0076],
            [0.0734,0.9786,-0.0511],
            [0.0042,-0.1034,-0.9214]])
@@ -99,7 +121,7 @@ for i in range(NumOfVectors):
     c = next(color)
     ax.quiver(0,0,0,MPU9250MeanVectors[i][0],MPU9250MeanVectors[i][1],MPU9250MeanVectors[i][2],color=c,linestyle='-',label='MPU '+str(ExperimentNumber[i]))
     ax.quiver(0, 0, 0, BMA280MeanVectors[i][0], BMA280MeanVectors[i][1], BMA280MeanVectors[i][2], color=c,linestyle='--',label='BMA '+str(ExperimentNumber[i]))
-    BMARotated=RotTanja*BMA280MeanVectors[i]
+    BMARotated=r_matrix*BMA280MeanVectors[i]
     ax.quiver(0, 0, 0, BMARotated[0], BMARotated[1], BMARotated[2], color=c,
              linestyle='-.', label='BMA Rotated' + str(ExperimentNumber[i]))
 Lim=[-11,11]
