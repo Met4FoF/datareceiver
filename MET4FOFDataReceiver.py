@@ -35,7 +35,7 @@ import messages_pb2
 
 from uncertainties import ufloat
 from uncertainties import unumpy
-# matplotlib.use('Qt5Agg')
+#matplotlib.use('Qt5Agg')
 
 
 class DataReceiver:
@@ -1071,7 +1071,7 @@ class Sensor:
 # wait until buffer is Full
 # Data can be acessed over the atribute ExampleBuffer.Buffer[0]
 class genericPlotter:
-    def __init__(self, BufferLength):
+    def __init__(self, BufferLength,pushDevider=1):
         """
         Creates an Datebuffer witch is plotting the Sensor data after the buffer is full, one Subplot for every unique physical unit [°C,deg/s,m/s^2,µT]. in the data stream  
 
@@ -1087,7 +1087,9 @@ class genericPlotter:
         """
         self.BufferLength = BufferLength
         self.Buffer = [None] * BufferLength
+        self.pushDevider=pushDevider
         self.Datasetpushed = 0
+        self.Devidercount=0
         self.FullmesaggePrinted = False
         self.flags = {"callbackSet" : False}
         # TODO change to actual time values""
@@ -1113,6 +1115,7 @@ class genericPlotter:
         plt.ion()
         # setting up subplot
         self.fig, self.ax = plt.subplots(self.Numofplots, 1, sharex=True)
+        self.Plots=[None]*self.Numofplots
         for ax in self.ax:
             ax.set_xlim(0, self.BufferLength)
         self.fig.suptitle(
@@ -1180,88 +1183,90 @@ class genericPlotter:
         None.
 
         """
-        if self.Datasetpushed == 0:
-            self.Description = copy.deepcopy(Description)
-            # ok fig was not inited do it now
-            if self.figInited == False:
-                self.setUpFig()
-                self.figInited = True
-        if self.Datasetpushed < self.BufferLength:
-            # Pushing data in to the numpy array for convinience
-            i = self.Datasetpushed
-            self.Buffer[i] = message
-            self.Y[0, i] = self.Buffer[i].Data_01
-            self.Y[1, i] = self.Buffer[i].Data_02
-            self.Y[2, i] = self.Buffer[i].Data_03
-            self.Y[3, i] = self.Buffer[i].Data_04
-            self.Y[4, i] = self.Buffer[i].Data_05
-            self.Y[5, i] = self.Buffer[i].Data_06
-            self.Y[6, i] = self.Buffer[i].Data_07
-            self.Y[7, i] = self.Buffer[i].Data_08
-            self.Y[8, i] = self.Buffer[i].Data_09
-            self.Y[9, i] = self.Buffer[i].Data_10
-            self.Y[10, i] = self.Buffer[i].Data_11
-            self.Y[11, i] = self.Buffer[i].Data_12
-            self.Y[12, i] = self.Buffer[i].Data_13
-            self.Y[13, i] = self.Buffer[i].Data_14
-            self.Y[14, i] = self.Buffer[i].Data_15
-            self.Y[15, i] = self.Buffer[i].Data_16
-            self.Datasetpushed = self.Datasetpushed + 1
-        else:
-            # ok the buffer is full---> do some plotting now
+        if self.Devidercount%self.pushDevider==0:
+            if self.Datasetpushed == 0:
+                self.Description = copy.deepcopy(Description)
+                # ok fig was not inited do it now
+                if self.figInited == False:
+                    self.setUpFig()
+                    self.figInited = True
+            if self.Datasetpushed < self.BufferLength:
+                # Pushing data in to the numpy array for convinience
+                i = self.Datasetpushed
+                self.Buffer[i] = message
+                self.Y[0, i] = self.Buffer[i].Data_01
+                self.Y[1, i] = self.Buffer[i].Data_02
+                self.Y[2, i] = self.Buffer[i].Data_03
+                self.Y[3, i] = self.Buffer[i].Data_04
+                self.Y[4, i] = self.Buffer[i].Data_05
+                self.Y[5, i] = self.Buffer[i].Data_06
+                self.Y[6, i] = self.Buffer[i].Data_07
+                self.Y[7, i] = self.Buffer[i].Data_08
+                self.Y[8, i] = self.Buffer[i].Data_09
+                self.Y[9, i] = self.Buffer[i].Data_10
+                self.Y[10, i] = self.Buffer[i].Data_11
+                self.Y[11, i] = self.Buffer[i].Data_12
+                self.Y[12, i] = self.Buffer[i].Data_13
+                self.Y[13, i] = self.Buffer[i].Data_14
+                self.Y[14, i] = self.Buffer[i].Data_15
+                self.Y[15, i] = self.Buffer[i].Data_16
+                self.Datasetpushed = self.Datasetpushed + 1
+            else:
+                # ok the buffer is full---> do some plotting now
 
-            # flush the axis
-            for ax in self.ax:
-                ax.clear()
-            # set titles and Y labels
-            for i in range(len(self.titles)):
-                self.ax[i].set_title(self.titles[i])
-                self.ax[i].set_ylabel(self.__getShortunitStr(self.unitstr[i]))
-            # actual draw
-            i = 0
-            for unit in self.units:
-                for channel in self.units[unit]:
-                    self.ax[i].plot(self.x, self.Y[channel - 1])
-                i = i + 1
-            # self.line1.set_ydata(self.y1)
-            self.fig.canvas.draw()
-            time=np.zeros(self.BufferLength)
-            time_uncer = np.zeros(self.BufferLength)
+                # flush the axis
+                for ax in self.ax:
+                    ax.clear()
+                # set titles and Y labels
+                for i in range(len(self.titles)):
+                    self.ax[i].set_title(self.titles[i])
+                    self.ax[i].set_ylabel(self.__getShortunitStr(self.unitstr[i]))
+                # actual draw
+                i = 0
+                for unit in self.units:
+                    for channel in self.units[unit]:
+                        self.ax[i].plot(self.x, self.Y[channel - 1])
+                    i = i + 1
+                # self.line1.set_ydata(self.y1)
+                self.fig.canvas.draw()
+                time=np.zeros(self.BufferLength)
+                time_uncer = np.zeros(self.BufferLength)
 
-            #_______ Peprare Data reshaping for agent comunication ________
-            #                     generate time index
-            for i in range(self.BufferLength):
-                time[i]=self.Buffer[i].unix_time+self.Buffer[i].unix_time_nsecs*10e-9
-                time_uncer[i]=self.Buffer[i].time_uncertainty*10e-9
-            self.index=unumpy.uarray(time,time_uncer)
-            activeChannels=self.Description.getActiveChannelsIDs()
-            OutDataDescripton={}
-            for ac in activeChannels:
-                OutDataDescripton[ac-1]=self.Description[ac]
-            coppyMask=np.array(list(activeChannels))
-            timeDescription = {
-                'PHYSICAL_QUANTITY' : "Time",
-                'UNIT' : "unixSeconds",
-                "UNCERTAINTY_TYPE": "2sigma convidence",
-            }
-            OutDescription={"Index":[timeDescription],"Data":OutDataDescripton,"TimeStamp":self.index[0]}
-            coppyMask =coppyMask-1
-            if self.flags["callbackSet"]:
-                try:
-                    self.callback(Index=self.index, Data = self.Y[coppyMask, :], Descripton = OutDescription)
-                except Exception:
-                    print(
-                        " Generic Plotter for  id:"
-                        + hex(self.Description.ID)
-                        + " Exception in user callback:"
-                    )
-                    print("-" * 60)
-                    traceback.print_exc(file=sys.stdout)
-                    print("-" * 60)
-                    pass
-            # flush Buffer
-            self.Buffer = [None] * self.BufferLength
-            self.Datasetpushed = 0
+                #_______ Peprare Data reshaping for agent comunication ________
+                #                     generate time index
+                for i in range(self.BufferLength):
+                    time[i]=self.Buffer[i].unix_time+self.Buffer[i].unix_time_nsecs*10e-9
+                    time_uncer[i]=self.Buffer[i].time_uncertainty*10e-9
+                self.index=unumpy.uarray(time,time_uncer)
+                activeChannels=self.Description.getActiveChannelsIDs()
+                OutDataDescripton={}
+                for ac in activeChannels:
+                    OutDataDescripton[ac-1]=self.Description[ac]
+                coppyMask=np.array(list(activeChannels))
+                timeDescription = {
+                    'PHYSICAL_QUANTITY' : "Time",
+                    'UNIT' : "unixSeconds",
+                    "UNCERTAINTY_TYPE": "2sigma convidence",
+                }
+                OutDescription={"Index":[timeDescription],"Data":OutDataDescripton,"TimeStamp":self.index[0]}
+                coppyMask =coppyMask-1
+                if self.flags["callbackSet"]:
+                    try:
+                        self.callback(Index=self.index, Data = self.Y[coppyMask, :], Descripton = OutDescription)
+                    except Exception:
+                        print(
+                            " Generic Plotter for  id:"
+                            + hex(self.Description.ID)
+                            + " Exception in user callback:"
+                        )
+                        print("-" * 60)
+                        traceback.print_exc(file=sys.stdout)
+                        print("-" * 60)
+                        pass
+                # flush Buffer
+                self.Buffer = [None] * self.BufferLength
+                self.Datasetpushed = 0
+        self.Devidercount+=1
 
     def SetCallback(self, callback):
         """
