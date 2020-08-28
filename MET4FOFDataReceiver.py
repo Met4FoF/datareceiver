@@ -656,6 +656,8 @@ class Sensor:
         self.datarate = 0
         self.timeoutOccured=False
         self.timeSinceLastPacket = 0
+        self.ASCIIDumpStartTime= None
+        self.ASCIIDumpFileCount=0
 
     def __repr__(self):
         """
@@ -667,8 +669,7 @@ class Sensor:
 
         """
         return hex(self.Description.ID) + " " + self.Description.SensorName
-
-    def StartDumpingToFileASCII(self, filename=""):
+    def StartDumpingToFileASCII(self, filenamePrefix="",splittime=0):
         """
         Activate dumping Messages in a file ASCII encoded ; seperated.
 
@@ -682,17 +683,26 @@ class Sensor:
         None.
 
         """
-        # check if the path is valid
-        # if(os.path.exists(os.path.dirname(os.path.abspath('data/dump.csv')))):
-        if filename == "":
-            now = datetime.now()
-            filename = (now.strftime("%Y%m%d%H%M%S")
+        self.ASCIIDumpStartTime = datetime.now()
+        self.initNewASCIIFile(self, filenamePrefix=filenamePrefix)
+        self.flags["DumpToFileASCII"] = True
+
+    def initNewASCIIFile(self,filenamePrefix=""):
+        try:
+            self.DumpfileASCII.close()
+        except:
+            pass #the file is not opend or existing and there fore cant be closed
+        filename = (
+                "data/"
+                + filenamePrefix
+                + self.ASCIIDumpStartTime.strftime("%Y%m%d%H%M%S")
                 + "_"
                 + str(self.Description.SensorName).replace(" ", "_")
                 + "_"
                 + hex(self.Description.ID)
+                + str(self.ASCIIDumpFileCount).zfill(5)
                 + ".dump"
-            )
+        )
         self.DumpfileASCII = open(filename, "a")
         json.dump(self.Description.asDict(), self.DumpfileASCII)
         self.DumpfileASCII.write("\n")
@@ -700,7 +710,7 @@ class Sensor:
             "id;sample_number;unix_time;unix_time_nsecs;time_uncertainty;Data_01;Data_02;Data_03;Data_04;Data_05;Data_06;Data_07;Data_08;Data_09;Data_10;Data_11;Data_12;Data_13;Data_14;Data_15;Data_16\n"
         )
         self.params["DumpFileNameASCII"] = filename
-        self.flags["DumpToFileASCII"] = True
+        self.ASCIIDumpFileCount=self.ASCIIDumpFileCount+1
 
     def StopDumpingToFileASCII(self):
         """
@@ -1073,7 +1083,7 @@ class Sensor:
 class genericPlotter:
     def __init__(self, BufferLength,pushDevider=1):
         """
-        Creates an Datebuffer witch is plotting the Sensor data after the buffer is full, one Subplot for every unique physical unit [°C,deg/s,m/s^2,µT]. in the data stream  
+        Creates an Datebuffer witch is plotting the Sensor data after the buffer is full, one Subplot for every unique physical unit [°C,deg/s,m/s^2,µT]. in the data stream
 
         Parameters
         ----------
