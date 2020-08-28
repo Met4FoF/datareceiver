@@ -239,5 +239,7 @@ class SensorDataPlayer:
     def __repr__(self):
         return "Dataplayer: playing "+str(self.params["fileName"])
 
+
+
 if __name__ == "__main__":
     Player=SensorDataPlayer('../data/2020-03-03_Messungen_MPU9250_SN12 Frequenzgang_Firmware_0.3.0/mpu9250_12_10_hz_250_Hz_6wdh.dump')
