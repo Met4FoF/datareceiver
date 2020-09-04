@@ -294,10 +294,10 @@ class DataReceiver:
 
     def StartDumpingAllSensorsASCII(self,folder="data",filenamePrefix="",splittime=86400,force=False):
         AllDscsCompleete=True
-        if force!=True:
-            for SensorID in self.AllSensors:
-                if self.AllSensors[SensorID].Description._complete==False:
-                    print("SensorID "+hex(SensorID)+" description incompelte"+str(self.AllSensors[SensorID]))
+        for SensorID in self.AllSensors:
+            if self.AllSensors[SensorID].Description._complete==False:
+                print("Description incompelte for sensor "+str(self.AllSensors[SensorID]))
+                if force != True:
                     AllDscsCompleete=False
         if AllDscsCompleete==False:
             raise RuntimeError("not all descriptions are complete dumping not started."
