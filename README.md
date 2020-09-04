@@ -39,6 +39,15 @@ pip install -r requirements.txt
     processed 10000 packets in receiver for Sensor ID:0x19920000 Packets in Que 4 >0.00015999999999999999%
     ```
 
+### Logging data
+Start dumping for all Sensors:
+   ```python
+    DR.StartDumpingAllSensorsASCII(folder="foldername",splittime=splittimeInSeconds)
+   ```
+Stop dumping for all Sensors
+   ```python
+    DR.StopDumpingAllSensorsASCII()
+   ```
 ## With example DATA
 An example data set can be downloaded here
 
@@ -62,10 +71,12 @@ An example data set can be downloaded here
     Description completed
     received 10000 packets
     processed 10000 packets in receiver for Sensor ID:0x19920000 Packets in Que 4 >0.00015999999999999999%
-    ```
+  ```
+ 
 
 # Principle of Operation
 ## Data format
+
 The data sent by the smartup unit is serialized with [google protobuff](https://developers.google.com/protocol-buffers).
 Two different protobuff [messages](https://github.com/Met4FoF/Met4FoF-SmartUpUnit/blob/SSU_V2/protobuff_deps/messages.proto) are used.
 1. DataMessage:

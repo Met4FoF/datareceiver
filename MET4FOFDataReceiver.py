@@ -292,6 +292,28 @@ class DataReceiver:
         self.socket.close()
 
 
+    def StartDumpingAllSensorsASCII(self,folder="data",filenamePrefix="",splittime=86400,force=False):
+        AllDscsCompleete=True
+        if force!=True:
+            for SensorID in self.AllSensors:
+                if self.AllSensors[SensorID].Description._complete==False:
+                    print("SensorID "+hex(SensorID)+" description incompelte"+str(self.AllSensors[SensorID]))
+                    AllDscsCompleete=False
+        if AllDscsCompleete==False:
+            raise RuntimeError("not all descriptions are complete dumping not started."
+                               " Wait until descriptions are complete or use function argument force=true to start anyway")
+        if folder != "":
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+        filenamePrefixwFolder=os.path.join(folder,filenamePrefix)
+        for SensorID in self.AllSensors:
+            self.AllSensors[SensorID].StartDumpingToFileASCII(filenamePrefix=filenamePrefixwFolder,splittime=splittime)
+
+
+    def StopDumpingAllSensorsASCII(self,):
+        for SensorID in self.AllSensors:
+            self.AllSensors[SensorID].StopDumpingToFileASCII()
+
 ### classes to proces sensor descriptions
 class AliasDict(dict):
     def __init__(self, *args, **kwargs):
@@ -548,8 +570,6 @@ class SensorDescription:
     def getActiveChannelsIDs(self):
         return self.Channels.keys()
 
-def doNothingCb():
-    pass
 
 class Sensor:
     """Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors
@@ -696,14 +716,14 @@ class Sensor:
             self.DumpfileASCII.close()
         except:
             pass #the file is not opend or existing and there fore cant be closed
-        filename = (
-                "data/"
-                + self.ASCIIDumpFilePrefix
-                + self.ASCIIDumpStartTimeLocal.strftime("%Y%m%d%H%M%S")
+        filename = os.path.join(
+                self.ASCIIDumpFilePrefix,
+                self.ASCIIDumpStartTimeLocal.strftime("%Y%m%d%H%M%S")
                 + "_"
                 + str(self.Description.SensorName).replace(" ", "_")
                 + "_"
                 + hex(self.Description.ID)
+                + "_"
                 + str(self.ASCIIDumpFileCount).zfill(5)
                 + ".dump"
         )
@@ -730,6 +750,7 @@ class Sensor:
         self.flags["DumpToFileASCII"] = False
         self.params["DumpFileNameASCII"] = ""
         self.DumpfileASCII.close()
+        self.ASCIIDumpFileCount = 0
 
     def StartDumpingToFileProto(self, filename=""):
         """
