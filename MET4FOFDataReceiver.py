@@ -17,6 +17,7 @@ import warnings
 from datetime import datetime
 from multiprocessing import Queue
 import time
+import datetime
 import copy
 import json
 
@@ -32,9 +33,6 @@ print(CURR_DIR)
 sys.path.append(CURR_DIR)
 import messages_pb2
 
-
-from uncertainties import ufloat
-from uncertainties import unumpy
 #matplotlib.use('Qt5Agg')
 
 
@@ -223,15 +221,14 @@ class DataReceiver:
                             + " packets"
                         )
                         if self.lastTimestamp != 0:
-                            timeDIFF = datetime.now() - self.lastTimestamp
-                            timeDIFF = timeDIFF.seconds + timeDIFF.microseconds * 1e-6
+                            timeDIFF = time.monotonic() - self.lastTimestamp
                             self.Datarate = (
                                 self.params["PacketrateUpdateCount"] / timeDIFF
                             )
                             print("Update rate is " + str(self.Datarate) + " Hz")
-                            self.lastTimestamp = datetime.now()
+                            self.lastTimestamp = time.monotonic()
                         else:
-                            self.lastTimestamp = datetime.now()
+                            self.lastTimestamp = time.monotonic()
             elif data[:4] == b"DSCP":
                 while BytesProcessed < len(data):
                     msg_len, new_pos = _DecodeVarint32(data, BytesProcessed)
@@ -272,15 +269,14 @@ class DataReceiver:
                             + " packets"
                         )
                         if self.lastTimestamp != 0:
-                            timeDIFF = datetime.now() - self.lastTimestamp
-                            timeDIFF = timeDIFF.seconds + timeDIFF.microseconds * 1e-6
+                            timeDIFF = time.monotonic() - self.lastTimestamp
                             self.Datarate = (
                                 self.params["PacketrateUpdateCount"] / timeDIFF
                             )
                             print("Update rate is " + str(self.Datarate) + " Hz")
-                            self.lastTimestamp = datetime.now()
+                            self.lastTimestamp = time.monotonic()
                         else:
-                            self.lastTimestamp = datetime.now()
+                            self.lastTimestamp = time.monotonic()
             else:
                 print("unrecognized packed preamble" + str(data[:5]))
 
@@ -658,6 +654,9 @@ class Sensor:
         self.timeSinceLastPacket = 0
         self.ASCIIDumpStartTime= None
         self.ASCIIDumpFileCount=0
+        self.ASCIIDumpFilePrefix = ""
+        self.ASCIIDumpSplittime=86400
+        self.ASCIIDumpNextSplittime = 0
 
     def __repr__(self):
         """
@@ -669,7 +668,7 @@ class Sensor:
 
         """
         return hex(self.Description.ID) + " " + self.Description.SensorName
-    def StartDumpingToFileASCII(self, filenamePrefix="",splittime=0):
+    def StartDumpingToFileASCII(self, filenamePrefix="",splittime=86400):
         """
         Activate dumping Messages in a file ASCII encoded ; seperated.
 
@@ -683,19 +682,24 @@ class Sensor:
         None.
 
         """
-        self.ASCIIDumpStartTime = datetime.now()
-        self.initNewASCIIFile(self, filenamePrefix=filenamePrefix)
+        self.ASCIIDumpFilePrefix=filenamePrefix
+        self.ASCIIDumpStartTime = time.monotonic()
+        self.ASCIIDumpStartTimeLocal = datetime.datetime.now()
         self.flags["DumpToFileASCII"] = True
+        if splittime>0:
+            self.ASCIIDumpSplittime=splittime
+        self.initNewASCIIFile()
 
-    def initNewASCIIFile(self,filenamePrefix=""):
+
+    def initNewASCIIFile(self):
         try:
             self.DumpfileASCII.close()
         except:
             pass #the file is not opend or existing and there fore cant be closed
         filename = (
                 "data/"
-                + filenamePrefix
-                + self.ASCIIDumpStartTime.strftime("%Y%m%d%H%M%S")
+                + self.ASCIIDumpFilePrefix
+                + self.ASCIIDumpStartTimeLocal.strftime("%Y%m%d%H%M%S")
                 + "_"
                 + str(self.Description.SensorName).replace(" ", "_")
                 + "_"
@@ -703,6 +707,7 @@ class Sensor:
                 + str(self.ASCIIDumpFileCount).zfill(5)
                 + ".dump"
         )
+        print("created new dumpfile "+filename)
         self.DumpfileASCII = open(filename, "a")
         json.dump(self.Description.asDict(), self.DumpfileASCII)
         self.DumpfileASCII.write("\n")
@@ -711,6 +716,7 @@ class Sensor:
         )
         self.params["DumpFileNameASCII"] = filename
         self.ASCIIDumpFileCount=self.ASCIIDumpFileCount+1
+        self.ASCIIDumpNextSplittime=self.ASCIIDumpStartTime+self.ASCIIDumpSplittime*self.ASCIIDumpFileCount
 
     def StopDumpingToFileASCII(self):
         """
@@ -909,6 +915,9 @@ class Sensor:
                             pass
                 if self.flags["DumpToFileASCII"]:
                     if message["Type"] == "Data":
+                        if time.monotonic()>self.ASCIIDumpNextSplittime:
+                            #TODO remove bug in this line
+                            self.initNewASCIIFile()
                         try:
                             self.__dumpMsgToFileASCII(message["ProtMsg"])
                         except Exception:
@@ -1247,7 +1256,7 @@ class genericPlotter:
                 for i in range(self.BufferLength):
                     time[i]=self.Buffer[i].unix_time+self.Buffer[i].unix_time_nsecs*10e-9
                     time_uncer[i]=self.Buffer[i].time_uncertainty*10e-9
-                self.index=unumpy.uarray(time,time_uncer)
+                self.index=np.array(time)
                 activeChannels=self.Description.getActiveChannelsIDs()
                 OutDataDescripton={}
                 for ac in activeChannels:

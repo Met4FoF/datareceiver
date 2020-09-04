@@ -69,19 +69,26 @@ for File in MPU9250FileNames:
     tmpPol=cart2sph(tmp)
     tmpdeg=tmpPol*np.array([1,180/np.pi,180/np.pi])
     MPU9250MeanVectorsPolDeg.append(tmpdeg)
-    
-def getDistance(angles):
-    Rotation= R.from_rotvec(np.array(angles))
+
+
+def getDistance(angles):                             # [alpha,beta,gamma]
+    rotation= R.from_rotvec(np.array(angles))        # generate rotation matrix
     tmpDistance=0
-    for v in range(len(MPU9250MeanVectors)):
-        RotVec=Rotation.apply(BMA280MeanVectors[v])
-        DistVect = MPU9250MeanVectors[v] - RotVec
-        tmpDistance += np.linalg.norm(DistVect)
-    print(angles,tmpDistance)
+    for v in range(len(MPU9250MeanVectors)):         # loop over all test orientations
+        rotvec=rotation.apply(BMA280MeanVectors[v])  # rotate one vector
+        distvect = MPU9250MeanVectors[v] - rotvec    # calulate difference vector
+        tmpDistance += np.linalg.norm(distvect)      # sum up difference vector length
+    print(angles, tmpDistance)
     return tmpDistance
 
-res=optimize.minimize(getDistance, np.array([0,np.pi,0]), bounds=((-np.pi, np.pi), (-np.pi, np.pi),(-np.pi, np.pi)),method='L-BFGS-B')
-r_matrix=R.from_rotvec(np.array(res.x)).as_matrix()
+
+res = optimize.minimize(getDistance,
+                      np.array([0,np.pi,0]),
+                      bounds = ((-np.pi, np.pi),
+                      (-np.pi, np.pi),
+                      (-np.pi, np.pi)),
+                      method = 'L-BFGS-B')
+r_matrix = R.from_rotvec(np.array(res.x)).as_matrix()
 
 
 fig = plt.figure()
