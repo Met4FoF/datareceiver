@@ -347,11 +347,11 @@ class ChannelDescription:
         """
         self.Description = {
             "CHID": CHID,
-            "PHYSICAL_QUANTITY": False,
-            "UNIT": False,
-            "RESOLUTION": False,
-            "MIN_SCALE": False,
-            "MAX_SCALE": False,
+            "PHYSICAL_QUANTITY": None,
+            "UNIT": None,
+            "RESOLUTION": None,
+            "MIN_SCALE": None,
+            "MAX_SCALE": None,
         }
         self._complete = False
 
@@ -396,11 +396,11 @@ class ChannelDescription:
         """
         self.Description[key] = value
         if (
-            self.Description["PHYSICAL_QUANTITY"] != False
-            and self.Description["UNIT"] != False
-            and self.Description["RESOLUTION"] != False
-            and self.Description["MIN_SCALE"] != False
-            and self.Description["MAX_SCALE"] != False
+            self.Description["PHYSICAL_QUANTITY"] != None
+            and self.Description["UNIT"] != None
+            and self.Description["RESOLUTION"] != None
+            and self.Description["MIN_SCALE"] != None
+            and self.Description["MAX_SCALE"] != None
         ):
             self._complete = True
 
