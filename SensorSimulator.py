@@ -30,12 +30,12 @@ class SensorSimulator:
             Data update frequency in Hz. The default is 1000.
         tagetip : sting, optional
             IP Adress of the DataReceiver. The default is "127.0.0.1".
-        port : intger, optional
-            UDP Port of the Datareceiver. The default is 7654.
+        port : integer, optional
+            UDP Port of the DataReceiver. The default is 7654.
         id : integer, optional
             ID of the simulated sensor. The default is 0x00000001.
         resolutionbit : integer, optional
-            The simulated Sensor data are quantizised in 2^resolutionbit  steps beween min and max. The default is 8.
+            The simulated Sensor data are quantized in 2^resolutionbit  steps between min and max. The default is 8.
         paramupdateratehz : integer, optional
             Update rate of sensor descriptions. The default is 0.5.
 

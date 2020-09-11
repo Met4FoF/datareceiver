@@ -108,7 +108,7 @@ class DataReceiver:
             target=self.run, name="Datareceiver_thread", args=()
         )
         self.thread.start()
-        print("Data receiver now running wating for Packates")
+        print("Data receiver now running wating for packets")
 
     def __repr__(self):
         """
@@ -124,7 +124,7 @@ class DataReceiver:
             + str(self.params["IP"])
             + " Port "
             + str(self.params["Port"])
-            + "\n Active Snesors are:"
+            + "\n Active Sensors are:"
             + str(self.AllSensors)
         )
 
@@ -544,7 +544,7 @@ class SensorDescription:
         """
         ChannelDescription as dict.
 
-        Returns
+        ReturnsDR.
         -------
         ReturnDict : dict
             ChannelDescription as dict.
