@@ -522,7 +522,7 @@ class SensorDescription:
         """
         ChannelDescription as dict.
 
-        Returns
+        ReturnsDR.
         -------
         ReturnDict : dict
             ChannelDescription as dict.
