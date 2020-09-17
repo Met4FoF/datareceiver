@@ -16,7 +16,7 @@ This reposity contains the software needed to receive the measurement data from 
 
 1. Try to connect to the webserver of the board the link will be IPadress/index.html like ```192.168.0.13/index.html``` in the example here.
   ![LCD_display](doc/webserver.png)
-1. Set the UDP target IP address to the Ip of your pc like ```192.168.0.200``` and set the subnetmask matching
+1. Set the UDP target IP address to the IP of your pc like ```192.168.0.200``` and set the subnetmask matching
 1. After saving this settings use the black button on the board to perform an soft reset
 1. Check if the settings are perserved after the restart (look at the LCD) if this is not working maybe the cr2032 battery of the board is empty
 
@@ -154,8 +154,8 @@ Two different protobuff [messages](https://github.com/Met4FoF/Met4FoF-SmartUpUni
       optional float f_Data_14 =33;
       optional float f_Data_15 =34;
       optional float f_Data_16 =35;
-         }
-        ```
+     }
+     ```
 For a further insight into the Description Messages we recommend a look at function
 ```c++
 int MPU9250::getDescription(DescriptionMessage * Message,DescriptionMessage_DESCRIPTION_TYPE DESCRIPTION_TYPE)
