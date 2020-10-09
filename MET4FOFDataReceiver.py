@@ -352,6 +352,7 @@ class ChannelDescription:
             "RESOLUTION": None,
             "MIN_SCALE": None,
             "MAX_SCALE": None,
+            "HIERARCHY": None,
         }
         self._complete = False
 
@@ -401,6 +402,7 @@ class ChannelDescription:
             and self.Description["RESOLUTION"] != None
             and self.Description["MIN_SCALE"] != None
             and self.Description["MAX_SCALE"] != None
+            and self.Description["HIERARCHY"] != None
         ):
             self._complete = True
 
@@ -621,6 +623,7 @@ class Sensor:
         3: "RESOLUTION",
         4: "MIN_SCALE",
         5: "MAX_SCALE",
+        6: "HIERARCHY"
     }
 
     def __init__(self, ID, BufferSize=25e5):
@@ -652,15 +655,16 @@ class Sensor:
         self.params = {"ID": ID, "BufferSize": BufferSize, "DumpFileName": ""}
         self.DescriptionsProcessed = AliasDict(
             {
-                "PHYSICAL_QUANTITY": False,
-                "UNIT": False,
-                "UNCERTAINTY_TYPE": False,
-                "RESOLUTION": False,
-                "MIN_SCALE": False,
-                "MAX_SCALE": False,
+                "PHYSICAL_QUANTITY": None,
+                "UNIT": None,
+                "UNCERTAINTY_TYPE": None,
+                "RESOLUTION": None,
+                "MIN_SCALE": None,
+                "MAX_SCALE": None,
+                "HIERARCHY": None,
             }
         )
-        for i in range(6):
+        for i in range(7):
             self.DescriptionsProcessed.add_alias(self.DescriptionTypNames[i], i)
         self._stop_event = threading.Event()
         self.thread = threading.Thread(
@@ -1369,7 +1373,7 @@ class RealFFTNodeCore:
         'UNIT': "//Herz",
         "RESOLUTION":self.outData.shape[0],
         "MIN_SCALE" : self.Index[0],
-        "MAX_scale" : self.Index[-1]
+        "MAX_SCALE" : self.Index[-1]
         }
         self.Description["Index"]=freqDescription
         print(self.parmas["Name"])
