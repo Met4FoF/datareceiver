@@ -655,13 +655,13 @@ class Sensor:
         self.params = {"ID": ID, "BufferSize": BufferSize, "DumpFileName": ""}
         self.DescriptionsProcessed = AliasDict(
             {
-                "PHYSICAL_QUANTITY": None,
-                "UNIT": None,
-                "UNCERTAINTY_TYPE": None,
-                "RESOLUTION": None,
-                "MIN_SCALE": None,
-                "MAX_SCALE": None,
-                "HIERARCHY": None,
+                "PHYSICAL_QUANTITY": False,
+                "UNIT": False,
+                "UNCERTAINTY_TYPE": False,
+                "RESOLUTION": False,
+                "MIN_SCALE": False,
+                "MAX_SCALE": False,
+                "HIERARCHY": False,
             }
         )
         for i in range(7):
@@ -857,6 +857,7 @@ class Sensor:
                                 0,
                                 1,
                                 2,
+                                6
                             ]:  # ["PHYSICAL_QUANTITY","UNIT","UNCERTAINTY_TYPE"]
                                 # print(Description)
                                 # string Processing
@@ -881,7 +882,7 @@ class Sensor:
                             if Description.Description_Type in [
                                 3,
                                 4,
-                                5,
+                                5
                             ]:  # ["RESOLUTION","MIN_SCALE","MAX_SCALE"]
                                 self.DescriptionsProcessed[
                                     Description.Description_Type
