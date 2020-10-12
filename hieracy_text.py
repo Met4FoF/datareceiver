@@ -1,18 +1,8 @@
 import numpy as np
-descriptiondict={'Name': 'MPU_9250',
- 'ID': 1621950464,
- 1: {'CHID': 1, 'PHYSICAL_QUANTITY': 'X Acceleration', 'UNIT': '\\metre\\second\\tothe{-2}', 'RESOLUTION': 65536.0, 'MIN_SCALE': -156.91439819335938, 'MAX_SCALE': 156.90960693359375, 'HIERARCHY': 'Acceleration/0'},
- 2: {'CHID': 2, 'PHYSICAL_QUANTITY': 'Y Acceleration', 'UNIT': '\\metre\\second\\tothe{-2}', 'RESOLUTION': 65536.0, 'MIN_SCALE': -156.91439819335938, 'MAX_SCALE': 156.90960693359375, 'HIERARCHY': 'Acceleration/1'},
- 3: {'CHID': 3, 'PHYSICAL_QUANTITY': 'Z Acceleration', 'UNIT': '\\metre\\second\\tothe{-2}', 'RESOLUTION': 65536.0, 'MIN_SCALE': -156.91439819335938, 'MAX_SCALE': 156.90960693359375, 'HIERARCHY': 'Acceleration/2'},
- 4: {'CHID': 4, 'PHYSICAL_QUANTITY': 'X Angular velocity', 'UNIT': '\\radian\\second\\tothe{-1}', 'RESOLUTION': 65536.0, 'MIN_SCALE': -34.9071159362793, 'MAX_SCALE': 34.90605163574219, 'HIERARCHY': 'Angular_velocity/0'},
- 5: {'CHID': 5, 'PHYSICAL_QUANTITY': 'Y Angular velocity', 'UNIT': '\\radian\\second\\tothe{-1}', 'RESOLUTION': 65536.0, 'MIN_SCALE': -34.9071159362793, 'MAX_SCALE': 34.90605163574219, 'HIERARCHY': 'Angular_velocity/1'},
- 6: {'CHID': 6, 'PHYSICAL_QUANTITY': 'Z Angular velocity', 'UNIT': '\\radian\\second\\tothe{-1}', 'RESOLUTION': 65536.0, 'MIN_SCALE': -34.9071159362793, 'MAX_SCALE': 34.90605163574219, 'HIERARCHY': 'Angular_velocity/2'},
- 7: {'CHID': 7, 'PHYSICAL_QUANTITY': 'X Magnetic flux density', 'UNIT': '\\micro\\tesla', 'RESOLUTION': 65520.0, 'MIN_SCALE': -5890.5625, 'MAX_SCALE': 5890.5625, 'HIERARCHY': 'Magnetic_flux_density/0'},
- 8: {'CHID': 8, 'PHYSICAL_QUANTITY': 'Y Magnetic flux density', 'UNIT': '\\micro\\tesla', 'RESOLUTION': 65520.0, 'MIN_SCALE': -5890.5625, 'MAX_SCALE': 5890.5625, 'HIERARCHY': 'Magnetic_flux_density/1'},
- 9: {'CHID': 9, 'PHYSICAL_QUANTITY': 'Z Magnetic flux density', 'UNIT': '\\micro\\tesla', 'RESOLUTION': 65520.0, 'MIN_SCALE': -5890.5625, 'MAX_SCALE': 5890.5625, 'HIERARCHY': 'Magnetic_flux_density/2'},
- 10: {'CHID': 10, 'PHYSICAL_QUANTITY': 'Temperature', 'UNIT': '\\degreecelsius', 'RESOLUTION': 65536.0, 'MIN_SCALE': -77.2088851928711, 'MAX_SCALE': 119.08009338378906, 'HIERARCHY': 'Temperature/0'}
- }
-
+import pandas
+import h5py
+import json
+import os
 ### classes to proces sensor descriptions
 class AliasDict(dict):
     def __init__(self, *args, **kwargs):
@@ -307,10 +297,60 @@ class SensorDescription:
             self.hiracydict[splittedhieracy[0]]['PHYSICAL_QUANTITY'][int(splittedhieracy[1])] = self.Channels[Channel]["PHYSICAL_QUANTITY"]
             self.hiracydict[splittedhieracy[0]]['UNIT'] = self.Channels[Channel]["UNIT"]# tehy ned to have the same unit by definition so we will over write it mybe some times but will not change anny thing
         print(self.hiracydict)
+        return self.hiracydict
 
+def convertdumpfile(dumpfile):
+    with open(dumpfile) as f:
+        jsonstring = f.readline()
+        dscp=json.loads(jsonstring)
+    print(dscp)
+    df=pandas.read_csv(dumpfile,sep=';',header=1)
+    hdf5filename=dumpfile.replace('csv','hdf5')
+    #hdffile = h5py.File(hdf5filename, 'a')
+    #group=hdffile.create_group(hex(dscp[ID]))
+    return dscp,df
 
 
 
 if __name__ == "__main__":
-    DSCP=SensorDescription(fromDict=descriptiondict)
-    DSCP.gethieracyasdict()
+
+    dscpstr, df = convertdumpfile(
+        r"D:\datareceiver\data\20201012133232_MPU_9250_0x60ad0100_00000.dump")
+    dscp=SensorDescription(fromDict=dscpstr)
+    hieracy=dscp.gethieracyasdict()
+    os.remove("test2.hdf5")
+    f = h5py.File(r"test2.hdf5",'a')
+    rawvalues=df.values.transpose()
+    dataframindexoffset=5
+    Datasets={}
+    chunksize=1000
+    group=f.create_group(hex(dscp.ID)+'_'+dscp.SensorName.replace(' ','_'))
+    group.attrs['Data_description_json']=json.dumps(dscp.asDict())
+    group.attrs['Sensor_name'] = dscp.SensorName
+    group.attrs['Sensor_ID'] = dscp.ID
+    group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
+    Datasets['Absolutetime'] =group.create_dataset("Absolutetime",([1,chunksize]),maxshape=(1,None),
+                          dtype='float64',compression="gzip",shuffle=True)
+    Datasets['Absolutetime'].resize([1, rawvalues.shape[1]])
+    time=rawvalues[2]+rawvalues[3]*1e-9
+    Datasets['Absolutetime'][...] =time.astype(np.float64)
+    Datasets['Absolutetime'].make_scale("Absoluitetime")
+    Datasets['Sample_number'] =group.create_dataset("Sample_number",([1,chunksize]),maxshape=(1,None),
+                          dtype='float64',compression="gzip",shuffle=True)
+    Datasets['Sample_number'].resize([1, rawvalues.shape[1]])
+    Datasets['Sample_number'][...] =rawvalues[1].astype(np.uint32)
+    for Groupname in hieracy:
+        vectorlength=len(hieracy[Groupname]['copymask'])
+        Datasets[Groupname]=group.create_dataset(Groupname,([vectorlength,chunksize]),maxshape=(3,None),
+                          dtype='float32',compression="gzip",shuffle=True)#compression="gzip",shuffle=True,
+        Datasets[Groupname].resize([vectorlength,rawvalues.shape[1]])
+        Datasets[Groupname][...]=rawvalues[hieracy[Groupname]['copymask']+dataframindexoffset].astype('float32')
+        Datasets[Groupname].dims[0].label = "Absoluitetime"
+        Datasets[Groupname].dims[0].attach_scale(Datasets['Absolutetime'])
+        Datasets[Groupname].attrs['Unit']=hieracy[Groupname]['UNIT']
+        Datasets[Groupname].attrs['Physical_quantity'] = hieracy[Groupname]['PHYSICAL_QUANTITY']
+        Datasets[Groupname].attrs['Resolution'] = hieracy[Groupname]['RESOLUTION']
+        Datasets[Groupname].attrs['Max_scale'] = hieracy[Groupname]['MAX_SCALE']
+        Datasets[Groupname].attrs['Min_scale'] = hieracy[Groupname]['MIN_SCALE']
+    f.flush()
+    f.close()
