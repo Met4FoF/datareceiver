@@ -21,6 +21,8 @@ import datetime
 import copy
 import json
 import h5py
+#from mpi4py import MPI #for multi threaded hdf writing on Windows MSMPI needs to be installed https://www.microsoft.com/en-us/download/details.aspx?id=57467
+
 
 # for live plotting
 import matplotlib.pyplot as plt
@@ -315,6 +317,8 @@ class DataReceiver:
         for SensorID in self.AllSensors:
             self.AllSensors[SensorID].StopDumpingToFileASCII()
 
+
+
 ### classes to proces sensor descriptions
 class AliasDict(dict):
     def __init__(self, *args, **kwargs):
@@ -580,6 +584,7 @@ class SensorDescription:
         for Channel in self.Channels:
             splittedhieracy=self.Channels[Channel]["HIERARCHY"].split('/')
             if len(splittedhieracy) !=2:
+                print(self.Channels[Channel]["HIERARCHY"])
                 raise ValueError("HIERACY "+Channel["HIERARCHY"]+" is invalide since it was no split in two parts")
             try:
                 splittedhieracy[1]=int(splittedhieracy[1])
@@ -730,6 +735,8 @@ class Sensor:
 
         """
         return hex(self.Description.ID) + " " + self.Description.SensorName
+
+
     def StartDumpingToFileASCII(self, filenamePrefix="",splittime=86400):
         """
         Activate dumping Messages in a file ASCII encoded ; seperated.
@@ -1000,6 +1007,9 @@ class Sensor:
                      self.timeSinceLastPacket=0
                  else:
                      self.timeSinceLastPacket+=0.1
+    def donothingcb(self,message,Description):
+        pass
+
 
     def SetCallback(self, callback):
         """
@@ -1028,7 +1038,7 @@ class Sensor:
 
         """
         self.flags["callbackSet"] = False
-        self.callback = doNothingCb
+        self.callback = self.donothingcb
 
     def stop(self):
         """
@@ -1148,71 +1158,89 @@ class Sensor:
 
 
 class HDF5Dumper:
-
-
-    def __init__(self,dscp,filename,chunksize=1000):
-        self._lock = threading.Lock()
+    def __init__(self,dscp,file,hdfffilelock,chunksize=1000):
+        self.hdflock=hdfffilelock
+        self.pushlock = threading.Lock()
         self.dataframindexoffset = 4
         self.chunksize=chunksize
         self.buffer=np.zeros([20,self.chunksize])
         self.chunkswritten=0
         self.msgbufferd=0
         self.hieracy = dscp.gethieracyasdict()
-        self.f = h5py.File(filename, 'a')
+        if  isinstance(file,str):
+            self.f = h5py.File(file, 'a')
+        elif isinstance(file,h5py._hl.files.File):
+            self.f=file
+        else:
+            raise TypeError("file needs to be either str or h5py._hl.files.File not "+str(type(file)))
         self.Datasets = {}
         chunksize = 1000
         #chreate self.groups
-        self.group = self.f.create_group(hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
-        self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
-        self.group.attrs['Sensor_name'] = dscp.SensorName
-        self.group.attrs['Sensor_ID'] = dscp.ID
-        self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
-        self.Datasets['Absolutetime'] = self.group.create_dataset("Absolutetime", ([1, chunksize]), maxshape=(1, None),
+        with self.hdflock:
+            self.group = self.f.create_group(hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
+            self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
+            self.group.attrs['Sensor_name'] = dscp.SensorName
+            self.group.attrs['Sensor_ID'] = dscp.ID
+            self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
+            self.Datasets['Absolutetime'] = self.group.create_dataset("Absolutetime", ([1, chunksize]), maxshape=(1, None),
                                                         dtype='float64', compression="gzip", shuffle=True)
-        self.Datasets['Absolutetime'].make_scale("Absoluitetime")
-        self.Datasets['Sample_number'] = self.group.create_dataset("Sample_number", ([1, chunksize]), maxshape=(1, None),
+            self.Datasets['Absolutetime'].make_scale("Absoluitetime")
+            self.Datasets['Sample_number'] = self.group.create_dataset("Sample_number", ([1, chunksize]), maxshape=(1, None),
                                                          dtype='uint32', compression="gzip", shuffle=True)
-        for groupname in self.hieracy:
-            vectorlength = len(self.hieracy[groupname]['copymask'])
-            self.Datasets[groupname] = self.group.create_dataset(groupname, ([vectorlength, chunksize]), maxshape=(3, None),
+            for groupname in self.hieracy:
+                vectorlength = len(self.hieracy[groupname]['copymask'])
+                self.Datasets[groupname] = self.group.create_dataset(groupname, ([vectorlength, chunksize]), maxshape=(3, None),
                                                        dtype='float32', compression="gzip",
                                                        shuffle=True)  # compression="gzip",shuffle=True,
-            self.Datasets[groupname].dims[0].label = "Absoluitetime"
-            self.Datasets[groupname].dims[0].attach_scale(self.Datasets['Absolutetime'])
-            self.Datasets[groupname].attrs['Unit'] = self.hieracy[groupname]['UNIT']
-            self.Datasets[groupname].attrs['Physical_quantity'] = self.hieracy[groupname]['PHYSICAL_QUANTITY']
-            self.Datasets[groupname].attrs['Resolution'] = self.hieracy[groupname]['RESOLUTION']
-            self.Datasets[groupname].attrs['Max_scale'] = self.hieracy[groupname]['MAX_SCALE']
-            self.Datasets[groupname].attrs['Min_scale'] = self.hieracy[groupname]['MIN_SCALE']
-        self.f.flush()
+                self.Datasets[groupname].dims[0].label = "Absoluitetime"
+                self.Datasets[groupname].dims[0].attach_scale(self.Datasets['Absolutetime'])
+                self.Datasets[groupname].attrs['Unit'] = self.hieracy[groupname]['UNIT']
+                self.Datasets[groupname].attrs['Physical_quantity'] = self.hieracy[groupname]['PHYSICAL_QUANTITY']
+                self.Datasets[groupname].attrs['Resolution'] = self.hieracy[groupname]['RESOLUTION']
+                self.Datasets[groupname].attrs['Max_scale'] = self.hieracy[groupname]['MAX_SCALE']
+                self.Datasets[groupname].attrs['Min_scale'] = self.hieracy[groupname]['MIN_SCALE']
+            self.f.flush()
+
+
     def pushmsg(self,message,Description):
-        with self._lock:
+        with self.pushlock:
             self.buffer[:,self.msgbufferd]=np.array([message.sample_number,message.unix_time,message.unix_time_nsecs,message.time_uncertainty,message.Data_01,message.Data_02,message.Data_03,message.Data_04,message.Data_05,message.Data_06,message.Data_07,message.Data_08,message.Data_09,message.Data_10,message.Data_11,message.Data_12,message.Data_13,message.Data_14,message.Data_15,message.Data_16])
             self.msgbufferd=self.msgbufferd+1
             if self.msgbufferd==self.chunksize:
-                startIDX = (self.chunksize * self.chunkswritten)
-                print("Start index is "+str(startIDX))
-                self.Datasets['Absolutetime'].resize([1,startIDX+self.chunksize])
-                time = self.buffer[1,:] + self.buffer[2,:startIDX+self.chunksize] * 1e-9
-                self.Datasets['Absolutetime'][startIDX:] = time.astype(np.float64)
-                self.Datasets['Sample_number'].resize([1,startIDX+self.chunksize])
-                self.Datasets['Sample_number'][startIDX:] = self.buffer[0,:].astype(np.uint32)
-                for groupname in self.hieracy:
-                    vectorlength = len(self.hieracy[groupname]['copymask'])
-                    self.Datasets[groupname].resize([vectorlength,startIDX+self.chunksize])
-                    data=self.buffer[(self.hieracy[groupname]['copymask']+self.dataframindexoffset),:].astype('float32')
-                    self.Datasets[groupname][:,startIDX:]=data
-                self.f.flush()
-                self.msgbufferd=0
-                self.chunkswritten=self.chunkswritten+1
+                with self.hdflock:
+                    startIDX = (self.chunksize * self.chunkswritten)
+                    print("Start index is "+str(startIDX))
+                    self.Datasets['Absolutetime'].resize([1,startIDX+self.chunksize])
+                    time = (self.buffer[1,:] + self.buffer[2,:startIDX+self.chunksize] * 1e-9).astype(np.float64)
+                    self.Datasets['Absolutetime'][:,startIDX:] = time
+                    self.Datasets['Sample_number'].resize([1,startIDX+self.chunksize])
+                    samplenumbers=self.buffer[0,:].astype(np.uint32)
+                    self.Datasets['Sample_number'][:,startIDX:] = samplenumbers
+                    for groupname in self.hieracy:
+                        vectorlength = len(self.hieracy[groupname]['copymask'])
+                        self.Datasets[groupname].resize([vectorlength,startIDX+self.chunksize])
+                        data=self.buffer[(self.hieracy[groupname]['copymask']+self.dataframindexoffset),:].astype('float32')
+                        self.Datasets[groupname][:,startIDX:]=data
+                    #self.f.flush()
+                    self.msgbufferd=0
+                    self.chunkswritten=self.chunkswritten+1
 
+def startdumpingallsensorshdf(filename):
+    hdfdumplock = threading.Lock()
+    hdfdumpfile = h5py.File(filename, 'a')
+    hdfdumper=[]
+    for SensorID in DR.AllSensors:
+        hdfdumper.append(HDF5Dumper(DR.AllSensors[SensorID].Description,hdfdumpfile,hdfdumplock))
+        DR.AllSensors[SensorID].SetCallback(hdfdumper[-1].pushmsg)
 
+def stopdumpingallsensorshdf(self):
+    for SensorID in self.AllSensors:
+        self.AllSensors[SensorID].UnSetCallback()
+    for hdfdumper in self.hdfdumper:
+        hdfdumper.f.flush()
+        del hdfdumper
+    self.hdfdumpfile.close()
 
 if __name__ == "__main__":
     DR = DataReceiver("192.168.0.200", 7654)
-    if os.path.exists("dump.hdf5"):
-        os.remove("dump.hdf5")
     time.sleep(9)
-    dumper=HDF5Dumper(DR.AllSensors[0x60ad0100].Description,"dump.hdf5",chunksize=1000)
-    DR.AllSensors[0x60ad0100].SetCallback(dumper.pushmsg)
-
