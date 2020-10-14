@@ -1232,15 +1232,17 @@ def startdumpingallsensorshdf(filename):
     for SensorID in DR.AllSensors:
         hdfdumper.append(HDF5Dumper(DR.AllSensors[SensorID].Description,hdfdumpfile,hdfdumplock))
         DR.AllSensors[SensorID].SetCallback(hdfdumper[-1].pushmsg)
+    return hdfdumper,hdfdumpfile
 
-def stopdumpingallsensorshdf(self):
-    for SensorID in self.AllSensors:
-        self.AllSensors[SensorID].UnSetCallback()
-    for hdfdumper in self.hdfdumper:
-        hdfdumper.f.flush()
-        del hdfdumper
-    self.hdfdumpfile.close()
+def stopdumpingallsensorshdf(dumperlist):
+    for SensorID in DR.AllSensors:
+        DR.AllSensors[SensorID].UnSetCallback()
+    for dumper in dumperlist:
+        dumper.f.flush()
+        del dumper
+    hdfdumpfile.close()
+
 
 if __name__ == "__main__":
-    DR = DataReceiver("192.168.0.200", 7654)
-    time.sleep(9)
+    #DR = DataReceiver("192.168.0.200", 7654)
+    hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
