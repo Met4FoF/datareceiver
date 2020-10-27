@@ -1259,7 +1259,7 @@ def startdumpingallsensorshdf(filename):
         DR.AllSensors[SensorID].SetCallback(hdfdumper[-1].pushmsg)
     return hdfdumper,hdfdumpfile
 
-def stopdumpingallsensorshdf(dumperlist):
+def stopdumpingallsensorshdf(dumperlist,dumpfile):
     for SensorID in DR.AllSensors:
         DR.AllSensors[SensorID].UnSetCallback()
     for dumper in dumperlist:
