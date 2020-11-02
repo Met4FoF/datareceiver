@@ -1158,7 +1158,7 @@ class Sensor:
 
 
 class HDF5Dumper:
-    def __init__(self,dscp,file,hdfffilelock,chunksize=1000):
+    def __init__(self,dscp,file,hdfffilelock,chunksize=2048):
         self.hdflock=hdfffilelock
         self.pushlock = threading.Lock()
         self.dataframindexoffset = 4
@@ -1177,16 +1177,33 @@ class HDF5Dumper:
         chunksize = 1000
         #chreate self.groups
         with self.hdflock:
-            self.group = self.f.create_group(hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
+            self.group = self.f.create_group("RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
             self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
             self.group.attrs['Sensor_name'] = dscp.SensorName
             self.group.attrs['Sensor_ID'] = dscp.ID
             self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
             self.Datasets['Absolutetime'] = self.group.create_dataset("Absolutetime", ([1, chunksize]), maxshape=(1, None),
-                                                        dtype='float64', compression="gzip", shuffle=True)
+                                                        dtype='uint64', compression="gzip", shuffle=True)
             self.Datasets['Absolutetime'].make_scale("Absoluitetime")
+            self.Datasets['Absolutetime'].attrs['Unit'] = "/nano/seconds"
+            self.Datasets['Absolutetime'].attrs['Physical_quantity'] = "Uinix_time_in_nanoseconds"
+            self.Datasets['Absolutetime'].attrs['Resolution'] = np.exp2(64)
+            self.Datasets['Absolutetime'].attrs['Max_scale'] = np.exp2(64)
+            self.Datasets['Absolutetime'].attrs['Min_scale'] = 0
+            self.Datasets['Absolutetime_uncertainty'] = self.group.create_dataset("Absolutetime_uncertainty", ([1, chunksize]), maxshape=(1, None),
+                                                         dtype='uint32', compression="gzip", shuffle=True)
+            self.Datasets['Absolutetime_uncertainty'].attrs['Unit'] = "/nano/seconds"
+            self.Datasets['Absolutetime_uncertainty'].attrs['Physical_quantity'] = "Uinix_time_uncertainty_in_nanosconds"
+            self.Datasets['Absolutetime_uncertainty'].attrs['Resolution'] = np.exp2(32)
+            self.Datasets['Absolutetime_uncertainty'].attrs['Max_scale'] = np.exp2(32)
+            self.Datasets['Absolutetime_uncertainty'].attrs['Min_scale'] = 0
             self.Datasets['Sample_number'] = self.group.create_dataset("Sample_number", ([1, chunksize]), maxshape=(1, None),
                                                          dtype='uint32', compression="gzip", shuffle=True)
+            self.Datasets['Sample_number'].attrs['Unit'] = "/one"
+            self.Datasets['Sample_number'].attrs['Physical_quantity'] = "Sample_number"
+            self.Datasets['Sample_number'].attrs['Resolution'] = np.exp2(32)
+            self.Datasets['Sample_number'].attrs['Max_scale'] = np.exp2(32)
+            self.Datasets['Sample_number'].attrs['Min_scale'] = 0
             for groupname in self.hieracy:
                 vectorlength = len(self.hieracy[groupname]['copymask'])
                 self.Datasets[groupname] = self.group.create_dataset(groupname, ([vectorlength, chunksize]), maxshape=(3, None),
@@ -1210,12 +1227,20 @@ class HDF5Dumper:
                 with self.hdflock:
                     startIDX = (self.chunksize * self.chunkswritten)
                     print("Start index is "+str(startIDX))
+
                     self.Datasets['Absolutetime'].resize([1,startIDX+self.chunksize])
-                    time = (self.buffer[1,:] + self.buffer[2,:startIDX+self.chunksize] * 1e-9).astype(np.float64)
+                    time = (self.buffer[1,:]* 1e9 + self.buffer[2,:startIDX+self.chunksize]).astype(np.uint64)
                     self.Datasets['Absolutetime'][:,startIDX:] = time
+
+                    self.Datasets['Absolutetime_uncertainty'].resize([1,startIDX+self.chunksize])
+                    Absolutetime_uncertainty=self.buffer[3,:].astype(np.uint32)
+                    self.Datasets['Absolutetime_uncertainty'][:,startIDX:]=Absolutetime_uncertainty
+
+
                     self.Datasets['Sample_number'].resize([1,startIDX+self.chunksize])
                     samplenumbers=self.buffer[0,:].astype(np.uint32)
                     self.Datasets['Sample_number'][:,startIDX:] = samplenumbers
+
                     for groupname in self.hieracy:
                         vectorlength = len(self.hieracy[groupname]['copymask'])
                         self.Datasets[groupname].resize([vectorlength,startIDX+self.chunksize])
@@ -1234,15 +1259,15 @@ def startdumpingallsensorshdf(filename):
         DR.AllSensors[SensorID].SetCallback(hdfdumper[-1].pushmsg)
     return hdfdumper,hdfdumpfile
 
-def stopdumpingallsensorshdf(dumperlist):
+def stopdumpingallsensorshdf(dumperlist,dumpfile):
     for SensorID in DR.AllSensors:
         DR.AllSensors[SensorID].UnSetCallback()
     for dumper in dumperlist:
         dumper.f.flush()
         del dumper
-    hdfdumpfile.close()
+    dumpfile.close()
 
 
 if __name__ == "__main__":
-    #DR = DataReceiver("192.168.0.200", 7654)
-    hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
+    DR = DataReceiver("192.168.0.200", 7654)
+    #hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
