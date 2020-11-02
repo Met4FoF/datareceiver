@@ -5,10 +5,17 @@ import numpy as np
 import csv
 from MET4FOFDataReceiver import HDF5Dumper
 from MET4FOFDataReceiver import SensorDescription
+import messages_pb2
+import threading
 
 if __name__ == "__main__":
     adcbaseid=10
+    extractadcdata = True
     dumpfilename=r"D:\data\200907_mpu9250_BMA280_cal\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\Messungen_CEM\m1-Kopie\20201023130103_MPU_9250_0xbccb0000_00000.dump"
+    hdffilename=dumpfilename.replace('.dump','.hdf5')
+    hdfdumplock = threading.Lock()
+    hdfdumpfile = h5py.File(hdffilename, 'w')
+
     with open(dumpfilename) as dumpfile:
         reader=csv.reader(dumpfile, delimiter=";")
         descpparsed=False
@@ -40,38 +47,72 @@ if __name__ == "__main__":
 
             paramsdictjson['10']["HIERARCHY"] = "Temperature/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
+
         else:
             print("sensor "+str(paramsdictjson['Name'])+' not supported exiting')
             exit()
         baseid = int(np.floor(paramsdictjson['ID'] / 65536))
-        adcid = baseid*65536 + 256 * adcbaseid
-        print("ADC ID " + hex(adcid))
-        adcparamsdict = {
-            'ID':adcid,
-            'Name': 'STM32 Internal ADC',
-                              '1': {'CHID': 1,
-                                    'PHYSICAL_QUANTITY': 'Voltage Ch 1',
-                                    'UNIT': '\\volt',
-                                    'RESOLUTION': 4096.0,
-                                    'MIN_SCALE': -10,
-                                    'MAX_SCALE':10 ,
-                                    "HIERARCHY":'Voltage/0'},
-                              '2': {'CHID': 2,
-                                    'PHYSICAL_QUANTITY': 'Voltage Ch 2',
-                                    'UNIT': '\\volt',
-                                    'RESOLUTION': 4096.0,
-                                    'MIN_SCALE': -10,
-                                    'MAX_SCALE': 10,
-                                    "HIERARCHY":'Voltage/1'},
-                              '3': {'CHID': 3,
-                                    'PHYSICAL_QUANTITY': 'Voltage Ch 3',
-                                    'UNIT': '\\volt',
-                                    'RESOLUTION': 4096.0,
-                                    'MIN_SCALE': -10,
-                                    'MAX_SCALE': 10,
-                                    "HIERARCHY":'Voltage/2'}}
-
-
-        adcdscp = SensorDescription(fromDict=adcparamsdict,ID=adcid)
-
+        #descriptions are now ready start the hdf dumpers
+        sensordumper = HDF5Dumper(sensordscp, hdfdumpfile, hdfdumplock)
+        if extractadcdata:
+            adcid = int(baseid * 65536 + 256 * adcbaseid)
+            print("ADC ID " + hex(adcid))
+            adcparamsdict = {
+                'ID': int(adcid),
+                'Name': 'STM32 Internal ADC',
+                '1': {'CHID': 1,
+                      'PHYSICAL_QUANTITY': 'Voltage Ch 1',
+                      'UNIT': '\\volt',
+                      'RESOLUTION': 4096.0,
+                      'MIN_SCALE': -10,
+                      'MAX_SCALE': 10,
+                      "HIERARCHY": 'Voltage/0'},
+                '2': {'CHID': 2,
+                      'PHYSICAL_QUANTITY': 'Voltage Ch 2',
+                      'UNIT': '\\volt',
+                      'RESOLUTION': 4096.0,
+                      'MIN_SCALE': -10,
+                      'MAX_SCALE': 10,
+                      "HIERARCHY": 'Voltage/1'},
+                '3': {'CHID': 3,
+                      'PHYSICAL_QUANTITY': 'Voltage Ch 3',
+                      'UNIT': '\\volt',
+                      'RESOLUTION': 4096.0,
+                      'MIN_SCALE': -10,
+                      'MAX_SCALE': 10,
+                      "HIERARCHY": 'Voltage/2'}}
+            adcdscp = SensorDescription(fromDict=adcparamsdict, ID=adcid)
+            adcdumper = HDF5Dumper(adcdscp, hdfdumpfile, hdfdumplock)
+        cloumnames = next(reader)
+        #loop over the remaining file content
+        for row in reader:
+            sensormsg = messages_pb2.DataMessage()
+            sensormsg.id = int(row[0])
+            sensormsg.sample_number = int(row[1])
+            sensormsg.unix_time = int(row[2])
+            sensormsg.unix_time_nsecs = int(row[3])
+            sensormsg.time_uncertainty = int(row[4])
+            sensormsg.Data_01 = float(row[5])
+            sensormsg.Data_02 = float(row[6])
+            sensormsg.Data_03 = float(row[7])
+            sensormsg.Data_04 = float(row[8])
+            sensormsg.Data_05 = float(row[9])
+            sensormsg.Data_06 = float(row[10])
+            sensormsg.Data_07 = float(row[11])
+            sensormsg.Data_08 = float(row[12])
+            sensormsg.Data_09 = float(row[13])
+            sensormsg.Data_10 = float(row[14])
+            sensordumper.pushmsg(sensormsg,sensordscp)
+            if extractadcdata:
+                adcmsg = messages_pb2.DataMessage()
+                adcmsg.id = adcid
+                adcmsg.sample_number = int(row[1])
+                adcmsg.unix_time = int(row[2])
+                adcmsg.unix_time_nsecs = int(row[3])
+                adcmsg.time_uncertainty = int(row[4])
+                adcmsg.Data_01 = float(row[15])
+                adcmsg.Data_02 = float(row[16])
+                adcmsg.Data_03 = float(row[17])
+                adcdumper.pushmsg(adcmsg, adcdscp)
+        hdfdumpfile.flush()
     #hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
