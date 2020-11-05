@@ -1,4 +1,3 @@
-import pandas as pd
 import json
 import h5py
 import numpy as np
@@ -11,7 +10,7 @@ import threading
 if __name__ == "__main__":
     adcbaseid=10
     extractadcdata = True
-    dumpfilename=r"D:\data\200907_mpu9250_BMA280_cal\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\Messungen_CEM\m1-Kopie\20201023130103_MPU_9250_0xbccb0000_00000.dump"
+    dumpfilename=r"/media/benedikt/nvme/data/2020-09-07 Messungen MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.dump"
     hdffilename=dumpfilename.replace('.dump','.hdf5')
     hdfdumplock = threading.Lock()
     hdfdumpfile = h5py.File(hdffilename, 'w')
@@ -115,4 +114,5 @@ if __name__ == "__main__":
                 adcmsg.Data_03 = float(row[17])
                 adcdumper.pushmsg(adcmsg, adcdscp)
         hdfdumpfile.flush()
+        hdfdumpfile.close()
     #hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
