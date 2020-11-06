@@ -122,7 +122,7 @@ class hdfmet4fofdatafile:
         falttned.resize(originalshape)
         return falttned.astype(int)
 
-class Experiment():
+class experiment():
     def __init__(self,hdfmet4fofdatafile,times):
         self.met4fofdatafile=hdfmet4fofdatafile
         self.timepoints=times
@@ -142,6 +142,10 @@ class Experiment():
         for sensor in self.met4fofdatafile.sensordatasets:
             irow=0
             idxs=self.idxs[sensor]
+            axs[icol,0].annotate(sensor.replace('_',' '), xy=(0, 0.5), xytext=(-axs[icol,0].yaxis.labelpad - 5, 0),
+                        xycoords=axs[icol,0].yaxis.label, textcoords='offset points',
+                        size='large', ha='right', va='center',rotation=90)
+
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 dsetattrs=self.met4fofdatafile.hdffile['RAWDATA/'+sensor+ '/' + dataset ].attrs
                 time=self.met4fofdatafile.hdffile['RAWDATA/'+sensor + '/' + 'Absolutetime'][0,idxs[0]:idxs[1]]
@@ -164,6 +168,11 @@ class Experiment():
             icol=icol+1
         fig.show()
 
+class sineexcitation(experiment):
+    def __init__(self,hdfmet4fofdatafile,times):
+        super().__init__(hdfmet4fofdatafile,times)
+
+
 
 if __name__ == "__main__":
     hdffilename = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
@@ -171,7 +180,7 @@ if __name__ == "__main__":
     test=hdfmet4fofdatafile(datafile)
     nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
     movementidx,movementtimes=test.detectmovment('0x1fe40000_MPU_9250', 'Acceleration')
-    experiment=Experiment(test,movementtimes[0])
-    experiment2 = Experiment(test, movementtimes[1])
+    experiment=experiment(test,movementtimes[0])
+    experiment2 = sineexcitation(test, movementtimes[1])
     experiment.plotall()
     experiment2.plotall()
