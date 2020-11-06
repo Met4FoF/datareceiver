@@ -1,5 +1,6 @@
 import h5py
 import numpy as np
+import matplotlib.pyplot as plt
 from MET4FOFDataReceiver import SensorDescription
 
 class hdfmet4fofdatafile:
@@ -39,7 +40,6 @@ class hdfmet4fofdatafile:
         nomovementtidx=[]
         nomovementtimes = []
         for i in range(std.size):
-            print(i)
             if std[i]<treshold:
                 wasvalide=wasvalide+1
             else:
@@ -61,7 +61,6 @@ class hdfmet4fofdatafile:
         movementtidx=[]
         movementtimes = []
         for i in range(std.size):
-            print(i)
             if std[i]>treshold:
                 wasvalide=wasvalide+1
             else:
@@ -74,8 +73,41 @@ class hdfmet4fofdatafile:
         movementidx=np.array(movementtidx)
         return movementidx,np.array(movementtimes)
 
+    def getnearestidxs(self,sensorname,time,blocksize=1000):
+        absolutimegroupname='RAWDATA/'+sensorname + '/' + 'Absolutetime'
+        absolutetimes= np.squeeze(self.hdffile[absolutimegroupname])
+        subsampledtimes=absolutetimes[0::blocksize]
+        originalshape=time.shape
+        falttned=time.flatten()
+        def getnearestsingelval(timeval):
+            t=timeval
+            timediff=abs(subsampledtimes-t)
+            tmp=np.argmin(timediff)
+            if(tmp==0):#value is in first block
+                idx = np.argmin(abs(absolutetimes[:blocksize] - t))
+            elif(tmp==len(subsampledtimes)):#value is in first block
+                tmpidx = np.argmin(abs(absolutetimes[len((absolutetimes)-blocksize):] - t))
+                idx= tmpidx+len((absolutetimes)-blocksize)
+            else:
+                subtimediff=abs(absolutetimes[(blocksize*(tmp-1)):(blocksize*(tmp+1))]-t)
+                relidx=np.argmin(subtimediff)
+                idx=relidx+(blocksize*(tmp-1))
+            return int(idx)
+
+        for i in np.arange(falttned.size):
+            falttned[i]=getnearestsingelval(falttned[i])
+        falttned.resize(originalshape)
+        return falttned.astype(int)
+
+    #experiments are inner classes since they can not exist with out an datafile
+    class Experiment():
+        def __init__(self,times):
+            self.timepoints=times
+            self.rawdata={}
+
+
 if __name__ == "__main__":
-    hdffilename = r"/media/benedikt/nvme/data/2020-09-07 Messungen MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    hdffilename = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
     datafile = h5py.File(hdffilename, 'r+')
     test=hdfmet4fofdatafile(datafile)
     nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
