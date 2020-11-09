@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from numba import jit
 import time
+import multiprocessing
 from MET4FOFDataReceiver import SensorDescription
 
 
@@ -195,6 +196,9 @@ class sineexcitation(experiment):
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 data=self.met4fofdatafile.hdffile['RAWDATA/'+sensor + '/' + dataset ][:,idxs[0]:idxs[1]]
                 self.Data[sensor][dataset]['RFFT'] =np.fft.rfft(data,axis=1)
+                self.Data[sensor][dataset]['FFT_max_freq']=self.Data[sensor]['RFFT Frequencys'][np.argmax(abs(np.sum(self.Data[sensor][dataset]['RFFT'],axis=0)))]
+                print(self.Data[sensor][dataset]['FFT_max_freq'])
+
 
     def dosinefits(self,sensorname,quantitiy,axis="Mag"):
         pass
@@ -266,15 +270,27 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
         hdffile.flush()
 
 
+def processdata(i):
+        mpdata['Experiemnts'][i] = sineexcitation(mpdata['hdfinstance'], mpdata['movementtimes'][i])
+        mpdata['Experiemnts'][i].dofft()
 
 if __name__ == "__main__":
     hdffilename = r"D:\data\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\WDH3\20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
-    refcsvfilename = r"D:\data\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\WDH3\20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
-    refhdf5filename = r"D:\data\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\WDH3\20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.hdf5"
     datafile = h5py.File(hdffilename, 'r+')
     test=hdfmet4fofdatafile(datafile)
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
     movementidx,movementtimes=test.detectmovment('0x1fe40000_MPU_9250', 'Acceleration')
-    experiment2 = sineexcitation(test, movementtimes[10])
-    experiment2.dofft()
-    summedFFT = np.sum(experiment2.Data['0x1fe40000_MPU_9250']['Acceleration']['RFFT'], axis=0)
+    manager = multiprocessing.Manager()
+    mpdata=manager.dict()
+    mpdata['hdfinstance']=test
+    mpdata['movementtimes']=movementtimes
+    mpdata['Experiemnts']=[None]*movementtimes.shape[0]
+    i=np.arange(movementtimes.shape[0])
+
+    process1 = multiprocessing.Process(target=processdata, args=[i[0::2]])
+    process2 = multiprocessing.Process(target=processdata, args=[i[1::2]])
+    process1.start()
+    process2.start()
+    process1.join()
+    process2.join()
+
