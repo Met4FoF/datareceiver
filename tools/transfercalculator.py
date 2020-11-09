@@ -1,6 +1,9 @@
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+from numba import jit
+import time
 from MET4FOFDataReceiver import SensorDescription
 
 
@@ -8,18 +11,22 @@ def getplotableunitstring(unitstr, Latex=False):
     if not Latex:
         convDict = {
             "\\degreecelsius": "°C",
+            "\\degree": "°",
             "\\micro\\tesla": "µT",
             "\\radian\\second\\tothe{-1}": "rad/s",
             "\\metre\\second\\tothe{-2}": "m/s^2",
             "\\volt": "v",
+            "\\hertz": "Hz",
         }
     else:
         convDict = {
             "\\degreecelsius": "$^\circ C$",
+            "\\degree": "$^\circ$",
             "\\micro\\tesla": "$\micro T$",
-            "\\radian\\second\\tothe{-1}": "$\frac{m}{s}$",
-            "\\metre\\second\\tothe{-2}": "\frac{m}{s^2}",
+            "\\radian\\second\\tothe{-1}": "$\\frac{m}{s}$",
+            "\\metre\\second\\tothe{-2}": "$\\frac{m}{s^2}",
             "\\volt": "v",
+            "\\hertz": "Hz",
         }
     try:
         result = convDict[unitstr]
@@ -45,13 +52,14 @@ class hdfmet4fofdatafile:
         print("RAW DataGroups are "+str(self.senorsnames))
         print("RAW Datasets are " + str(self.sensordatasets))
 
-    def calcblockwiesestd(self,dataset,blocksize=1000):
+    def calcblockwiesestd(self,dataset,blocksize=100):
+        start = time.time()
         blockcount=int(np.floor(dataset.size / blocksize))
         std=np.zeros(blockcount)
-        for i in range(blockcount):
-            startIDX=i*blocksize
-            stopIDX=(i+1)*blocksize
-            std[i]=np.std(dataset[startIDX:stopIDX])
+        split=np.split(dataset[:blocksize*blockcount], blockcount, axis=0)
+        std=np.std(split,axis=1)
+        end = time.time()
+        print("bwstd for dataset "+str(dataset)+"took "+str(end - start)+ " secs")
         return std
 
     def detectnomovment(self,sensorname,quantitiy,treshold=0.05,blocksinrow=5,blocksize=100):
@@ -127,8 +135,12 @@ class experiment():
         self.met4fofdatafile=hdfmet4fofdatafile
         self.timepoints=times
         self.idxs={}
+        self.Data={}
         for name in self.met4fofdatafile.senorsnames:
             self.idxs[name]=self.met4fofdatafile.getnearestidxs(name,self.timepoints)
+            self.Data[name] = {}
+            for dataset in self.met4fofdatafile.sensordatasets[name]:
+                self.Data[name][dataset] = {}
         print(self.idxs)
 
     def plotall(self,absolutetime=False):
@@ -172,15 +184,97 @@ class sineexcitation(experiment):
     def __init__(self,hdfmet4fofdatafile,times):
         super().__init__(hdfmet4fofdatafile,times)
 
+    def dofft(self):
+        for sensor in self.met4fofdatafile.sensordatasets:
+            idxs = self.idxs[sensor]
+            points=idxs[1]-idxs[0]
+            time = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
+            reltime = time - self.timepoints[0]
+            self.Data[sensor]['Mean Delta T']=np.mean(np.diff(reltime/1e9))
+            self.Data[sensor]['RFFT Frequencys']=np.fft.rfftfreq(points,self.Data[sensor]['Mean Delta T'])
+            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
+                data=self.met4fofdatafile.hdffile['RAWDATA/'+sensor + '/' + dataset ][:,idxs[0]:idxs[1]]
+                self.Data[sensor][dataset]['RFFT'] =np.fft.rfft(data,axis=1)
+
+    def dosinefits(self,sensorname,quantitiy,axis="Mag"):
+        pass
+
+def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
+    refcsv= pd.read_csv(csvfilename, delimiter=";",comment='#')
+    hdffile=hdffile
+    isaccelerationreference1d=False
+    with open(csvfilename, "r") as file:
+        first_line = file.readline()
+        second_line = file.readline()
+        third_line= file.readline()
+        if r'loop;frequency;ex_amp;ex_amp_std;phase;phase_std' in first_line and r'#Number;Hz;m/s^2;m/s^2;deg;deg' in third_line:
+            isaccelerationreference1d = True
+            print("1D Accelerationrefference fiele given creating hdf5 data set")
+        else:
+            if not r'loop;frequency;ex_amp;ex_amp_std;phase;phase_std' in first_line:
+                raise RuntimeError("Looking for >>>loop;frequency;ex_amp;ex_amp_std;phase;phase_std<<< in csvfile first row got"+first_line)
+            if not r'#Number;Hz;m/s^2;m/s^2;deg;deg' in third_line:
+                raise RuntimeError("Looking for >>>loop;frequency;ex_amp;ex_amp_std;phase;phase_std<<< in csvfile first row got"+third_line)
+    if isaccelerationreference1d:
+        Datasets = {}
+        REFDATA = hdffile.create_group("REFENCEDATA")
+        group = REFDATA.create_group("Acceleration_refference")
+        group.attrs['Refference_name'] = "PTB HF acceleration standard"
+        group.attrs['Sensor_name'] = group.attrs['Refference_name']
+        group.attrs['Refference_type'] = "1D acceleration"
+        Datasets['Frequency'] = group.create_dataset('Frequency', ([1, refcsv.shape[0]]),
+                                                    dtype='float64')
+        Datasets['Frequency'].make_scale("Frequency")
+        Datasets['Frequency'].attrs['Unit'] = "/hertz"
+        Datasets['Frequency'].attrs['Physical_quantity'] = "Excitation frequency"
+        Datasets['Frequency'][:]=refcsv['frequency'].to_numpy()
+        Datasets['Repetition count'] = group.create_dataset('repetition count', ([1, refcsv.shape[0]]),
+                                                    dtype='int32')
+        Datasets['Repetition count'].attrs['Unit'] = "/one"
+        Datasets['Repetition count'].attrs['Physical_quantity'] = "Repetition count"
+        Datasets['Repetition count'][:]=refcsv['loop'].to_numpy()
+        Datasets['Repetition count'].dims[0].label = 'Frequency'
+        Datasets['Repetition count'].dims[0].attach_scale(Datasets['Frequency'])
+        uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+        Datasets['Excitation amplitude']=group.create_dataset('Excitation amplitude', ([3, refcsv.shape[0]]),
+                                                    dtype=uncerval)
+        Datasets['Excitation amplitude'].attrs['Unit'] = "\\metre\\second\\tothe{-2}"
+        Datasets['Excitation amplitude'].attrs['Physical_quantity'] = ["X Excitation amplitude",
+                                                                       "Y Excitation amplitude",
+                                                                       "Z Excitation amplitude"]
+        Datasets['Excitation amplitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
+        Datasets['Excitation amplitude'][:]=np.empty([3, refcsv.shape[0]])
+        Datasets['Excitation amplitude'][:]=np.nan
+        Datasets['Excitation amplitude'][axis, :,"value"] = refcsv['ex_amp']
+        Datasets['Excitation amplitude'][axis, :,"uncertainty"] = refcsv['ex_amp_std']
+        Datasets['Excitation amplitude'].dims[0].label = 'Frequency'
+        Datasets['Excitation amplitude'].dims[0].attach_scale(Datasets['Frequency'])
+
+        Datasets['Phase']=group.create_dataset('Phasee', ([3, refcsv.shape[0]]),
+                                                    dtype=uncerval)
+        Datasets['Phase'].attrs['Unit'] = "\\degree"
+        Datasets['Phase'].attrs['Physical_quantity'] = ["X Phase",
+                                                        "Y Phase",
+                                                        "Z Phase"]
+        Datasets['Phase'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
+        Datasets['Phase'][:]=np.empty([3, refcsv.shape[0]])
+        Datasets['Phase'][:]=np.nan
+        Datasets['Phase'][axis, :,"value"] = refcsv['phase']
+        Datasets['Phase'][axis, :,"uncertainty"] = refcsv['phase_std']
+        Datasets['Phase'].dims[0].label = 'Frequency'
+        Datasets['Phase'].dims[0].attach_scale(Datasets['Frequency'])
+        hdffile.flush()
+
 
 
 if __name__ == "__main__":
-    hdffilename = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    hdffilename = r"D:\data\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\WDH3\20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    refcsvfilename = r"D:\data\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\WDH3\20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
+    refhdf5filename = r"D:\data\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\WDH3\20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.hdf5"
     datafile = h5py.File(hdffilename, 'r+')
     test=hdfmet4fofdatafile(datafile)
-    nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
+    #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
     movementidx,movementtimes=test.detectmovment('0x1fe40000_MPU_9250', 'Acceleration')
-    experiment=experiment(test,movementtimes[0])
-    experiment2 = sineexcitation(test, movementtimes[1])
-    experiment.plotall()
-    experiment2.plotall()
+    experiment2 = sineexcitation(test, movementtimes[10])
+    experiment2.dofft()
+    summedFFT = np.sum(experiment2.Data['0x1fe40000_MPU_9250']['Acceleration']['RFFT'], axis=0)
