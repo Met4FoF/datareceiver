@@ -1,10 +1,12 @@
-import h5py
+#import h5py
+import h5pickle as h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from numba import jit
 import time
 import multiprocessing
+import sys
+import time
 from MET4FOFDataReceiver import SensorDescription
 
 
@@ -131,6 +133,8 @@ class hdfmet4fofdatafile:
         falttned.resize(originalshape)
         return falttned.astype(int)
 
+
+
 class experiment():
     def __init__(self,hdfmet4fofdatafile,times):
         self.met4fofdatafile=hdfmet4fofdatafile
@@ -138,7 +142,10 @@ class experiment():
         self.idxs={}
         self.Data={}
         for name in self.met4fofdatafile.senorsnames:
+            start = time.time()
             self.idxs[name]=self.met4fofdatafile.getnearestidxs(name,self.timepoints)
+            end = time.time()
+            print("Nearest IDX Time " + str(end - start))
             self.Data[name] = {}
             for dataset in self.met4fofdatafile.sensordatasets[name]:
                 self.Data[name][dataset] = {}
@@ -271,12 +278,24 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
 
 
 def processdata(i):
-        mpdata['Experiemnts'][i] = sineexcitation(mpdata['hdfinstance'], mpdata['movementtimes'][i])
-        mpdata['Experiemnts'][i].dofft()
+        print(i)
+        sys.stdout.flush()
+        start = time.time()
+        mpdata['Experiemnts'][i] = experiment =sineexcitation(mpdata['hdfinstance'], mpdata['movementtimes'][i])
+        sys.stdout.flush()
+        print(experiment)
+        sys.stdout.flush()
+        experiment.dofft()
+        end = time.time()
+        print("FFT Time "+str(end - start))
+        sys.stdout.flush()
+
+
 
 if __name__ == "__main__":
-    hdffilename = r"D:\data\2020-09-07 Messungen MPU9250_SN31_Zweikanalig\WDH3\20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
-    datafile = h5py.File(hdffilename, 'r+')
+    start = time.time()
+    hdffilename = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    datafile = h5py.File(hdffilename, 'r+',driver='core')
     test=hdfmet4fofdatafile(datafile)
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
     movementidx,movementtimes=test.detectmovment('0x1fe40000_MPU_9250', 'Acceleration')
@@ -286,11 +305,16 @@ if __name__ == "__main__":
     mpdata['movementtimes']=movementtimes
     mpdata['Experiemnts']=[None]*movementtimes.shape[0]
     i=np.arange(movementtimes.shape[0])
+    with multiprocessing.Pool(4) as p:
+        p.map(processdata,i)
+    end = time.time()
+    print(end - start)
 
-    process1 = multiprocessing.Process(target=processdata, args=[i[0::2]])
-    process2 = multiprocessing.Process(target=processdata, args=[i[1::2]])
-    process1.start()
-    process2.start()
-    process1.join()
-    process2.join()
+
+
+#PTB Pc
+#Single Core 105.88655972480774
+#Dual Core    59.0755774974823
+#Triple Core  39.963184118270874
+#Quad Core    31.353542804718018
 
