@@ -7,6 +7,7 @@ import time
 import multiprocessing
 import sys
 import time
+import sinetools.SineTools as st
 from MET4FOFDataReceiver import SensorDescription
 
 
@@ -51,11 +52,18 @@ def binarySearch(data, val):
         else:
             best_ind = mid
             break
+
         # check if data[mid] is closer to val than data[best_ind]
-        absmidint=abs(data[mid].astype(np.int64) - val.astype(np.int64))
-        absestind = abs(data[mid].astype(np.int64) - val.astype(np.int64))
-        if absmidint<absestind:
+        dtype=data.dtype
+        if data.dtype==np.uint64:
+            absmidint=abs(data[mid].astype(np.int64) - val.astype(np.int64))
+            absbestind = abs(data[best_ind].astype(np.int64) - val.astype(np.int64))
+        else:
+            absmidint=abs(data[mid] - val)
+            absbestind = abs(data[best_ind]- val)
+        if absmidint<absbestind:
             best_ind = mid
+
     return best_ind
 
 
@@ -175,7 +183,7 @@ class experiment():
                 dsetattrs=self.met4fofdatafile.hdffile['RAWDATA/'+sensor+ '/' + dataset ].attrs
                 time=self.met4fofdatafile.hdffile['RAWDATA/'+sensor + '/' + 'Absolutetime'][0,idxs[0]:idxs[1]]
                 if not absolutetime:
-                    time=time-self.timepoints[0]
+                    time=time.astype('int64') - self.timepoints[0].astype('int64')
                 time=time/1e9
                 print(dsetattrs.keys())
                 axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs['Unit']))
@@ -196,13 +204,12 @@ class experiment():
 class sineexcitation(experiment):
     def __init__(self,hdfmet4fofdatafile,times):
         super().__init__(hdfmet4fofdatafile,times)
-
     def dofft(self):
         for sensor in self.met4fofdatafile.sensordatasets:
             idxs = self.idxs[sensor]
             points=idxs[1]-idxs[0]
             time = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
-            reltime = time - self.timepoints[0]
+            reltime = time.astype('int64') - self.timepoints[0].astype('int64')
             self.Data[sensor]['Mean Delta T']=np.mean(np.diff(reltime/1e9))
             self.Data[sensor]['RFFT Frequencys']=np.fft.rfftfreq(points,self.Data[sensor]['Mean Delta T'])
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
@@ -212,7 +219,33 @@ class sineexcitation(experiment):
                 print(self.Data[sensor][dataset]['FFT_max_freq'])
 
 
-    def dosinefits(self,sensorname,quantitiy,axis="Mag"):
+    def do3paramsinefits(self,freqs):
+        for sensor in self.met4fofdatafile.sensordatasets:
+            idxs = self.idxs[sensor]
+            points = idxs[1] - idxs[0]
+            time = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
+            reltime = time.astype('int64') - self.timepoints[0].astype('int64')
+            reltime=reltime/1e9
+            excitationfreqs=freqs
+            uniquexfreqs = np.sort(np.unique(excitationfreqs))
+            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
+                try:
+                    fftmaxfreq=self.Data[sensor][dataset]['FFT_max_freq']
+                except NameError:
+                    self.dofft()
+                freqidx=binarySearch(uniquexfreqs, fftmaxfreq)
+                f0=uniquexfreqs[freqidx]
+                self.Data[sensor][dataset]['Sin_Fit_freq'] =f0
+                datasetrows=self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' +dataset].shape[0]
+                #calc first row and create output array
+                sineparams=st.seq_threeparsinefit(self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' +dataset][0,:], reltime , f0)
+                self.Data[sensor][dataset]['SinParams']=np.zeros([datasetrows,sineparams.shape[0],3])
+                self.Data[sensor][dataset]['SinParams'][0]=sineparams
+                for i in np.arange(1,datasetrows):
+                    sineparams = st.seq_threeparsinefit(
+                        self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset][i, :], reltime, f0)
+                    self.Data[sensor][dataset]['SinParams'][i] = sineparams
+
 
         pass
 
@@ -286,14 +319,22 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
 def processdata(i):
         print(i)
         sys.stdout.flush()
-        start = time.time()
-        experiment =sineexcitation(mpdata['hdfinstance'], mpdata['movementtimes'][i])
+
+        times=mpdata['movementtimes'][i]
+        times[0] += 1000000000
+        times[1] -= 1000000000
+        experiment = sineexcitation(mpdata['hdfinstance'], times)
         sys.stdout.flush()
         print(experiment)
         sys.stdout.flush()
+        start = time.time()
         experiment.dofft()
         end = time.time()
         print("FFT Time "+str(end - start))
+        start = time.time()
+        experiment.do3paramsinefits(mpdata['uniquexfreqs'])
+        end = time.time()
+        print("Sin Fit Time "+str(end - start))
         sys.stdout.flush()
         return experiment
 
@@ -302,7 +343,9 @@ def processdata(i):
 if __name__ == "__main__":
     start = time.time()
     hdffilename = r"/media/benedikt/nvme/data/2020-09-07 Messungen MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    revcsv = r"/media/benedikt/nvme/data/2020-09-07 Messungen MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     datafile = h5py.File(hdffilename, 'r+',driver='core')
+    #add1dsinereferencedatatohdffile(revcsv, datafile)
     test=hdfmet4fofdatafile(datafile)
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
     movementidx,movementtimes=test.detectmovment('0x1fe40000_MPU_9250', 'Acceleration')
@@ -311,8 +354,10 @@ if __name__ == "__main__":
     mpdata['hdfinstance']=test
     mpdata['movementtimes']=movementtimes
     mpdata['Experiemnts']=[None]*movementtimes.shape[0]
+    mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
     i=np.arange(movementtimes.shape[0])
-    with multiprocessing.Pool(15) as p:
+    i=np.arange(2)
+    with multiprocessing.Pool(1) as p:
         results=p.map(processdata,i)
     end = time.time()
     print(end - start)
