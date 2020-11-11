@@ -37,6 +37,28 @@ def getplotableunitstring(unitstr, Latex=False):
         result = unitstr
     return result
 
+
+# code from https://stackoverflow.com/questions/23681948/get-index-of-closest-value-with-binary-search  answered Dec 6 '14 at 23:51 Yaguang
+def binarySearch(data, val):
+    lo, hi = 0, len(data) - 1
+    best_ind = lo
+    while lo <= hi:
+        mid = lo + (hi - lo) // 2
+        if data[mid] < val:
+            lo = mid + 1
+        elif data[mid] > val:
+            hi = mid - 1
+        else:
+            best_ind = mid
+            break
+        # check if data[mid] is closer to val than data[best_ind]
+        absmidint=abs(data[mid].astype(np.int64) - val.astype(np.int64))
+        absestind = abs(data[mid].astype(np.int64) - val.astype(np.int64))
+        if absmidint<absestind:
+            best_ind = mid
+    return best_ind
+
+
 class hdfmet4fofdatafile:
     def __init__(self,hdffile):
         self.hdffile=hdffile
@@ -107,31 +129,14 @@ class hdfmet4fofdatafile:
         movementidx=np.array(movementtidx)
         return movementidx,np.array(movementtimes)
 
-    def getnearestidxs(self,sensorname,time,blocksize=1000):
+    def getnearestidxs(self,sensorname,time):
         absolutimegroupname='RAWDATA/'+sensorname + '/' + 'Absolutetime'
         absolutetimes= np.squeeze(self.hdffile[absolutimegroupname])
-        subsampledtimes=absolutetimes[0::blocksize]
-        originalshape=time.shape
-        falttned=time.flatten()
-        def getnearestsingelval(timeval):
-            t=timeval
-            timediff=abs(subsampledtimes-t)
-            tmp=np.argmin(timediff)
-            if(tmp==0):#value is in first block
-                idx = np.argmin(abs(absolutetimes[:blocksize] - t))
-            elif(tmp==len(subsampledtimes)):#value is in first block
-                tmpidx = np.argmin(abs(absolutetimes[len((absolutetimes)-blocksize):] - t))
-                idx= tmpidx+len((absolutetimes)-blocksize)
-            else:
-                subtimediff=abs(absolutetimes[(blocksize*(tmp-1)):(blocksize*(tmp+1))]-t)
-                relidx=np.argmin(subtimediff)
-                idx=relidx+(blocksize*(tmp-1))
-            return int(idx)
-
-        for i in np.arange(falttned.size):
-            falttned[i]=getnearestsingelval(falttned[i])
-        falttned.resize(originalshape)
-        return falttned.astype(int)
+        idxs=np.copy(time)
+        with np.nditer(idxs, op_flags=['readwrite']) as it:
+            for x in it:
+                x[...]=binarySearch(absolutetimes ,x)
+        return idxs
 
 
 
@@ -203,11 +208,12 @@ class sineexcitation(experiment):
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 data=self.met4fofdatafile.hdffile['RAWDATA/'+sensor + '/' + dataset ][:,idxs[0]:idxs[1]]
                 self.Data[sensor][dataset]['RFFT'] =np.fft.rfft(data,axis=1)
-                self.Data[sensor][dataset]['FFT_max_freq']=self.Data[sensor]['RFFT Frequencys'][np.argmax(abs(np.sum(self.Data[sensor][dataset]['RFFT'],axis=0)))]
+                self.Data[sensor][dataset]['FFT_max_freq']=self.Data[sensor]['RFFT Frequencys'][np.argmax(abs(np.sum(self.Data[sensor][dataset]['RFFT'][:,1:],axis=0)))+1]
                 print(self.Data[sensor][dataset]['FFT_max_freq'])
 
 
     def dosinefits(self,sensorname,quantitiy,axis="Mag"):
+
         pass
 
 def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
@@ -281,7 +287,7 @@ def processdata(i):
         print(i)
         sys.stdout.flush()
         start = time.time()
-        mpdata['Experiemnts'][i] = experiment =sineexcitation(mpdata['hdfinstance'], mpdata['movementtimes'][i])
+        experiment =sineexcitation(mpdata['hdfinstance'], mpdata['movementtimes'][i])
         sys.stdout.flush()
         print(experiment)
         sys.stdout.flush()
@@ -289,12 +295,13 @@ def processdata(i):
         end = time.time()
         print("FFT Time "+str(end - start))
         sys.stdout.flush()
+        return experiment
 
 
 
 if __name__ == "__main__":
     start = time.time()
-    hdffilename = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    hdffilename = r"/media/benedikt/nvme/data/2020-09-07 Messungen MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
     datafile = h5py.File(hdffilename, 'r+',driver='core')
     test=hdfmet4fofdatafile(datafile)
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
@@ -305,8 +312,8 @@ if __name__ == "__main__":
     mpdata['movementtimes']=movementtimes
     mpdata['Experiemnts']=[None]*movementtimes.shape[0]
     i=np.arange(movementtimes.shape[0])
-    with multiprocessing.Pool(4) as p:
-        p.map(processdata,i)
+    with multiprocessing.Pool(15) as p:
+        results=p.map(processdata,i)
     end = time.time()
     print(end - start)
 
@@ -318,3 +325,15 @@ if __name__ == "__main__":
 #Triple Core  39.963184118270874
 #Quad Core    31.353542804718018
 
+#Bene Pc
+#Single Core 103.87189602851868
+#Dual Core    58.934141635894775
+#Triple Core  42.016947507858276
+#Quad Core    32.152546405792236
+#Penta Core    26.92629075050354
+#hexa core  24.332046270370483
+#hepta core  21.610567331314087
+#octa core   19.724497318267822
+#dodeca cora 15.849191665649414
+#15 core     13.566272497177124
+#16 core     14.062445878982544

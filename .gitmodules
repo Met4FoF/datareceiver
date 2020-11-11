@@ -1,0 +1,3 @@
+[submodule "tools/sinetools"]
+	path = tools/sinetools
+	url = https://gitlab1.ptb.de/Seeger/sinetools
