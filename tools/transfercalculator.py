@@ -239,13 +239,32 @@ class sineexcitation(experiment):
                 self.Data[sensor][dataset]['Sin_Fit_freq'] =f0
                 datasetrows=self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' +dataset].shape[0]
                 #calc first row and create output array[:,idxs[0]:idxs[1]]
-                sineparams=st.seq_threeparsinefit(self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' +dataset][0, idxs[0]:idxs[1]], reltime , f0)
-                self.Data[sensor][dataset]['SinParams']=np.zeros([datasetrows,sineparams.shape[0],3])
+                sineparams=st.seq_threeparsinefit(self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' +dataset][0, idxs[0]:idxs[1]], reltime , f0,periods=10)
+                self.Data[sensor][dataset]['SinPOpt']=np.zeros([datasetrows,4])
+                self.Data[sensor][dataset]['SinPCov'] = np.zeros([datasetrows,4, 4])
+                self.Data[sensor][dataset]['SinParams'] = np.zeros([datasetrows, sineparams.shape[0], 3])
                 self.Data[sensor][dataset]['SinParams'][0]=sineparams
                 for i in np.arange(1,datasetrows):
                     sineparams = st.seq_threeparsinefit(
-                        self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset][i, idxs[0]:idxs[1]], reltime, f0)
+                        self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset][i, idxs[0]:idxs[1]], reltime, f0,periods=10)
                     self.Data[sensor][dataset]['SinParams'][i] = sineparams
+                for i in np.arange(datasetrows):
+                    sineparams = self.Data[sensor][dataset]['SinParams'][i]
+                    Complex = sineparams[:, 1] + 1j * sineparams[:, 0]
+                    DC = sineparams[:, 2]
+                    Freq = np.ones(sineparams.shape[0])*f0
+                    self.Data[sensor][dataset]['SinPOpt'][i,:] = [
+                        np.mean(abs(Complex)),
+                        np.mean(DC),
+                        np.mean(Freq),
+                        np.mean(np.unwrap(np.angle(Complex))),
+                    ]
+                    CoVarData = np.stack(
+                        (abs(Complex), DC, Freq, np.unwrap(np.angle(Complex))), axis=0
+                    )
+                    self.Data[sensor][dataset]['SinPCov'][i,:] = np.cov(
+                        CoVarData, bias=True
+                    )  # bias=True Nomation With N like np.std
 
 
         pass
@@ -354,11 +373,10 @@ if __name__ == "__main__":
     mpdata=manager.dict()
     mpdata['hdfinstance']=test
     mpdata['movementtimes']=movementtimes
-    mpdata['Experiemnts']=[None]*movementtimes.shape[0]
     mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
     i=np.arange(movementtimes.shape[0])
-    i=np.arange(2)
-    with multiprocessing.Pool(1) as p:
+    #i=np.arange(2)
+    with multiprocessing.Pool(4) as p:
         results=p.map(processdata,i)
     end = time.time()
     print(end - start)
@@ -380,6 +398,7 @@ if __name__ == "__main__":
 #hexa core  24.332046270370483
 #hepta core  21.610567331314087
 #octa core   19.724497318267822
+
 #dodeca cora 15.849191665649414
 #15 core     13.566272497177124
 #16 core     14.062445878982544
