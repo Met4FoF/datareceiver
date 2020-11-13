@@ -228,6 +228,7 @@ class sineexcitation(experiment):
             reltime=reltime/1e9
             excitationfreqs=freqs
             uniquexfreqs = np.sort(np.unique(excitationfreqs))
+            idxs = self.idxs[sensor]
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 try:
                     fftmaxfreq=self.Data[sensor][dataset]['FFT_max_freq']
@@ -237,13 +238,13 @@ class sineexcitation(experiment):
                 f0=uniquexfreqs[freqidx]
                 self.Data[sensor][dataset]['Sin_Fit_freq'] =f0
                 datasetrows=self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' +dataset].shape[0]
-                #calc first row and create output array
-                sineparams=st.seq_threeparsinefit(self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' +dataset][0,:], reltime , f0)
+                #calc first row and create output array[:,idxs[0]:idxs[1]]
+                sineparams=st.seq_threeparsinefit(self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' +dataset][0, idxs[0]:idxs[1]], reltime , f0)
                 self.Data[sensor][dataset]['SinParams']=np.zeros([datasetrows,sineparams.shape[0],3])
                 self.Data[sensor][dataset]['SinParams'][0]=sineparams
                 for i in np.arange(1,datasetrows):
                     sineparams = st.seq_threeparsinefit(
-                        self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset][i, :], reltime, f0)
+                        self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset][i, idxs[0]:idxs[1]], reltime, f0)
                     self.Data[sensor][dataset]['SinParams'][i] = sineparams
 
 
@@ -342,8 +343,8 @@ def processdata(i):
 
 if __name__ == "__main__":
     start = time.time()
-    hdffilename = r"/media/benedikt/nvme/data/2020-09-07 Messungen MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
-    revcsv = r"/media/benedikt/nvme/data/2020-09-07 Messungen MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
+    hdffilename = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    revcsv = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     datafile = h5py.File(hdffilename, 'r+',driver='core')
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     test=hdfmet4fofdatafile(datafile)
