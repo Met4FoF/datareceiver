@@ -8,6 +8,8 @@ import multiprocessing
 import sys
 import time
 import sinetools.SineTools as st
+import yappi
+
 from MET4FOFDataReceiver import SensorDescription
 
 
@@ -219,7 +221,7 @@ class sineexcitation(experiment):
                 print(self.Data[sensor][dataset]['FFT_max_freq'])
 
 
-    def do3paramsinefits(self,freqs):
+    def do3paramsinefits(self,freqs,periods=10):
         for sensor in self.met4fofdatafile.sensordatasets:
             idxs = self.idxs[sensor]
             points = idxs[1] - idxs[0]
@@ -337,38 +339,38 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
 
 
 def processdata(i):
-        print(i)
-        sys.stdout.flush()
-
-        times=mpdata['movementtimes'][i]
-        times[0] += 1000000000
-        times[1] -= 1000000000
-        experiment = sineexcitation(mpdata['hdfinstance'], times)
-        sys.stdout.flush()
-        print(experiment)
-        sys.stdout.flush()
-        start = time.time()
-        experiment.dofft()
-        end = time.time()
-        print("FFT Time "+str(end - start))
-        start = time.time()
-        experiment.do3paramsinefits(mpdata['uniquexfreqs'])
-        end = time.time()
-        print("Sin Fit Time "+str(end - start))
-        sys.stdout.flush()
-        return experiment
+    print(i)
+    sys.stdout.flush()
+    times=mpdata['movementtimes'][i]
+    times[0] += 1000000000
+    times[1] -= 1000000000
+    experiment = sineexcitation(mpdata['hdfinstance'], times)
+    sys.stdout.flush()
+    print(experiment)
+    sys.stdout.flush()
+    start = time.time()
+    experiment.dofft()
+    end = time.time()
+    print("FFT Time "+str(end - start))
+    start = time.time()
+    experiment.do3paramsinefits(mpdata['uniquexfreqs'],periods=10)
+    end = time.time()
+    print("Sin Fit Time "+str(end - start))
+    sys.stdout.flush()
+    return experiment
 
 
 
 if __name__ == "__main__":
+    yappi.start()
     start = time.time()
-    hdffilename = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
-    revcsv = r"/home/seeger01/Schreibtisch/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
+    hdffilename = r"/media/benedikt/nvme/data/200907_mpu9250_BMA280_cal/2020-09-08_Messungen_Bosch_BMA280_Zweikanalig/WDH3/20200908122144_BMA_280_0x1fe40000_sensor_sensor_BMA280_WDH3.hdf5"
+    revcsv = r"/media/benedikt/nvme/data/200907_mpu9250_BMA280_cal/2020-09-08_Messungen_Bosch_BMA280_Zweikanalig/WDH3/20200908122144_BMA_280_0x1fe40000_sensor_sensor_BMA280_WDH3_Ref_TF.csv"
     datafile = h5py.File(hdffilename, 'r+',driver='core')
-    #add1dsinereferencedatatohdffile(revcsv, datafile)
+    add1dsinereferencedatatohdffile(revcsv, datafile)
     test=hdfmet4fofdatafile(datafile)
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    movementidx,movementtimes=test.detectmovment('0x1fe40000_MPU_9250', 'Acceleration')
+    movementidx,movementtimes=test.detectmovment('0x1fe40000_BMA_280', 'Acceleration')
     manager = multiprocessing.Manager()
     mpdata=manager.dict()
     mpdata['hdfinstance']=test
@@ -376,7 +378,7 @@ if __name__ == "__main__":
     mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
     i=np.arange(movementtimes.shape[0])
     #i=np.arange(2)
-    with multiprocessing.Pool(4) as p:
+    with multiprocessing.Pool(15) as p:
         results=p.map(processdata,i)
     end = time.time()
     print(end - start)

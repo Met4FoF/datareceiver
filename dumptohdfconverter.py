@@ -10,7 +10,7 @@ import threading
 if __name__ == "__main__":
     adcbaseid=10
     extractadcdata = True
-    dumpfilename=r"/media/benedikt/nvme/data/2020-09-07 Messungen MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.dump"
+    dumpfilename=r"/media/benedikt/nvme/data/200907_mpu9250_BMA280_cal/2020-09-08_Messungen_Bosch_BMA280_Zweikanalig/WDH3/20200908122144_BMA_280_0x1fe40000_sensor_sensor_BMA280_WDH3.dump"
     hdffilename=dumpfilename.replace('.dump','.hdf5')
     hdfdumplock = threading.Lock()
     hdfdumpfile = h5py.File(hdffilename, 'w')
@@ -46,7 +46,14 @@ if __name__ == "__main__":
 
             paramsdictjson['10']["HIERARCHY"] = "Temperature/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
+        if paramsdictjson['Name'] == 'BMA 280':
+            print("MPU9250 description found adding hieracey")
+            paramsdictjson['1']["HIERARCHY"] = "Acceleration/0"
+            paramsdictjson['2']["HIERARCHY"] = "Acceleration/1"
+            paramsdictjson['3']["HIERARCHY"] = "Acceleration/2"
 
+            paramsdictjson['10']["HIERARCHY"] = "Temperature/0"
+            sensordscp = SensorDescription(fromDict=paramsdictjson)
         else:
             print("sensor "+str(paramsdictjson['Name'])+' not supported exiting')
             exit()
