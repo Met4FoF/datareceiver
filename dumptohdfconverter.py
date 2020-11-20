@@ -10,7 +10,7 @@ import threading
 if __name__ == "__main__":
     adcbaseid=10
     extractadcdata = True
-    dumpfilename=r"/media/benedikt/nvme/data/200907_mpu9250_BMA280_cal/2020-09-08_Messungen_Bosch_BMA280_Zweikanalig/WDH3/20200908122144_BMA_280_0x1fe40000_sensor_sensor_BMA280_WDH3.dump"
+    dumpfilename=r"/media/seeger01/Part2/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000.dump"
     hdffilename=dumpfilename.replace('.dump','.hdf5')
     hdfdumplock = threading.Lock()
     hdfdumpfile = h5py.File(hdffilename, 'w')
@@ -23,8 +23,9 @@ if __name__ == "__main__":
             row = next(reader)
             try:
                 paramsdictjson = json.loads(row[0])
-                print(paramsdictjson)
-                descpparsed=True
+                if isinstance(paramsdictjson, dict):
+                    print(paramsdictjson)
+                    descpparsed=True
             except json.decoder.JSONDecodeError :
                 skiprowcount=skiprowcount+1
                 print("skipped "+str(skiprowcount)+" rows")
