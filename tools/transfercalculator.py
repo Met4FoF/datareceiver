@@ -11,7 +11,16 @@ import sinetools.SineTools as st
 import yappi
 import warnings
 
+import os
+from adccaldata import Met4FOFADCCall
+from scipy import stats ## for Student T Coverragefactor
+from scipy.optimize import curve_fit #for fiting of Groupdelay
+from scipy import interpolate #for 1D amplitude estimation
+
+
+
 uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+
 
 def getplotableunitstring(unitstr, Latex=False):
     if not Latex:
@@ -161,9 +170,107 @@ class hdfmet4fofdatafile:
                 x[...]=binarySearch(absolutetimes ,x)
         return idxs
 
+class transferfunktion:
+    def __init__(self,tfgroup):
+        self.group=tfgroup
+
+    def getNearestTF(self,Channel,freq):
+        Freqs=self.group['Frequency'][:]
+        testFreqIDX=np.argmin(abs(Freqs-freq))
+        if Freqs[testFreqIDX]-freq==0:#ok we hit an calibrated point no need to interpolate
+            return {'frequency':Freqs[testFreqIDX],
+                    'magnitude':self.group['magnitude'][Channel][testFreqIDX],
+                    'phase':self.group['phase'][Channel][testFreqIDX],
+                    'N':self.group['N'][Channel][testFreqIDX]}
+        else:
+            #interpolate
+            A=self.getInterPolatedAmplitude(Channel,freq)
+            P=self.getInterPolatedPhase(Channel,freq)
+            return {'Frequency':freq,
+                    'magnitude':A,
+                    'phase':P,
+                    'N':np.NaN}
+
+    def __getitem__(self, key):
+        if len(key)==4:
+            return self.TransferFunctions[key]
+        if len(key)==2:
+            return self.getNearestTF(key[0],key[1])
+        else:
+            raise ValueError("Invalide Key:  > "+str(key)+" <Use either [Channel] eg ['ADC1] or [Channel,Frequency] eg ['ADC1',1000]  as key ")
+
+    def getGroupDelay(self,Channel):
+        freqs=self.TransferFunctions[Channel]['Frequencys']
+        phases=self.TransferFunctions[Channel]['Phase']
+        phaseUncer=self.TransferFunctions[Channel]['PhaseUncer']
+        popt, pcov = curve_fit(PhaseFunc, freqs, phases,sigma=phaseUncer,absolute_sigma=True)
+        return[popt,pcov]
+
+    def getInterPolatedAmplitude(self,channel,freq):
+        Freqs=self.group['Frequency'][:]
+        Ampls=self.group['magnitude'][channel,:]
+        testFreqIDX=np.argmin(abs(Freqs-freq))
+        DeltaInterpolIDX=0
+        if freq-Freqs[testFreqIDX]<0:
+            DeltaInterpolIDX=-1
+        if freq-Freqs[testFreqIDX]>0:
+            DeltaInterpolIDX=1
+        if testFreqIDX+DeltaInterpolIDX<0:
+            assert RuntimeWarning(str(freq)+" is to SMALL->Extrapolation is not recomended! minimal Frequency is "+str(Freqs[0]))
+            return Ampls[0]
+        if testFreqIDX+DeltaInterpolIDX>=Freqs.size:
+            raise ValueError(str(freq)+" is to BIG->Extrapolation not supported! maximal Frequency is "+str(Freqs[-1]))
+        if DeltaInterpolIDX==0:
+            return Ampls[testFreqIDX]
+        elif DeltaInterpolIDX ==-1:
+            IDX=[testFreqIDX-1,testFreqIDX]
+        elif DeltaInterpolIDX==1:
+            IDX=[testFreqIDX,testFreqIDX+1]
+        x=Freqs[IDX]
+        A=Ampls[IDX]['value']
+        AErr=Ampls[IDX]["uncertainty"]
+        fA = interpolate.interp1d(x, A)
+        fAErr = interpolate.interp1d(x, AErr)
+        print('Interpolateded transferfunction for Channel '+str(channel)+'at Freq '+str(freq))  # will not print anything
+        result=np.empty([1], dtype=uncerval)
+        result['value']=fA(freq)
+        result['uncertainty']=fAErr(freq)
+        return result
+
+    def getInterPolatedPhase(self,channel,freq):
+        Freqs=self.group['Frequency'][:]
+        Phases=self.group['phase'][channel,:]
+        testFreqIDX=np.argmin(abs(Freqs-freq))
+        DeltaInterpolIDX=0
+        if freq-Freqs[testFreqIDX]<0:
+            DeltaInterpolIDX=-1
+        if freq-Freqs[testFreqIDX]>0:
+            DeltaInterpolIDX=1
+        if testFreqIDX+DeltaInterpolIDX<0:
+            assert RuntimeWarning(str(freq)+" is to SMALL->Extrapolation is not recomended! minimal Frequency is "+str(Freqs[0]))
+            return Phases[0]
+        if testFreqIDX+DeltaInterpolIDX>=Freqs.size:
+            raise ValueError("Extrapolation not supported! maximal Frequency is"+Freqs[-1])
+        if DeltaInterpolIDX==0:
+            return Phases[testFreqIDX]
+        elif DeltaInterpolIDX ==-1:
+            IDX=[testFreqIDX-1,testFreqIDX]
+        elif DeltaInterpolIDX==1:
+            IDX=[testFreqIDX,testFreqIDX+1]
+        x=Freqs[IDX]
+        P=Phases[IDX]['value']
+        PErr=Phases[IDX]['uncertainty']
+        fP = interpolate.interp1d(x, P)
+        fPErr = interpolate.interp1d(x, PErr)
+        print('Interpolateded transferfunction for Channel '+str(channel)+'at Freq '+str(freq))  # will not print anything
+        result = np.empty([1], dtype=uncerval)
+        result['value'] = fP(freq)
+        result['uncertainty'] = fPErr(freq)
+        return result
 
 
-class experiment():
+
+class experiment:
     def __init__(self,hdfmet4fofdatafile,times):
         self.met4fofdatafile=hdfmet4fofdatafile
         self.timepoints=times
@@ -285,13 +392,13 @@ class sineexcitation(experiment):
         self.flags['Sine fit calculated']=True
         return
 
-    def calculatetfanloguephaserf1d(self,refdatagroupname,refdataidx,analogrefchannelname,analogrefchannelidx):
+    def calculatetanloguephaserf1d(self,refdatagroupname,refdataidx,analogrefchannelname,analogrefchannelidx):
         for sensor in self.met4fofdatafile.sensordatasets:
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 datasetrows = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset].shape[0]
                 self.Data[sensor][dataset]['TF']={}
-                self.Data[sensor][dataset]['TF']['Amp']=np.empty(datasetrows,dtype=uncerval)
-                self.Data[sensor][dataset]['TF']['Phase'] = np.empty(datasetrows,dtype=uncerval)
+                self.Data[sensor][dataset]['TF']['magnitude']=np.empty(datasetrows,dtype=uncerval)
+                self.Data[sensor][dataset]['TF']['phase'] = np.empty(datasetrows,dtype=uncerval)
                 self.Data[sensor][dataset]['TF']['ExAmp'] = np.empty(datasetrows,dtype=uncerval)
                 for i in np.arange(0, datasetrows):
                     fitfreq = self.Data[sensor][dataset]['Sin_Fit_freq']
@@ -302,12 +409,8 @@ class sineexcitation(experiment):
                     else:
                         self.Data[sensor][dataset]['TF']['ExAmp'][i] = examp = self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx]
                         phase = self.met4fofdatafile.hdffile[refdatagroupname]['Phasee'][i][analogrefchannelidx]#todo fix spell rerror
-                        self.Data[sensor][dataset]['TF']['Amp'][i]['value']= self.Data[sensor][dataset]['SinPOpt'][i][0]/examp['value']
-                        self.Data[sensor][dataset]['TF']['Amp'][i]['uncertainty']=np.NaN
-
-
-
-
+                        self.Data[sensor][dataset]['TF']['magnitude'][i]['value']= self.Data[sensor][dataset]['SinPOpt'][i][0]/examp['value']
+                        self.Data[sensor][dataset]['TF']['magnitude'][i]['uncertainty']=np.NaN
 
 def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
     refcsv= pd.read_csv(csvfilename, delimiter=";",comment='#')
@@ -332,28 +435,27 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
         group.attrs['Refference_name'] = "PTB HF acceleration standard"
         group.attrs['Sensor_name'] = group.attrs['Refference_name']
         group.attrs['Refference_type'] = "1D acceleration"
-        Datasets['Frequency'] = group.create_dataset('Frequency', ([1, refcsv.shape[0]]),
+        Datasets['Frequency'] = group.create_dataset('Frequency', ([refcsv.shape[0]]),
                                                     dtype='float64')
         Datasets['Frequency'].make_scale("Frequency")
         Datasets['Frequency'].attrs['Unit'] = "/hertz"
         Datasets['Frequency'].attrs['Physical_quantity'] = "Excitation frequency"
-        Datasets['Frequency'][:]=refcsv['frequency'].to_numpy()
-        Datasets['Repetition count'] = group.create_dataset('repetition count', ([1, refcsv.shape[0]]),
+        Datasets['Frequency']=refcsv['frequency'].to_numpy()
+        Datasets['Repetition count'] = group.create_dataset('repetition count', ([refcsv.shape[0]]),
                                                     dtype='int32')
         Datasets['Repetition count'].attrs['Unit'] = "/one"
         Datasets['Repetition count'].attrs['Physical_quantity'] = "Repetition count"
-        Datasets['Repetition count'][:]=refcsv['loop'].to_numpy()
+        Datasets['Repetition count'] = refcsv['loop'].to_numpy()
         Datasets['Repetition count'].dims[0].label = 'Frequency'
         Datasets['Repetition count'].dims[0].attach_scale(Datasets['Frequency'])
-        Datasets['Excitation amplitude']=group.create_dataset('Excitation amplitude', ([3, refcsv.shape[0]]),
+        Datasets['Excitation amplitude'] = group.create_dataset('Excitation amplitude', ([3, refcsv.shape[0]]),
                                                     dtype=uncerval)
         Datasets['Excitation amplitude'].attrs['Unit'] = "\\metre\\second\\tothe{-2}"
         Datasets['Excitation amplitude'].attrs['Physical_quantity'] = ["X Excitation amplitude",
                                                                        "Y Excitation amplitude",
                                                                        "Z Excitation amplitude"]
         Datasets['Excitation amplitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-        Datasets['Excitation amplitude'][:]=np.empty([3, refcsv.shape[0]])
-        Datasets['Excitation amplitude'][:]=np.nan
+        Datasets['Excitation amplitude'] = np.empty([3, refcsv.shape[0]])
         Datasets['Excitation amplitude'][axis, :,"value"] = refcsv['ex_amp']
         Datasets['Excitation amplitude'][axis, :,"uncertainty"] = refcsv['ex_amp_std']
         Datasets['Excitation amplitude'].dims[0].label = 'Frequency'
@@ -366,13 +468,85 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
                                                         "Y Phase",
                                                         "Z Phase"]
         Datasets['Phase'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-        Datasets['Phase'][:]=np.empty([3, refcsv.shape[0]])
-        Datasets['Phase'][:]=np.nan
+        Datasets['Phase'] = np.empty([3, refcsv.shape[0]])
         Datasets['Phase'][axis, :,"value"] = refcsv['phase']
         Datasets['Phase'][axis, :,"uncertainty"] = refcsv['phase_std']
         Datasets['Phase'].dims[0].label = 'Frequency'
         Datasets['Phase'].dims[0].attach_scale(Datasets['Frequency'])
         hdffile.flush()
+
+
+def addadctransferfunctiontodset(topgroup,jsonfilelist):
+    ADCCal = Met4FOFADCCall(Filenames=jsonfilelist)
+    TFs = {}
+    for channel in ADCCal.fitResults.keys():
+        TFs[channel] = ADCCal.GetTransferFunction(channel)
+    channelcount = len(TFs.keys())
+    freqpoints = np.empty(channelcount)
+    i = 0
+    freqsmatch = True
+    for channel in TFs:
+        freqpoints[i] = len(TFs[channel]['Frequencys'])
+        if i > 0 and freqsmatch:
+            result = (freqpoints[0] == freqpoints[i]).all()
+            if result == False:
+                freqsmatch = False
+                raise ValueError("All ADC Channels need to have the same frequencys")
+        i = i + 1
+    channeloder = ['ADC1', 'ADC2', 'ADC3']
+    Datasets = {}
+    group=topgroup.create_group("Transferfunction")
+    Datasets['frequency'] = group.create_dataset('Frequency', ([freqpoints[0]]), dtype='float64')
+    Datasets['frequency'].make_scale("Frequency")
+    Datasets['frequency'].attrs['Unit'] = "/hertz"
+    Datasets['frequency'].attrs['Physical_quantity'] = "Excitation frequency"
+    Datasets['frequency'][0:] = TFs[channeloder[0]]['Frequencys']
+    Datasets['magnitude'] = group.create_dataset('magnitude', ([channelcount, freqpoints[0]]),
+                                                 dtype=uncerval)
+    datapointscount = len(TFs[channeloder[0]]['Frequencys'])
+    Datasets['magnitude'].attrs['Unit'] = "\\one"
+    Datasets['magnitude'].attrs['Physical_quantity'] = ['Magnitude response Voltage Ch 1',
+                                                        'Magnitude response Voltage Ch 2',
+                                                        'Magnitude response Voltage Ch 3']
+    Datasets['magnitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
+    i = 0
+    for channel in channeloder:
+        Datasets['magnitude'][i, :, "value"] = TFs[channel]['AmplitudeCoefficent']
+        Datasets['magnitude'][i, :, "uncertainty"] = TFs[channel]['AmplitudeCoefficentUncer']
+        i = i + 1
+    Datasets['magnitude'].dims[0].label = 'Frequency'
+    Datasets['magnitude'].dims[0].attach_scale(Datasets['frequency'])
+
+    Datasets['phase'] = group.create_dataset('phase', ([channelcount, freqpoints[0]]),
+                                             dtype=uncerval)
+    datapointscount = len(TFs[channeloder[0]]['Frequencys'])
+    Datasets['phase'].attrs['Unit'] = "\\radian"
+    Datasets['phase'].attrs['Physical_quantity'] = ['Phase response Voltage Ch 1',
+                                                    'Phase response Voltage Ch 2',
+                                                    'Phase response  Voltage Ch 3']
+    Datasets['phase'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
+    i = 0
+    for channel in channeloder:
+        Datasets['phase'][i, :, "value"] = TFs[channel]['Phase']
+        Datasets['phase'][i, :, "uncertainty"] = TFs[channel]['PhaseUncer']
+        i = i + 1
+    Datasets['phase'].dims[0].label = 'Frequency'
+    Datasets['phase'].dims[0].attach_scale(Datasets['frequency'])
+
+    Datasets['N'] = group.create_dataset('N', ([channelcount, freqpoints[0]]),
+                                         dtype=np.int32)
+    datapointscount = len(TFs[channeloder[0]]['Frequencys'])
+    Datasets['N'].attrs['Unit'] = "\\one"
+    Datasets['N'].attrs['Physical_quantity'] = ['Datapoints Voltage Ch 1',
+                                                'Datapoints Voltage Ch 2',
+                                                'Datapoints Voltage Ch 3']
+    i = 0
+    for channel in channeloder:
+        Datasets['N'][i, :] = TFs[channel]['N']
+        i = i + 1
+    Datasets['N'].dims[0].label = 'Frequency'
+    Datasets['N'].dims[0].attach_scale(Datasets['frequency'])
+
 
 
 def processdata(i):
@@ -404,24 +578,46 @@ def processdata(i):
 if __name__ == "__main__":
     yappi.start()
     start = time.time()
-    hdffilename = r"/media/seeger01/Part2/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
-    revcsv = r"/media/seeger01/Part2/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
+
+    hdffilename = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
+    #revcsv = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, 'r+',driver='core')
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     test=hdfmet4fofdatafile(datafile)
+    #addadctransferfunctiontodset(datafile['RAWDATA/0x1fe40000_BMA_280'], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
+    #datafile.flush()
+    tf = transferfunktion(datafile['RAWDATA/0x1fe40000_BMA_280/Transferfunction'])
+    print(tf.getNearestTF(0, 10))
+    print(tf.getNearestTF(0, 102))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    movementidx,movementtimes=test.detectmovment('0x1fe40000_BMA_280', 'Acceleration',treshold=0.08,blocksinrow=1000,blocksize=50,plot=True)
-    manager = multiprocessing.Manager()
-    mpdata=manager.dict()
-    mpdata['hdfinstance']=test
-    mpdata['movementtimes']=movementtimes
-    mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
-    i=np.arange(movementtimes.shape[0])
+    #movementidx,movementtimes=test.detectmovment('0x1fe40000_BMA_280', 'Acceleration',treshold=0.08,blocksinrow=1000,blocksize=50,plot=True)
+    #manager = multiprocessing.Manager()
+    #mpdata=manager.dict()
+    #mpdata['hdfinstance']=test
+    #mpdata['movementtimes']=movementtimes
+    #mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
+    #i=np.arange(movementtimes.shape[0])
     #i=np.arange(20)
-    with multiprocessing.Pool(4) as p:
-        results=p.map(processdata,i)
-    end = time.time()
-    print(end - start)
+    #with multiprocessing.Pool(15) as p:
+    #    results=p.map(processdata,i)
+    #end = time.time()
+    #print(end - start)
 
 
 
