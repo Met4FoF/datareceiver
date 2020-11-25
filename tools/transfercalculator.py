@@ -174,18 +174,18 @@ class transferfunktion:
     def __init__(self,tfgroup):
         self.group=tfgroup
 
-    def getNearestTF(self,Channel,freq):
+    def getNearestTF(self,channel,freq):
         Freqs=self.group['Frequency'][:]
         testFreqIDX=np.argmin(abs(Freqs-freq))
         if Freqs[testFreqIDX]-freq==0:#ok we hit an calibrated point no need to interpolate
             return {'frequency':Freqs[testFreqIDX],
-                    'magnitude':self.group['magnitude'][Channel][testFreqIDX],
-                    'phase':self.group['phase'][Channel][testFreqIDX],
-                    'N':self.group['N'][Channel][testFreqIDX]}
+                    'magnitude':self.group['magnitude'][channel][testFreqIDX],
+                    'phase':self.group['phase'][channel][testFreqIDX],
+                    'N':self.group['N'][channel][testFreqIDX]}
         else:
             #interpolate
-            A=self.getInterPolatedAmplitude(Channel,freq)
-            P=self.getInterPolatedPhase(Channel,freq)
+            A=self.getInterPolatedAmplitude(channel,freq)
+            P=self.getInterPolatedPhase(channel,freq)
             return {'Frequency':freq,
                     'magnitude':A,
                     'phase':P,
@@ -403,9 +403,11 @@ class sineexcitation(experiment):
                 for i in np.arange(0, datasetrows):
                     fitfreq = self.Data[sensor][dataset]['Sin_Fit_freq']
                     reffreq = self.met4fofdatafile.hdffile[refdatagroupname]['Frequency'][0][refdataidx]
+                    ADCTF=transferfunktion(self.met4fofdatafile.hdffile[analogrefchannelname].attrs['Transferfunction'])
                     if fitfreq != reffreq:
                         warinigstr="Frequency mismatach in Sesnor"+sensor+' '+dataset+" fit["+str(i)+"]= "+str(fitfreq)+" ref["+str(refdataidx)+"]= "+str(reffreq)+" Transferfunction will be invaladie !!"
                         warnings.warn(warinigstr,RuntimeWarning)
+
                     else:
                         self.Data[sensor][dataset]['TF']['ExAmp'][i] = examp = self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx]
                         phase = self.met4fofdatafile.hdffile[refdatagroupname]['Phasee'][i][analogrefchannelidx]#todo fix spell rerror
@@ -476,7 +478,7 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
         hdffile.flush()
 
 
-def addadctransferfunctiontodset(topgroup,jsonfilelist):
+def addadctransferfunctiontodset(topgroup,tragetsensor,jsonfilelist):
     ADCCal = Met4FOFADCCall(Filenames=jsonfilelist)
     TFs = {}
     for channel in ADCCal.fitResults.keys():
@@ -496,6 +498,7 @@ def addadctransferfunctiontodset(topgroup,jsonfilelist):
     channeloder = ['ADC1', 'ADC2', 'ADC3']
     Datasets = {}
     group=topgroup.create_group("Transferfunction")
+    tragetsensor.attrs['Transferfunction']=group
     Datasets['frequency'] = group.create_dataset('Frequency', ([freqpoints[0]]), dtype='float64')
     Datasets['frequency'].make_scale("Frequency")
     Datasets['frequency'].attrs['Unit'] = "/hertz"
@@ -503,7 +506,6 @@ def addadctransferfunctiontodset(topgroup,jsonfilelist):
     Datasets['frequency'][0:] = TFs[channeloder[0]]['Frequencys']
     Datasets['magnitude'] = group.create_dataset('magnitude', ([channelcount, freqpoints[0]]),
                                                  dtype=uncerval)
-    datapointscount = len(TFs[channeloder[0]]['Frequencys'])
     Datasets['magnitude'].attrs['Unit'] = "\\one"
     Datasets['magnitude'].attrs['Physical_quantity'] = ['Magnitude response Voltage Ch 1',
                                                         'Magnitude response Voltage Ch 2',
@@ -519,7 +521,6 @@ def addadctransferfunctiontodset(topgroup,jsonfilelist):
 
     Datasets['phase'] = group.create_dataset('phase', ([channelcount, freqpoints[0]]),
                                              dtype=uncerval)
-    datapointscount = len(TFs[channeloder[0]]['Frequencys'])
     Datasets['phase'].attrs['Unit'] = "\\radian"
     Datasets['phase'].attrs['Physical_quantity'] = ['Phase response Voltage Ch 1',
                                                     'Phase response Voltage Ch 2',
@@ -535,7 +536,6 @@ def addadctransferfunctiontodset(topgroup,jsonfilelist):
 
     Datasets['N'] = group.create_dataset('N', ([channelcount, freqpoints[0]]),
                                          dtype=np.int32)
-    datapointscount = len(TFs[channeloder[0]]['Frequencys'])
     Datasets['N'].attrs['Unit'] = "\\one"
     Datasets['N'].attrs['Physical_quantity'] = ['Datapoints Voltage Ch 1',
                                                 'Datapoints Voltage Ch 2',
@@ -570,7 +570,7 @@ def processdata(i):
     end = time.time()
     #print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
-    experiment.calculatetfanloguephaserf1d('REFENCEDATA/Acceleration_refference', i, '0x1fe40a00/Voltage', 2)
+    experiment.calculatetanloguephaserf1d('REFENCEDATA/Acceleration_refference', i, 'RAWDATA/0x1fe40a00_STM32_Internal_ADC', 2)
     return experiment
 
 
@@ -580,63 +580,23 @@ if __name__ == "__main__":
     start = time.time()
 
     hdffilename = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
-    #revcsv = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
+    revcsv = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, 'r+',driver='core')
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     test=hdfmet4fofdatafile(datafile)
-    #addadctransferfunctiontodset(datafile['RAWDATA/0x1fe40000_BMA_280'], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
-    #datafile.flush()
-    tf = transferfunktion(datafile['RAWDATA/0x1fe40000_BMA_280/Transferfunction'])
-    print(tf.getNearestTF(0, 10))
-    print(tf.getNearestTF(0, 102))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    #adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
+    #addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0x1fe40a00_STM32_Internal_ADC"], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
+    datafile.flush()
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    #movementidx,movementtimes=test.detectmovment('0x1fe40000_BMA_280', 'Acceleration',treshold=0.08,blocksinrow=1000,blocksize=50,plot=True)
-    #manager = multiprocessing.Manager()
-    #mpdata=manager.dict()
-    #mpdata['hdfinstance']=test
-    #mpdata['movementtimes']=movementtimes
-    #mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
-    #i=np.arange(movementtimes.shape[0])
-    #i=np.arange(20)
-    #with multiprocessing.Pool(15) as p:
-    #    results=p.map(processdata,i)
-    #end = time.time()
-    #print(end - start)
-
-
-
-#PTB Pc
-#Single Core 105.88655972480774
-#Dual Core    59.0755774974823
-#Triple Core  39.963184118270874
-#Quad Core    31.353542804718018
-
-#Bene Pc
-#Single Core 103.87189602851868
-#Dual Core    58.934141635894775
-#Triple Core  42.016947507858276
-#Quad Core    32.152546405792236
-#Penta Core    26.92629075050354
-#hexa core  24.332046270370483
-#hepta core  21.610567331314087
-#octa core   19.724497318267822
-
-#dodeca cora 15.849191665649414
-#15 core     13.566272497177124
-#16 core     14.062445878982544
+    movementidx,movementtimes=test.detectmovment('0x1fe40000_BMA_280', 'Acceleration',treshold=0.08,blocksinrow=1000,blocksize=50,plot=True)
+    manager = multiprocessing.Manager()
+    mpdata=manager.dict()
+    mpdata['hdfinstance']=test
+    mpdata['movementtimes']=movementtimes
+    mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
+    i=np.arange(movementtimes.shape[0])
+    i=np.arange(15)
+    with multiprocessing.Pool(15) as p:
+        results=p.map(processdata,i)
+    end = time.time()
+    print(end - start)
