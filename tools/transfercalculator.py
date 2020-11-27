@@ -392,6 +392,29 @@ class sineexcitation(experiment):
         self.flags['Sine fit calculated']=True
         return
 
+    def plotXYsine(self,sensor,dataset,axis,fig=None,ax=None,mode='XY',alpha=0.05):
+        idxs = self.idxs[sensor]
+        time = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
+        reltime = time.astype('int64') - self.timepoints[0].astype('int64')
+        reltime = reltime / 1e9
+        sinparams=self.Data[sensor][dataset]['SinPOpt']
+        f0=sinparams[axis,2]
+        dc=sinparams[axis,1]
+        amp = sinparams[axis,0]
+        phi = sinparams[axis,3]
+        undisturbedsine=np.sin(2*np.pi*f0*reltime+phi)*amp+dc
+        sinedata=self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset][axis, idxs[0]:idxs[1]]
+        if mode=='XY':
+            data=sinedata
+        if mode=='diff':
+            data=sinedata-undisturbedsine
+        if fig==None and ax==None:
+            fig,ax=plt.subplots()
+        ax.scatter(undisturbedsine,data,alpha=alpha,s=1)
+        return fig,ax
+
+
+    #todo finish implementation
     def calculatetanloguephaserf1d(self,refdatagroupname,refdataidx,analogrefchannelname,analogrefchannelidx):
         for sensor in self.met4fofdatafile.sensordatasets:
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
@@ -580,13 +603,17 @@ if __name__ == "__main__":
     start = time.time()
 
     hdffilename = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
-    revcsv = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
+    #revcsv = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
+
     datafile = h5py.File(hdffilename, 'r+',driver='core')
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     test=hdfmet4fofdatafile(datafile)
+
     #adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
     #addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0x1fe40a00_STM32_Internal_ADC"], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
     datafile.flush()
+
+
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
     movementidx,movementtimes=test.detectmovment('0x1fe40000_BMA_280', 'Acceleration',treshold=0.08,blocksinrow=1000,blocksize=50,plot=True)
     manager = multiprocessing.Manager()
@@ -595,8 +622,11 @@ if __name__ == "__main__":
     mpdata['movementtimes']=movementtimes
     mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
     i=np.arange(movementtimes.shape[0])
-    i=np.arange(15)
+    #i=np.arange(15)
     with multiprocessing.Pool(15) as p:
         results=p.map(processdata,i)
     end = time.time()
     print(end - start)
+    fig,ax=plt.subplots()
+    for ex in results:
+        ex.plotXYsine('0x1fe40000_BMA_280', 'Acceleration',2,fig=fig,ax=ax,mode='diff')
