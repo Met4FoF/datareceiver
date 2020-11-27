@@ -408,10 +408,71 @@ class sineexcitation(experiment):
             data=sinedata
         if mode=='diff':
             data=sinedata-undisturbedsine
+        if mode=='XY+fit':
+            data=sinedata
+            polycoevs=np.polyfit(undisturbedsine,data,2)
+            print(polycoevs)
         if fig==None and ax==None:
             fig,ax=plt.subplots()
-        ax.scatter(undisturbedsine,data,alpha=alpha,s=1)
-        return fig,ax
+        ax.scatter(undisturbedsine,data,alpha=alpha,s=1,label="Raw data")
+        if mode == 'XY+fit':
+            max=np.max(undisturbedsine)
+            min=np.min(undisturbedsine)
+            delta=max-min
+            polyx=np.arange(min,max,delta/2e3)
+            poly = np.poly1d(polycoevs)
+            ax.plot(polyx,poly(polyx),label='Fit')
+            #ax.plot(polyx,polyx,label='Prefect signal')
+            ax.legend()
+        if mode=='XY+fit':
+            return polycoevs
+        else:
+            return
+
+    def plotsinefit(self,absolutetime=False):
+        cols=len(self.met4fofdatafile.sensordatasets)#one colum for every sensor
+        datasetspersensor=[]
+        for sensors in self.met4fofdatafile.sensordatasets:
+            datasetspersensor.append(len(self.met4fofdatafile.sensordatasets[sensors]))
+        rows=np.max(datasetspersensor)
+        fig,axs=plt.subplots(cols,rows, sharex='all')
+        icol=0
+        for sensor in self.met4fofdatafile.sensordatasets:
+            irow=0
+            idxs=self.idxs[sensor]
+            axs[icol,0].annotate(sensor.replace('_',' '), xy=(0, 0.5), xytext=(-axs[icol,0].yaxis.labelpad - 5, 0),
+                        xycoords=axs[icol,0].yaxis.label, textcoords='offset points',
+                        size='large', ha='right', va='center',rotation=90)
+
+            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
+                dsetattrs=self.met4fofdatafile.hdffile['RAWDATA/'+sensor+ '/' + dataset ].attrs
+                time=self.met4fofdatafile.hdffile['RAWDATA/'+sensor + '/' + 'Absolutetime'][0,idxs[0]:idxs[1]]
+                if not absolutetime:
+                    time=time.astype('int64') - self.timepoints[0].astype('int64')
+                time=time/1e9
+                #print(dsetattrs.keys())
+                axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs['Unit']))
+                if not absolutetime:
+                    axs[icol, irow].set_xlabel("Relative time in s")
+                else :
+                    axs[icol, irow].set_xlabel("Unixtime in s")
+                axs[icol, irow].set_title(dataset.replace('_',' '))
+                for i in np.arange(self.met4fofdatafile.hdffile['RAWDATA/'+sensor + '/' + dataset ].shape[0]):
+                    label=dsetattrs['Physical_quantity'][i]
+                    data=self.met4fofdatafile.hdffile['RAWDATA/'+sensor + '/' + dataset ][i,idxs[0]:idxs[1]]
+                    p=axs[icol,irow].plot(time,data,label=label)
+                    sinparams = self.Data[sensor][dataset]['SinPOpt']
+                    f0 = sinparams[i, 2]
+                    dc = sinparams[i, 1]
+                    amp = sinparams[i, 0]
+                    phi = sinparams[i, 3]
+                    sinelabel=label+" Sine Fit"
+                    undisturbedsine = np.sin(2 * np.pi * f0 * time + phi) * amp + dc
+                    axs[icol, irow].plot(time, undisturbedsine, label=sinelabel,color=p[0].get_color(),ls='dotted')
+                    axs[icol,irow].legend()
+                irow=irow+1
+            icol=icol+1
+        fig.show()
 
 
     #todo finish implementation
@@ -576,8 +637,8 @@ def processdata(i):
     #print(i)
     sys.stdout.flush()
     times=mpdata['movementtimes'][i]
-    times[0] += 1000000000
-    times[1] -= 1000000000
+    times[0] += 2000000000
+    times[1] -= 2000000000
     if times[1].astype(np.int64)-times[0].astype(np.int64)<0:
         raise ValueError("time after cutting is <0")
     experiment = sineexcitation(mpdata['hdfinstance'], times)
@@ -602,7 +663,7 @@ if __name__ == "__main__":
     yappi.start()
     start = time.time()
 
-    hdffilename = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
+    hdffilename = r"/home/seeger01/Dokumente/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
 
     datafile = h5py.File(hdffilename, 'r+',driver='core')
@@ -622,11 +683,12 @@ if __name__ == "__main__":
     mpdata['movementtimes']=movementtimes
     mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
     i=np.arange(movementtimes.shape[0])
-    #i=np.arange(15)
-    with multiprocessing.Pool(15) as p:
+    #i=np.arange(4)
+    with multiprocessing.Pool(4) as p:
         results=p.map(processdata,i)
     end = time.time()
     print(end - start)
     fig,ax=plt.subplots()
+    coefs = np.empty([len(results), 3])
     for ex in results:
-        ex.plotXYsine('0x1fe40000_BMA_280', 'Acceleration',2,fig=fig,ax=ax,mode='diff')
+        coefs[i]=ex.plotXYsine('0x1fe40000_BMA_280', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
