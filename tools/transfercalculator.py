@@ -2,6 +2,7 @@
 import h5pickle as h5py
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
 import pandas as pd
 import time
 import multiprocessing
@@ -17,9 +18,23 @@ from scipy import stats ## for Student T Coverragefactor
 from scipy.optimize import curve_fit #for fiting of Groupdelay
 from scipy import interpolate #for 1D amplitude estimation
 
-
-
 uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+
+
+#plt.rc('font', family='serif')
+#plt.rc('text', usetex=True)
+PLTSCALFACTOR=2
+SMALL_SIZE = 12*PLTSCALFACTOR
+MEDIUM_SIZE = 15*PLTSCALFACTOR
+BIGGER_SIZE = 18*PLTSCALFACTOR
+
+plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
 def getplotableunitstring(unitstr, Latex=False):
@@ -393,6 +408,7 @@ class sineexcitation(experiment):
         return
 
     def plotXYsine(self,sensor,dataset,axis,fig=None,ax=None,mode='XY',alpha=0.05):
+        dsetattrs = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset].attrs
         idxs = self.idxs[sensor]
         time = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
         reltime = time.astype('int64') - self.timepoints[0].astype('int64')
@@ -404,16 +420,24 @@ class sineexcitation(experiment):
         phi = sinparams[axis,3]
         undisturbedsine=np.sin(2*np.pi*f0*reltime+phi)*amp+dc
         sinedata=self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset][axis, idxs[0]:idxs[1]]
+        if fig==None and ax==None:
+            fig,ax=plt.subplots()
+            ax.set_xlabel('Nonminal '+dsetattrs['Physical_quantity'][axis]+' calculated from sine in '+getplotableunitstring(dsetattrs['Unit']))
         if mode=='XY':
             data=sinedata
+            ax.set_ylabel(dsetattrs['Physical_quantity'][
+                axis] + 'in ' + getplotableunitstring(dsetattrs['Unit']))
         if mode=='diff':
             data=sinedata-undisturbedsine
+            ax.set_ylabel(dsetattrs['Physical_quantity'][
+                axis] + 'in ' + getplotableunitstring(dsetattrs['Unit']))
         if mode=='XY+fit':
+            ax.set_ylabel(dsetattrs['Physical_quantity'][
+                axis] + 'in ' + getplotableunitstring(dsetattrs['Unit']))
             data=sinedata
             polycoevs=np.polyfit(undisturbedsine,data,2)
             print(polycoevs)
-        if fig==None and ax==None:
-            fig,ax=plt.subplots()
+
         ax.scatter(undisturbedsine,data,alpha=alpha,s=1,label="Raw data")
         if mode == 'XY+fit':
             max=np.max(undisturbedsine)
@@ -663,7 +687,7 @@ if __name__ == "__main__":
     yappi.start()
     start = time.time()
 
-    hdffilename = r"/home/seeger01/Dokumente/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
+    hdffilename = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
 
     datafile = h5py.File(hdffilename, 'r+',driver='core')
@@ -684,11 +708,45 @@ if __name__ == "__main__":
     mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
     i=np.arange(movementtimes.shape[0])
     #i=np.arange(4)
-    with multiprocessing.Pool(4) as p:
+    with multiprocessing.Pool(15) as p:
         results=p.map(processdata,i)
     end = time.time()
     print(end - start)
-    fig,ax=plt.subplots()
-    coefs = np.empty([len(results), 3])
+    i=0
+
+
+
+    DC = np.zeros(movementtimes.shape[0])
+    AC = np.zeros(movementtimes.shape[0])
+    ACNominal = test.hdffile['REFENCEDATA/Acceleration_refference/Excitation amplitude'][2,:,'value']
+    F = np.zeros(movementtimes.shape[0])
     for ex in results:
-        coefs[i]=ex.plotXYsine('0x1fe40000_BMA_280', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
+        DC[i] = ex.Data['0x1fe40000_BMA_280']['Acceleration']['SinPOpt'][2][1]
+        AC[i] = ex.Data['0x1fe40000_BMA_280']['Acceleration']['SinPOpt'][2][0]
+        F[i] = ex.Data['0x1fe40000_BMA_280']['Acceleration']['SinPOpt'][2][2]
+        i = i+1
+    color = iter(cm.rainbow(np.linspace(0, 1, np.unique(F).size)))
+    colordict={}
+    for i in range(np.unique(F).size):
+        colordict[np.unique(F)[i]]=next(color)
+    freqcolors=[]
+    for i in range(F.size):
+        freqcolors.append(colordict[F[i]])
+    fig,ax=plt.subplots()
+    labelplotet=[]
+    for i in range(len(AC)):
+        if F[i] not in labelplotet:
+            ax.scatter(ACNominal[i], DC[i], color=freqcolors[i],Label="{:.1f}".format(F[i]))
+            labelplotet.append(F[i])
+        else:
+            ax.scatter(ACNominal[i], DC[i], color=freqcolors[i])
+    ax.set_xlabel('Nominal amplitude in m/s^2')
+    ax.set_ylabel('DC in m/s^2')
+    ax.legend()
+    fig.show()
+
+    #results[0].plotXYsine('0x1fe40000_BMA_280', 'Acceleration', 2)
+    #fig,ax=plt.subplots()
+    #coefs = np.empty([len(results), 3])
+    #for ex in results:
+    #    coefs[i]=ex.plotXYsine('0x1fe40000_BMA_280', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
