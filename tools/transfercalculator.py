@@ -510,16 +510,16 @@ class sineexcitation(experiment):
                 self.Data[sensor][dataset]['TF']['ExAmp'] = np.empty(datasetrows,dtype=uncerval)
                 for i in np.arange(0, datasetrows):
                     fitfreq = self.Data[sensor][dataset]['Sin_Fit_freq']
-                    reffreq = self.met4fofdatafile.hdffile[refdatagroupname]['Frequency'][0][refdataidx]
+                    print(refdataidx)
+                    reffreq = self.met4fofdatafile.hdffile[refdatagroupname]['Frequency'][i,'value'][refdataidx]
                     ADCTF=transferfunktion(self.met4fofdatafile.hdffile[analogrefchannelname].attrs['Transferfunction'])
                     if fitfreq != reffreq:
                         warinigstr="Frequency mismatach in Sesnor"+sensor+' '+dataset+" fit["+str(i)+"]= "+str(fitfreq)+" ref["+str(refdataidx)+"]= "+str(reffreq)+" Transferfunction will be invaladie !!"
                         warnings.warn(warinigstr,RuntimeWarning)
-
                     else:
-                        self.Data[sensor][dataset]['TF']['ExAmp'][i] = examp = self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx]
-                        phase = self.met4fofdatafile.hdffile[refdatagroupname]['Phasee'][i][analogrefchannelidx]#todo fix spell rerror
-                        self.Data[sensor][dataset]['TF']['magnitude'][i]['value']= self.Data[sensor][dataset]['SinPOpt'][i][0]/examp['value']
+                        self.Data[sensor][dataset]['TF']['ExAmp'][i]= self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx]
+                        examp=self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx]['value']
+                        self.Data[sensor][dataset]['TF']['magnitude'][i]['value']= self.Data[sensor][dataset]['SinPOpt'][i][0]/examp
                         self.Data[sensor][dataset]['TF']['magnitude'][i]['uncertainty']=np.NaN
 
 def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
@@ -545,17 +545,17 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
         group.attrs['Refference_name'] = "PTB HF acceleration standard"
         group.attrs['Sensor_name'] = group.attrs['Refference_name']
         group.attrs['Refference_type'] = "1D acceleration"
-        Datasets['Frequency'] = group.create_dataset('Frequency', ([refcsv.shape[0]]),
-                                                    dtype='float64')
+        Datasets['Frequency'] = group.create_dataset('Frequency', ([3, refcsv.shape[0]]),
+                                                    dtype=uncerval)
         Datasets['Frequency'].make_scale("Frequency")
         Datasets['Frequency'].attrs['Unit'] = "/hertz"
         Datasets['Frequency'].attrs['Physical_quantity'] = "Excitation frequency"
-        Datasets['Frequency']=refcsv['frequency'].to_numpy()
+        Datasets['Frequency'][axis, :,"value"] =refcsv['frequency'].to_numpy()
         Datasets['Repetition count'] = group.create_dataset('repetition count', ([refcsv.shape[0]]),
                                                     dtype='int32')
         Datasets['Repetition count'].attrs['Unit'] = "/one"
         Datasets['Repetition count'].attrs['Physical_quantity'] = "Repetition count"
-        Datasets['Repetition count'] = refcsv['loop'].to_numpy()
+        Datasets['Repetition count'][:] = refcsv['loop'].to_numpy()
         Datasets['Repetition count'].dims[0].label = 'Frequency'
         Datasets['Repetition count'].dims[0].attach_scale(Datasets['Frequency'])
         Datasets['Excitation amplitude'] = group.create_dataset('Excitation amplitude', ([3, refcsv.shape[0]]),
@@ -565,9 +565,8 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
                                                                        "Y Excitation amplitude",
                                                                        "Z Excitation amplitude"]
         Datasets['Excitation amplitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-        Datasets['Excitation amplitude'] = np.empty([3, refcsv.shape[0]])
-        Datasets['Excitation amplitude'][axis, :,"value"] = refcsv['ex_amp']
-        Datasets['Excitation amplitude'][axis, :,"uncertainty"] = refcsv['ex_amp_std']
+        Datasets['Excitation amplitude'][axis, :,"value"] = refcsv['ex_amp'].to_numpy()
+        Datasets['Excitation amplitude'][axis, :,"uncertainty"]  = refcsv['ex_amp_std'].to_numpy()
         Datasets['Excitation amplitude'].dims[0].label = 'Frequency'
         Datasets['Excitation amplitude'].dims[0].attach_scale(Datasets['Frequency'])
 
@@ -578,9 +577,8 @@ def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
                                                         "Y Phase",
                                                         "Z Phase"]
         Datasets['Phase'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-        Datasets['Phase'] = np.empty([3, refcsv.shape[0]])
-        Datasets['Phase'][axis, :,"value"] = refcsv['phase']
-        Datasets['Phase'][axis, :,"uncertainty"] = refcsv['phase_std']
+        Datasets['Phase'][axis, :,"value"]  = refcsv['phase'].to_numpy()
+        Datasets['Phase'][axis, :,"uncertainty"]  = refcsv['phase_std'].to_numpy()
         Datasets['Phase'].dims[0].label = 'Frequency'
         Datasets['Phase'].dims[0].attach_scale(Datasets['Frequency'])
         hdffile.flush()
@@ -658,9 +656,10 @@ def addadctransferfunctiontodset(topgroup,tragetsensor,jsonfilelist):
 
 
 def processdata(i):
-    #print(i)
     sys.stdout.flush()
     times=mpdata['movementtimes'][i]
+    refidx = int(mpdata['refidx'][i])
+    print("DONE i=" + str(i) + "refidx=" + str(refidx))
     times[0] += 2000000000
     times[1] -= 2000000000
     if times[1].astype(np.int64)-times[0].astype(np.int64)<0:
@@ -678,35 +677,46 @@ def processdata(i):
     end = time.time()
     #print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
-    experiment.calculatetanloguephaserf1d('REFENCEDATA/Acceleration_refference', i, 'RAWDATA/0x1fe40a00_STM32_Internal_ADC', 2)
+    experiment.calculatetanloguephaserf1d('REFENCEDATA/Acceleration_refference', refidx, 'RAWDATA/0x1fe40a00_STM32_Internal_ADC', 2)
+    print("DONE i="+str(i)+"refidx="+str(refidx))
     return experiment
-
-
 
 if __name__ == "__main__":
     yappi.start()
     start = time.time()
 
-    hdffilename = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000.hdf5"
-    #revcsv = r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/20201118153703_BMA_280_0x1fe40000_00000_Ref_TF.csv"
+    hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    revcsv =      r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
 
     datafile = h5py.File(hdffilename, 'r+',driver='core')
-    #add1dsinereferencedatatohdffile(revcsv, datafile)
+
     test=hdfmet4fofdatafile(datafile)
+
+    #add1dsinereferencedatatohdffile(revcsv, datafile)
 
     #adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
     #addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0x1fe40a00_STM32_Internal_ADC"], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
-    datafile.flush()
+    #datafile.flush()
 
 
     #nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    movementidx,movementtimes=test.detectmovment('0x1fe40000_BMA_280', 'Acceleration',treshold=0.08,blocksinrow=1000,blocksize=50,plot=True)
+    movementidx,movementtimes=test.detectmovment('0x1fe40000_MPU_9250', 'Acceleration',treshold=0.1,blocksinrow=100,blocksize=50,plot=True)
     manager = multiprocessing.Manager()
     mpdata=manager.dict()
     mpdata['hdfinstance']=test
     mpdata['movementtimes']=movementtimes
-    mpdata['uniquexfreqs'] = np.unique(test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][0, :], axis=0)
-    i=np.arange(movementtimes.shape[0])
+
+    # CALCULATE REFERENCE data index skipping one data set at the end of evry loop
+    mpdata['refidx']=np.zeros([16*10])
+    refidx=np.zeros([17*10])
+    for i in np.arange(10):
+        refidx[i*17:(i+1)*17]=np.arange(17)+i*18
+    mpdata['refidx']=refidx
+
+    freqs=test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][2,:,'value']
+    unicefreqs=np.unique(freqs, axis=0)
+    mpdata['uniquexfreqs'] = unicefreqs
+    i=np.arange(refidx.size)
     #i=np.arange(4)
     with multiprocessing.Pool(15) as p:
         results=p.map(processdata,i)
@@ -714,39 +724,50 @@ if __name__ == "__main__":
     print(end - start)
     i=0
 
-
-
-    DC = np.zeros(movementtimes.shape[0])
-    AC = np.zeros(movementtimes.shape[0])
-    ACNominal = test.hdffile['REFENCEDATA/Acceleration_refference/Excitation amplitude'][2,:,'value']
-    F = np.zeros(movementtimes.shape[0])
+    freqs= np.zeros(movementtimes.shape[0])
+    mag = np.zeros(movementtimes.shape[0])
+    examp= np.zeros(movementtimes.shape[0])
+    rawamp= np.zeros(movementtimes.shape[0])
+    i=0
     for ex in results:
-        DC[i] = ex.Data['0x1fe40000_BMA_280']['Acceleration']['SinPOpt'][2][1]
-        AC[i] = ex.Data['0x1fe40000_BMA_280']['Acceleration']['SinPOpt'][2][0]
-        F[i] = ex.Data['0x1fe40000_BMA_280']['Acceleration']['SinPOpt'][2][2]
-        i = i+1
-    color = iter(cm.rainbow(np.linspace(0, 1, np.unique(F).size)))
-    colordict={}
-    for i in range(np.unique(F).size):
-        colordict[np.unique(F)[i]]=next(color)
-    freqcolors=[]
-    for i in range(F.size):
-        freqcolors.append(colordict[F[i]])
-    fig,ax=plt.subplots()
-    labelplotet=[]
-    for i in range(len(AC)):
-        if F[i] not in labelplotet:
-            ax.scatter(ACNominal[i], DC[i], color=freqcolors[i],Label="{:.1f}".format(F[i]))
-            labelplotet.append(F[i])
-        else:
-            ax.scatter(ACNominal[i], DC[i], color=freqcolors[i])
-    ax.set_xlabel('Nominal amplitude in m/s^2')
-    ax.set_ylabel('DC in m/s^2')
-    ax.legend()
-    fig.show()
+        mag[i]=ex.Data['0x1fe40000_MPU_9250']['Acceleration']['TF']['magnitude'][2]['value']
+        examp[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
+        freqs[i]=ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
+        rawamp[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
+        i=i+1
 
-    #results[0].plotXYsine('0x1fe40000_BMA_280', 'Acceleration', 2)
-    #fig,ax=plt.subplots()
-    #coefs = np.empty([len(results), 3])
-    #for ex in results:
-    #    coefs[i]=ex.plotXYsine('0x1fe40000_BMA_280', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
+
+    # DC = np.zeros(movementtimes.shape[0])
+    # AC = np.zeros(movementtimes.shape[0])
+    # ACNominal = test.hdffile['REFENCEDATA/Acceleration_refference/Excitation amplitude'][2,:,'value']
+    # F = np.zeros(movementtimes.shape[0])
+    # for ex in results:
+    #      DC[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][1]
+    #      AC[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
+    #      F[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
+    #      i = i+1
+    # color = iter(cm.rainbow(np.linspace(0, 1, np.unique(F).size)))
+    # colordict={}
+    # for i in range(np.unique(F).size):
+    #     colordict[np.unique(F)[i]]=next(color)
+    # freqcolors=[]
+    # for i in range(F.size):
+    #     freqcolors.append(colordict[F[i]])
+    # fig,ax=plt.subplots()
+    # labelplotet=[]
+    # for i in range(len(AC)):
+    #     if F[i] not in labelplotet:
+    #         ax.scatter(ACNominal[i], DC[i], color=freqcolors[i],Label="{:.1f}".format(F[i]))
+    #         labelplotet.append(F[i])
+    #     else:
+    #          ax.scatter(ACNominal[i], DC[i], color=freqcolors[i])
+    # ax.set_xlabel('Nominal amplitude in m/s^2')
+    # ax.set_ylabel('DC in m/s^2')
+    # ax.legend()
+    # fig.show()
+    #
+    # results[0].plotXYsine('0x1fe40000_MPU_9250', 'Acceleration', 2)
+    # fig,ax=plt.subplots()
+    # coefs = np.empty([len(results), 3])
+    # for ex in results:
+    #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
