@@ -571,6 +571,10 @@ class sineexcitation(experiment):
                         ufADCTFphase = ufloatfromuncerval(ADCTF.getNearestTF(analogrefchannelidx, fitfreq)['Phase'])
                         ufrefphase = ufloatfromuncerval(self.met4fofdatafile.hdffile[refdatagroupname]['Phase'][i][refdataidx])  # in rad
                         phase = ufdutphase-(ufanalogrefphase+ufADCTFphase)+ufrefphase
+                        if phase.n<-np.pi:
+                            phase+=ufloat(2*np.pi,0)
+                        elif phase.n>np.pi:
+                            phase-=ufloat(2*np.pi,0)
                         self.Data[sensor][dataset]['TF']['Phase'][i] = ufloattouncerval(phase)
                         if i == 2 and dataset == 'Acceleration':
                             print("Hallo")
