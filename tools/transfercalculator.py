@@ -20,7 +20,18 @@ from scipy import interpolate #for 1D amplitude estimation
 
 uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
+# used only in transfercalculation because of performance reasonsfrom uncertainties import ufloat
+# >>> from uncertainties.umath import *  # sin(), etc.
+from uncertainties import ufloat
+from uncertainties.umath import *  # sin(), etc.
+def ufloatfromuncerval(uncerval):
+    return ufloat(uncerval['value'],uncerval['uncertainty'])
 
+def ufloattouncerval(ufloat):
+    result = np.empty([1], dtype=uncerval)
+    result['value'] = ufloat.n
+    result['uncertainty'] = ufloat.s
+    return result
 #plt.rc('font', family='serif')
 #plt.rc('text', usetex=True)
 PLTSCALFACTOR=2
@@ -517,10 +528,12 @@ class sineexcitation(experiment):
                         warinigstr="Frequency mismatach in Sesnor"+sensor+' '+dataset+" fit["+str(i)+"]= "+str(fitfreq)+" ref["+str(refdataidx)+"]= "+str(reffreq)+" Transferfunction will be invaladie !!"
                         warnings.warn(warinigstr,RuntimeWarning)
                     else:
+                        #calculate magnitude response
                         self.Data[sensor][dataset]['TF']['ExAmp'][i]= self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx]
-                        examp=self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx]['value']
-                        self.Data[sensor][dataset]['TF']['magnitude'][i]['value']= self.Data[sensor][dataset]['SinPOpt'][i][0]/examp
-                        self.Data[sensor][dataset]['TF']['magnitude'][i]['uncertainty']=np.NaN
+                        uexamp=ufloatfromuncerval(self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx])
+                        measamp=ufloat(self.Data[sensor][dataset]['SinPOpt'][i][0],self.Data[sensor][dataset]['SinPCov'][i][0,0])
+                        mag=measamp/uexamp
+                        self.Data[sensor][dataset]['TF']['magnitude'][i]=ufloattouncerval(mag)
 
 def add1dsinereferencedatatohdffile(csvfilename,hdffile,axis=2):
     refcsv= pd.read_csv(csvfilename, delimiter=";",comment='#')
