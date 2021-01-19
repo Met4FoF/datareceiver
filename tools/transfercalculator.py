@@ -750,12 +750,14 @@ def processdata(i):
 
 
 if __name__ == "__main__":
-    yappi.start()
     start = time.time()
+
 
     hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
     revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
 
+    #hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000.hdf5"
+    #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, 'r+', driver='core')
 
     test = hdfmet4fofdatafile(datafile)
@@ -763,6 +765,11 @@ if __name__ == "__main__":
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     #adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
     #addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0x1fe40a00_STM32_Internal_ADC"], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
+    #datafile.flush()
+
+    #add1dsinereferencedatatohdffile(revcsv, datafile)
+    #adc_tf_goup=datafile.create_group("REFENCEDATA/0xbccb0a00_STM32_Internal_ADC")
+    #addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0xbccb0a00_STM32_Internal_ADC"], [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
     #datafile.flush()
 
     # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
@@ -779,7 +786,8 @@ if __name__ == "__main__":
     for i in np.arange(10):
         refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
     mpdata['refidx'] = refidx
-
+    #refidx = np.array([0,0,1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33])
+    mpdata['refidx'] = refidx
     freqs = test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][2, :, 'value']
     unicefreqs = np.unique(freqs, axis=0)
     mpdata['uniquexfreqs'] = unicefreqs
@@ -804,7 +812,13 @@ if __name__ == "__main__":
         rawamp[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
         phase[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['TF']['Phase'][2]['value']
         i = i + 1
-
+    # for ex in results:
+    #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
+    #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
+    #      freqs[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
+    #      rawamp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
+    #      phase[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Phase'][2]['value']
+    #      i = i + 1
     # DC = np.zeros(movementtimes.shape[0])
     # AC = np.zeros(movementtimes.shape[0])
     # ACNominal = test.hdffile['REFENCEDATA/Acceleration_refference/Excitation amplitude'][2,:,'value']
@@ -839,3 +853,11 @@ if __name__ == "__main__":
     # coefs = np.empty([len(results), 3])
     # for ex in results:
     #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
+
+    CEMFreqs=np.array([250. ,  10. ,  12.5,  16. ,  20. ,  25. ,  31.5,  40. ,  46.7,
+        50. ,  53.3,  63. ,  80. , 100. , 125. , 160. , 200. , 250. ])
+
+    CEMPhase=np.array([0.76607581, 3.04663103, 3.02287512, 2.98955853, 2.95162467,
+       2.90407428, 2.84232287, 2.76153583, 2.69795859, 2.66658932,
+       2.63509269, 2.54387006, 2.38167268, 2.19138501, 1.95305217,
+       1.62281459, 1.24135665, 0.76608718])

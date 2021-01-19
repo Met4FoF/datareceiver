@@ -1177,46 +1177,56 @@ class HDF5Dumper:
         chunksize = 1000
         #chreate self.groups
         with self.hdflock:
-            self.group = self.f.create_group("RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
-            self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
-            self.group.attrs['Sensor_name'] = dscp.SensorName
-            self.group.attrs['Sensor_ID'] = dscp.ID
-            self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
-            self.Datasets['Absolutetime'] = self.group.create_dataset("Absolutetime", ([1, chunksize]), maxshape=(1, None),
-                                                        dtype='uint64', compression="gzip", shuffle=True)
-            self.Datasets['Absolutetime'].make_scale("Absoluitetime")
-            self.Datasets['Absolutetime'].attrs['Unit'] = "/nano/seconds"
-            self.Datasets['Absolutetime'].attrs['Physical_quantity'] = "Uinix_time_in_nanoseconds"
-            self.Datasets['Absolutetime'].attrs['Resolution'] = np.exp2(64)
-            self.Datasets['Absolutetime'].attrs['Max_scale'] = np.exp2(64)
-            self.Datasets['Absolutetime'].attrs['Min_scale'] = 0
-            self.Datasets['Absolutetime_uncertainty'] = self.group.create_dataset("Absolutetime_uncertainty", ([1, chunksize]), maxshape=(1, None),
-                                                         dtype='uint32', compression="gzip", shuffle=True)
-            self.Datasets['Absolutetime_uncertainty'].attrs['Unit'] = "/nano/seconds"
-            self.Datasets['Absolutetime_uncertainty'].attrs['Physical_quantity'] = "Uinix_time_uncertainty_in_nanosconds"
-            self.Datasets['Absolutetime_uncertainty'].attrs['Resolution'] = np.exp2(32)
-            self.Datasets['Absolutetime_uncertainty'].attrs['Max_scale'] = np.exp2(32)
-            self.Datasets['Absolutetime_uncertainty'].attrs['Min_scale'] = 0
-            self.Datasets['Sample_number'] = self.group.create_dataset("Sample_number", ([1, chunksize]), maxshape=(1, None),
-                                                         dtype='uint32', compression="gzip", shuffle=True)
-            self.Datasets['Sample_number'].attrs['Unit'] = "/one"
-            self.Datasets['Sample_number'].attrs['Physical_quantity'] = "Sample_number"
-            self.Datasets['Sample_number'].attrs['Resolution'] = np.exp2(32)
-            self.Datasets['Sample_number'].attrs['Max_scale'] = np.exp2(32)
-            self.Datasets['Sample_number'].attrs['Min_scale'] = 0
-            for groupname in self.hieracy:
-                vectorlength = len(self.hieracy[groupname]['copymask'])
-                self.Datasets[groupname] = self.group.create_dataset(groupname, ([vectorlength, chunksize]), maxshape=(3, None),
-                                                       dtype='float32', compression="gzip",
-                                                       shuffle=True)  # compression="gzip",shuffle=True,
-                self.Datasets[groupname].dims[0].label = "Absoluitetime"
-                self.Datasets[groupname].dims[0].attach_scale(self.Datasets['Absolutetime'])
-                self.Datasets[groupname].attrs['Unit'] = self.hieracy[groupname]['UNIT']
-                self.Datasets[groupname].attrs['Physical_quantity'] = self.hieracy[groupname]['PHYSICAL_QUANTITY']
-                self.Datasets[groupname].attrs['Resolution'] = self.hieracy[groupname]['RESOLUTION']
-                self.Datasets[groupname].attrs['Max_scale'] = self.hieracy[groupname]['MAX_SCALE']
-                self.Datasets[groupname].attrs['Min_scale'] = self.hieracy[groupname]['MIN_SCALE']
-            self.f.flush()
+            try:
+                self.group=self.f["RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')]
+                warnings.warn("GROUP RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')+" existed allready ! useing old group MAKE SHURE DESCRIPTINS ARE THE SAME TO AVOID DATA CORRUPTION")
+                self.Datasets['Absolutetime'] = self.group['Absolutetime']
+                self.Datasets['Absolutetime_uncertainty'] = self.group['Absolutetime_uncertainty']
+                self.Datasets['Sample_number'] = self.group['Sample_number']
+                for groupname in self.hieracy:
+                    self.Datasets[groupname] = self.group[groupname]
+                #todo implent description checking
+            except ValueError:
+                self.group = self.f.create_group("RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
+                self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
+                self.group.attrs['Sensor_name'] = dscp.SensorName
+                self.group.attrs['Sensor_ID'] = dscp.ID
+                self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
+                self.Datasets['Absolutetime'] = self.group.create_dataset("Absolutetime", ([1, chunksize]), maxshape=(1, None),
+                                                            dtype='uint64', compression="gzip", shuffle=True)
+                self.Datasets['Absolutetime'].make_scale("Absoluitetime")
+                self.Datasets['Absolutetime'].attrs['Unit'] = "/nano/seconds"
+                self.Datasets['Absolutetime'].attrs['Physical_quantity'] = "Uinix_time_in_nanoseconds"
+                self.Datasets['Absolutetime'].attrs['Resolution'] = np.exp2(64)
+                self.Datasets['Absolutetime'].attrs['Max_scale'] = np.exp2(64)
+                self.Datasets['Absolutetime'].attrs['Min_scale'] = 0
+                self.Datasets['Absolutetime_uncertainty'] = self.group.create_dataset("Absolutetime_uncertainty", ([1, chunksize]), maxshape=(1, None),
+                                                             dtype='uint32', compression="gzip", shuffle=True)
+                self.Datasets['Absolutetime_uncertainty'].attrs['Unit'] = "/nano/seconds"
+                self.Datasets['Absolutetime_uncertainty'].attrs['Physical_quantity'] = "Uinix_time_uncertainty_in_nanosconds"
+                self.Datasets['Absolutetime_uncertainty'].attrs['Resolution'] = np.exp2(32)
+                self.Datasets['Absolutetime_uncertainty'].attrs['Max_scale'] = np.exp2(32)
+                self.Datasets['Absolutetime_uncertainty'].attrs['Min_scale'] = 0
+                self.Datasets['Sample_number'] = self.group.create_dataset("Sample_number", ([1, chunksize]), maxshape=(1, None),
+                                                             dtype='uint32', compression="gzip", shuffle=True)
+                self.Datasets['Sample_number'].attrs['Unit'] = "/one"
+                self.Datasets['Sample_number'].attrs['Physical_quantity'] = "Sample_number"
+                self.Datasets['Sample_number'].attrs['Resolution'] = np.exp2(32)
+                self.Datasets['Sample_number'].attrs['Max_scale'] = np.exp2(32)
+                self.Datasets['Sample_number'].attrs['Min_scale'] = 0
+                for groupname in self.hieracy:
+                    vectorlength = len(self.hieracy[groupname]['copymask'])
+                    self.Datasets[groupname] = self.group.create_dataset(groupname, ([vectorlength, chunksize]), maxshape=(3, None),
+                                                           dtype='float32', compression="gzip",
+                                                           shuffle=True)  # compression="gzip",shuffle=True,
+                    self.Datasets[groupname].dims[0].label = "Absoluitetime"
+                    self.Datasets[groupname].dims[0].attach_scale(self.Datasets['Absolutetime'])
+                    self.Datasets[groupname].attrs['Unit'] = self.hieracy[groupname]['UNIT']
+                    self.Datasets[groupname].attrs['Physical_quantity'] = self.hieracy[groupname]['PHYSICAL_QUANTITY']
+                    self.Datasets[groupname].attrs['Resolution'] = self.hieracy[groupname]['RESOLUTION']
+                    self.Datasets[groupname].attrs['Max_scale'] = self.hieracy[groupname]['MAX_SCALE']
+                    self.Datasets[groupname].attrs['Min_scale'] = self.hieracy[groupname]['MIN_SCALE']
+                self.f.flush()
 
 
     def pushmsg(self,message,Description):
