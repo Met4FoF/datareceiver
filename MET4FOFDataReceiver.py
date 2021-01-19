@@ -1185,7 +1185,20 @@ class HDF5Dumper:
                 self.Datasets['Sample_number'] = self.group['Sample_number']
                 for groupname in self.hieracy:
                     self.Datasets[groupname] = self.group[groupname]
-                #todo implent description checking
+                    if not self.Datasets[groupname].attrs['Unit'] == self.hieracy[groupname]['UNIT']:
+                        raise RuntimeError("Unit missmatch !" +self.Datasets[groupname].attrs['Unit'] +" "+ self.hieracy[groupname]['UNIT'])
+
+                    if not (self.Datasets[groupname].attrs['Physical_quantity'] == self.hieracy[groupname]['PHYSICAL_QUANTITY']).all():
+                        raise RuntimeError("Physical_quantity missmatch !" +self.Datasets[groupname].attrs['Physical_quantity'] +" "+ self.hieracy[groupname]['PHYSICAL_QUANTITY'])
+
+                    if not (self.Datasets[groupname].attrs['Resolution'] == self.hieracy[groupname]['RESOLUTION']).all():
+                        raise RuntimeError("Resolution  missmatch !" +self.Datasets[groupname].attrs['Resolution'] +" "+ self.hieracy[groupname]['RESOLUTION'])
+
+                    if not (self.Datasets[groupname].attrs['Max_scale'] == self.hieracy[groupname]['MAX_SCALE']).all():
+                        raise RuntimeError("Max scale missmatch !" +self.Datasets[groupname].attrs['Max_scale'] +" "+ self.hieracy[groupname]['MAX_SCALE'])
+
+                    if not (self.Datasets[groupname].attrs['Min_scale'] == self.hieracy[groupname]['MIN_SCALE']).all():
+                        raise RuntimeError("Min scale missmatch !" +self.Datasets[groupname].attrs['Min_scale'] +" "+ self.hieracy[groupname]['MIN_SCALE'])
             except ValueError:
                 self.group = self.f.create_group("RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
                 self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
