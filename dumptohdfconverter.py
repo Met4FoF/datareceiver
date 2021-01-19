@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     dumpfilename=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.dump" # input file name
     hdffilename=dumpfilename.replace('.dump','.hdf5')# if you want to add an dataset to an existing hdf file paste file name here
-    hdfdumplock = threading.Lock() # lock use for multi threading actualy not implementeted
+    hdfdumplock = threading.Lock() # lock use for multi threading lock in met4FOF hdf dumper implementation 
     hdfdumpfile = h5py.File(hdffilename, 'a') # open the hdf file
 
     with open(dumpfilename) as dumpfile:
