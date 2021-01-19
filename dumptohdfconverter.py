@@ -9,11 +9,12 @@ import threading
 
 if __name__ == "__main__":
     adcbaseid=10
-    extractadcdata = True
-    dumpfilename=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.dump"
-    hdffilename=dumpfilename.replace('.dump','.hdf5')
-    hdfdumplock = threading.Lock()
-    hdfdumpfile = h5py.File(hdffilename, 'w')
+    extractadcdata = False #legacy mode for data where channel 11,12 and 13 contain STM32 internal adc data
+
+    dumpfilename=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.dump" # input file name
+    hdffilename=dumpfilename.replace('.dump','.hdf5')# if you want to add an dataset to an existing hdf file paste file name here
+    hdfdumplock = threading.Lock() # lock use for multi threading actualy not implementeted
+    hdfdumpfile = h5py.File(hdffilename, 'a') # open the hdf file
 
     with open(dumpfilename) as dumpfile:
         reader=csv.reader(dumpfile, delimiter=";")
@@ -54,6 +55,12 @@ if __name__ == "__main__":
             paramsdictjson['3']["HIERARCHY"] = "Acceleration/2"
 
             paramsdictjson['10']["HIERARCHY"] = "Temperature/0"
+            sensordscp = SensorDescription(fromDict=paramsdictjson)
+        elif paramsdictjson['Name'] == 'STM32 Internal ADC':
+            print("MPU9250 description found adding hieracey")
+            paramsdictjson['1']["HIERARCHY"] = "Voltage/0"
+            paramsdictjson['2']["HIERARCHY"] = "Voltage/1"
+            paramsdictjson['3']["HIERARCHY"] = "Voltage/2"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         else:
             print("sensor "+str(paramsdictjson['Name'])+' not supported exiting')
