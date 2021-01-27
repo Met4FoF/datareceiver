@@ -1199,7 +1199,7 @@ class HDF5Dumper:
 
                     if not (self.Datasets[groupname].attrs['Min_scale'] == self.hieracy[groupname]['MIN_SCALE']).all():
                         raise RuntimeError("Min scale missmatch !" +self.Datasets[groupname].attrs['Min_scale'] +" "+ self.hieracy[groupname]['MIN_SCALE'])
-            except ValueError:
+            except KeyError:
                 self.group = self.f.create_group("RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
                 self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
                 self.group.attrs['Sensor_name'] = dscp.SensorName

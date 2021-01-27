@@ -6,30 +6,32 @@ from MET4FOFDataReceiver import HDF5Dumper
 from MET4FOFDataReceiver import SensorDescription
 import messages_pb2
 import threading
+import pandas as pd
 
-if __name__ == "__main__":
-    adcbaseid=10
-    extractadcdata = False #legacy mode for data where channel 11,12 and 13 contain STM32 internal adc data
 
-    dumpfilename=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.dump" # input file name
-    hdffilename=dumpfilename.replace('.dump','.hdf5')# if you want to add an dataset to an existing hdf file paste file name here
-    hdfdumplock = threading.Lock() # lock use for multi threading lock in met4FOF hdf dumper implementation 
-    hdfdumpfile = h5py.File(hdffilename, 'a') # open the hdf file
+def readspektraprp(filename):
+    df=pd.read_csv(filename, delimiter='\t', decimal=',',encoding='ISO-8859-1',header=17,skiprows=1)
+
+def adddumptohdf(dumpfilename,hdffilename,hdfdumplock=threading.Lock(),adcbaseid=10,extractadcdata = False):
+    # lock use for multi threading lock in met4FOF hdf dumper implementation
+    #adcbaseid=10
+    #extractadcdata = False #legacy mode for data where channel 11,12 and 13 contain STM32 internal adc data
+    hdfdumpfile = h5py.File(hdffilename, 'a')  # open the hdf file
 
     with open(dumpfilename) as dumpfile:
-        reader=csv.reader(dumpfile, delimiter=";")
-        descpparsed=False
-        skiprowcount=0
-        while(not descpparsed):
+        reader = csv.reader(dumpfile, delimiter=";")
+        descpparsed = False
+        skiprowcount = 0
+        while (not descpparsed):
             row = next(reader)
             try:
                 paramsdictjson = json.loads(row[0])
                 if isinstance(paramsdictjson, dict):
                     print(paramsdictjson)
-                    descpparsed=True
-            except json.decoder.JSONDecodeError :
-                skiprowcount=skiprowcount+1
-                print("skipped "+str(skiprowcount)+" rows")
+                    descpparsed = True
+            except json.decoder.JSONDecodeError:
+                skiprowcount = skiprowcount + 1
+                print("skipped " + str(skiprowcount) + " rows")
                 pass
 
         if paramsdictjson['Name'] == 'MPU 9250':
@@ -63,10 +65,10 @@ if __name__ == "__main__":
             paramsdictjson['3']["HIERARCHY"] = "Voltage/2"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         else:
-            print("sensor "+str(paramsdictjson['Name'])+' not supported exiting')
+            print("sensor " + str(paramsdictjson['Name']) + ' not supported exiting')
             exit()
         baseid = int(np.floor(paramsdictjson['ID'] / 65536))
-        #descriptions are now ready start the hdf dumpers
+        # descriptions are now ready start the hdf dumpers
         sensordumper = HDF5Dumper(sensordscp, hdfdumpfile, hdfdumplock)
         if extractadcdata:
             adcid = int(baseid * 65536 + 256 * adcbaseid)
@@ -98,7 +100,7 @@ if __name__ == "__main__":
             adcdscp = SensorDescription(fromDict=adcparamsdict, ID=adcid)
             adcdumper = HDF5Dumper(adcdscp, hdfdumpfile, hdfdumplock)
         cloumnames = next(reader)
-        #loop over the remaining file content
+        # loop over the remaining file content
         for row in reader:
             sensormsg = messages_pb2.DataMessage()
             sensormsg.id = int(row[0])
@@ -116,7 +118,7 @@ if __name__ == "__main__":
             sensormsg.Data_08 = float(row[12])
             sensormsg.Data_09 = float(row[13])
             sensormsg.Data_10 = float(row[14])
-            sensordumper.pushmsg(sensormsg,sensordscp)
+            sensordumper.pushmsg(sensormsg, sensordscp)
             if extractadcdata:
                 adcmsg = messages_pb2.DataMessage()
                 adcmsg.id = adcid
@@ -130,4 +132,13 @@ if __name__ == "__main__":
                 adcdumper.pushmsg(adcmsg, adcdscp)
         hdfdumpfile.flush()
         hdfdumpfile.close()
-    #hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
+
+if __name__ == "__main__":
+
+
+    dumpfilename=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m4/20201026095729_MPU_9250_0xbccb0000_00000.dump" # input file name
+    #hdffilename=dumpfilename.replace('.dump','_comb.hdf5')# if you want to add an dataset to an existing hdf file paste file name here
+    hdffilename=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/test.hdf5"
+    adddumptohdf(dumpfilename, hdffilename,extractadcdata = True)
+    #spektrareffile=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m4/Met4FoF_Dinamics_sensor_Met4FoF__2020-10-26_2.prp.txt"
+
