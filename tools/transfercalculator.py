@@ -18,14 +18,16 @@ from scipy import stats  ## for Student T Coverragefactor
 from scipy.optimize import curve_fit  # for fiting of Groupdelay
 from scipy import interpolate  # for 1D amplitude estimation
 
-uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+
 
 # used only in transfercalculation because of performance reasonsfrom uncertainties import ufloat
 # >>> from uncertainties.umath import *  # sin(), etc.
 from uncertainties import ufloat
 from uncertainties.umath import *  # sin(), etc.
-
-
+from met4fofhdftools import add1dsinereferencedatatohdffile
+from met4fofhdftools import uncerval #uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+#from met4fofhdftools import add1dsinereferencedatatohdffile
+#from met4fofhdftools import addadctransferfunctiontodset
 def ufloatfromuncerval(uncerval):
     return ufloat(uncerval['value'], uncerval['uncertainty'])
 
@@ -578,148 +580,6 @@ class sineexcitation(experiment):
                         self.Data[sensor][dataset]['TF']['Phase'][i] = ufloattouncerval(phase)
                         if i == 2 and dataset == 'Acceleration':
                             print("Hallo")
-
-
-def add1dsinereferencedatatohdffile(csvfilename, hdffile, axis=2, isdeg=True):
-    refcsv = pd.read_csv(csvfilename, delimiter=";", comment='#')
-    hdffile = hdffile
-    isaccelerationreference1d = False
-    with open(csvfilename, "r") as file:
-        first_line = file.readline()
-        second_line = file.readline()
-        third_line = file.readline()
-        if r'loop;frequency;ex_amp;ex_amp_std;phase;phase_std' in first_line and r'#Number;Hz;m/s^2;m/s^2;deg;deg' in third_line:
-            isaccelerationreference1d = True
-            print("1D Accelerationrefference fiele given creating hdf5 data set")
-        else:
-            if not r'loop;frequency;ex_amp;ex_amp_std;phase;phase_std' in first_line:
-                raise RuntimeError(
-                    "Looking for >>>loop;frequency;ex_amp;ex_amp_std;phase;phase_std<<< in csvfile first row got" + first_line)
-            if not r'#Number;Hz;m/s^2;m/s^2;deg;deg' in third_line:
-                raise RuntimeError(
-                    "Looking for >>>loop;frequency;ex_amp;ex_amp_std;phase;phase_std<<< in csvfile first row got" + third_line)
-    if isaccelerationreference1d:
-        Datasets = {}
-        REFDATA = hdffile.create_group("REFENCEDATA")
-        group = REFDATA.create_group("Acceleration_refference")
-        group.attrs['Refference_name'] = "PTB HF acceleration standard"
-        group.attrs['Sensor_name'] = group.attrs['Refference_name']
-        group.attrs['Refference_type'] = "1D acceleration"
-        Datasets['Frequency'] = group.create_dataset('Frequency', ([3, refcsv.shape[0]]),
-                                                     dtype=uncerval)
-        Datasets['Frequency'].make_scale("Frequency")
-        Datasets['Frequency'].attrs['Unit'] = "/hertz"
-        Datasets['Frequency'].attrs['Physical_quantity'] = "Excitation frequency"
-        Datasets['Frequency'][axis, :, "value"] = refcsv['frequency'].to_numpy()
-        Datasets['Repetition count'] = group.create_dataset('repetition count', ([refcsv.shape[0]]),
-                                                            dtype='int32')
-        Datasets['Repetition count'].attrs['Unit'] = "/one"
-        Datasets['Repetition count'].attrs['Physical_quantity'] = "Repetition count"
-        Datasets['Repetition count'][:] = refcsv['loop'].to_numpy()
-        Datasets['Repetition count'].dims[0].label = 'Frequency'
-        Datasets['Repetition count'].dims[0].attach_scale(Datasets['Frequency'])
-        Datasets['Excitation amplitude'] = group.create_dataset('Excitation amplitude', ([3, refcsv.shape[0]]),
-                                                                dtype=uncerval)
-        Datasets['Excitation amplitude'].attrs['Unit'] = "\\metre\\second\\tothe{-2}"
-        Datasets['Excitation amplitude'].attrs['Physical_quantity'] = ["X Excitation amplitude",
-                                                                       "Y Excitation amplitude",
-                                                                       "Z Excitation amplitude"]
-        Datasets['Excitation amplitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-        Datasets['Excitation amplitude'][axis, :, "value"] = refcsv['ex_amp'].to_numpy()
-        Datasets['Excitation amplitude'][axis, :, "uncertainty"] = refcsv['ex_amp_std'].to_numpy()
-        Datasets['Excitation amplitude'].dims[0].label = 'Frequency'
-        Datasets['Excitation amplitude'].dims[0].attach_scale(Datasets['Frequency'])
-
-        Datasets['Phase'] = group.create_dataset('Phase', ([3, refcsv.shape[0]]),
-                                                 dtype=uncerval)
-        Datasets['Phase'].attrs['Unit'] = "\\degree"
-        Datasets['Phase'].attrs['Physical_quantity'] = ["X Phase",
-                                                        "Y Phase",
-                                                        "Z Phase"]
-        Datasets['Phase'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-        Datasets['Phase'][axis, :, "value"] = refcsv['phase'].to_numpy()
-        Datasets['Phase'][axis, :, "uncertainty"] = refcsv['phase_std'].to_numpy()
-        if (isdeg):
-            Datasets['Phase'][axis, :, "value"] = Datasets['Phase'][axis, :, "value"] / 180 * np.pi
-            Datasets['Phase'][axis, :, "uncertainty"] = Datasets['Phase'][axis, :, "uncertainty"] / 180 * np.pi
-
-        Datasets['Phase'].dims[0].label = 'Frequency'
-        Datasets['Phase'].dims[0].attach_scale(Datasets['Frequency'])
-        hdffile.flush()
-
-
-def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=True):
-    ADCCal = Met4FOFADCCall(Filenames=jsonfilelist)
-    TFs = {}
-    for channel in ADCCal.fitResults.keys():
-        TFs[channel] = ADCCal.GetTransferFunction(channel)
-    channelcount = len(TFs.keys())
-    freqpoints = np.empty(channelcount)
-    i = 0
-    freqsmatch = True
-    for channel in TFs:
-        freqpoints[i] = len(TFs[channel]['Frequencys'])
-        if i > 0 and freqsmatch:
-            result = (freqpoints[0] == freqpoints[i]).all()
-            if result == False:
-                freqsmatch = False
-                raise ValueError("All ADC Channels need to have the same frequencys")
-        i = i + 1
-    channeloder = ['ADC1', 'ADC2', 'ADC3']
-    Datasets = {}
-    group = topgroup.create_group("Transferfunction")
-    tragetsensor.attrs['Transferfunction'] = group
-    Datasets['Frequency'] = group.create_dataset('Frequency', ([freqpoints[0]]), dtype='float64')
-    Datasets['Frequency'].make_scale("Frequency")
-    Datasets['Frequency'].attrs['Unit'] = "/hertz"
-    Datasets['Frequency'].attrs['Physical_quantity'] = "Excitation frequency"
-    Datasets['Frequency'][0:] = TFs[channeloder[0]]['Frequencys']
-    Datasets['Magnitude'] = group.create_dataset('Magnitude', ([channelcount, freqpoints[0]]),
-                                                 dtype=uncerval)
-    Datasets['Magnitude'].attrs['Unit'] = "\\one"
-    Datasets['Magnitude'].attrs['Physical_quantity'] = ['Magnitude response Voltage Ch 1',
-                                                        'Magnitude response Voltage Ch 2',
-                                                        'Magnitude response Voltage Ch 3']
-    Datasets['Magnitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-    i = 0
-    for channel in channeloder:
-        Datasets['Magnitude'][i, :, "value"] = TFs[channel]['AmplitudeCoefficent']
-        Datasets['Magnitude'][i, :, "uncertainty"] = TFs[channel]['AmplitudeCoefficentUncer']
-        i = i + 1
-    Datasets['Magnitude'].dims[0].label = 'Frequency'
-    Datasets['Magnitude'].dims[0].attach_scale(Datasets['Frequency'])
-
-    Datasets['Phase'] = group.create_dataset('Phase', ([channelcount, freqpoints[0]]),
-                                             dtype=uncerval)
-    Datasets['Phase'].attrs['Unit'] = "\\radian"
-    Datasets['Phase'].attrs['Physical_quantity'] = ['Phase response Voltage Ch 1',
-                                                    'Phase response Voltage Ch 2',
-                                                    'Phase response  Voltage Ch 3']
-    Datasets['Phase'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-    i = 0
-    for channel in channeloder:
-        Datasets['Phase'][i, :, "value"] = TFs[channel]['Phase']
-        Datasets['Phase'][i, :, "uncertainty"] = TFs[channel]['PhaseUncer']
-        if isdeg:
-            Datasets['Phase'][i, :, "value"] = Datasets['Phase'][i, :, "value"] / 180 * np.pi
-            Datasets['Phase'][i, :, "uncertainty"] = Datasets['Phase'][i, :, "uncertainty"] / 180 * np.pi
-        i = i + 1
-    Datasets['Phase'].dims[0].label = 'Frequency'
-    Datasets['Phase'].dims[0].attach_scale(Datasets['Frequency'])
-
-    Datasets['N'] = group.create_dataset('N', ([channelcount, freqpoints[0]]),
-                                         dtype=np.int32)
-    Datasets['N'].attrs['Unit'] = "\\one"
-    Datasets['N'].attrs['Physical_quantity'] = ['Datapoints Voltage Ch 1',
-                                                'Datapoints Voltage Ch 2',
-                                                'Datapoints Voltage Ch 3']
-    i = 0
-    for channel in channeloder:
-        Datasets['N'][i, :] = TFs[channel]['N']
-        i = i + 1
-    Datasets['N'].dims[0].label = 'Frequency'
-    Datasets['N'].dims[0].attach_scale(Datasets['Frequency'])
-
 
 def processdata(i):
     sys.stdout.flush()
