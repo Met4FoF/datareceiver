@@ -316,21 +316,21 @@ def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=Tru
     Datasets['N'].dims[0].attach_scale(Datasets['Frequency'])
 
 if __name__ == "__main__":
-    folder=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/"
-    #find all dumpfiles in folder
-    dumpfilenames=findfilesmatchingstr(folder,r"MPU_9250_0xbccb0000_00000.dump") # input file name
+    folder=r"C:\Users\seeger01\Desktop"
+    #find all dumpfiles in folder matching str
+    dumpfilenames=findfilesmatchingstr(folder,r".dump") # input file name
 
-    hdffilename=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/CEMMPU9250.hdf5"
-    #for dumpfilename in dumpfilenames:
-    #    adddumptohdf(dumpfilename, hdffilename,extractadcdata = True)
+    hdffilename=r"out.hdf5"
+    for dumpfilename in dumpfilenames:
+        adddumptohdf(dumpfilename, hdffilename,extractadcdata = False)
     #find al spektra reference files
-    reffilenames = findfilesmatchingstr(folder, 'prp.txt')
-    #pase spektra reference files
-    cemref=spektraprptohdfref(reffilenames)
-    hdffile=h5py.File(hdffilename, 'a')
+    #reffilenames = findfilesmatchingstr(folder, 'prp.txt')
+    #parse spektra reference files
+    #cemref=spektraprptohdfref(reffilenames)
+    #hdffile=h5py.File(hdffilename, 'a')
     #add reference file
     #add1dsinereferencedatatohdffile(cemref, hdffile, axis=2, isdeg=True)
     #add adc tf
-    adc_tf_goup=hdffile.create_group("REFENCEDATA/0xbccb0a00_STM32_Internal_ADC")
-    addadctransferfunctiontodset(adc_tf_goup,adc_tf_goup, [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
+    #adc_tf_goup=hdffile.create_group("REFENCEDATA/0xbccb0a00_STM32_Internal_ADC")
+    #addadctransferfunctiontodset(adc_tf_goup,adc_tf_goup, [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
 
