@@ -83,7 +83,7 @@ def adddumptohdf(dumpfilename,hdffilename,hdfdumplock=threading.Lock(),adcbaseid
             paramsdictjson['10']["HIERARCHY"] = "Temperature/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         elif paramsdictjson['Name'] == 'BMA 280':
-            print("MPU9250 description found adding hieracey")
+            print("BMA description found adding hieracey")
             paramsdictjson['1']["HIERARCHY"] = "Acceleration/0"
             paramsdictjson['2']["HIERARCHY"] = "Acceleration/1"
             paramsdictjson['3']["HIERARCHY"] = "Acceleration/2"
@@ -91,10 +91,15 @@ def adddumptohdf(dumpfilename,hdffilename,hdfdumplock=threading.Lock(),adcbaseid
             paramsdictjson['10']["HIERARCHY"] = "Temperature/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         elif paramsdictjson['Name'] == 'STM32 Internal ADC':
-            print("MPU9250 description found adding hieracey")
+            print("STM32 Internal ADC description found adding hieracey")
             paramsdictjson['1']["HIERARCHY"] = "Voltage/0"
             paramsdictjson['2']["HIERARCHY"] = "Voltage/1"
             paramsdictjson['3']["HIERARCHY"] = "Voltage/2"
+            sensordscp = SensorDescription(fromDict=paramsdictjson)
+        elif paramsdictjson['Name'] == 'MS5837_02BA':
+            print("MS5837_02BA description found adding hieracey")
+            paramsdictjson['1']["HIERARCHY"] = "Temeprature/0"
+            paramsdictjson['2']["HIERARCHY"] = "Releative humidity/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         else:
             print("sensor " + str(paramsdictjson['Name']) + ' not supported exiting')
