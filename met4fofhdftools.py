@@ -8,6 +8,7 @@ import messages_pb2
 import threading
 import pandas as pd
 import os
+import warnings
 from tools.adccaldata import Met4FOFADCCall as Met4FOFADCCall
 uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
@@ -140,33 +141,42 @@ def adddumptohdf(dumpfilename,hdffilename,hdfdumplock=threading.Lock(),adcbaseid
         # loop over the remaining file content
         for row in reader:
             sensormsg = messages_pb2.DataMessage()
-            sensormsg.id = int(row[0])
-            sensormsg.sample_number = int(row[1])
-            sensormsg.unix_time = int(row[2])
-            sensormsg.unix_time_nsecs = int(row[3])
-            sensormsg.time_uncertainty = int(row[4])
-            sensormsg.Data_01 = float(row[5])
-            sensormsg.Data_02 = float(row[6])
-            sensormsg.Data_03 = float(row[7])
-            sensormsg.Data_04 = float(row[8])
-            sensormsg.Data_05 = float(row[9])
-            sensormsg.Data_06 = float(row[10])
-            sensormsg.Data_07 = float(row[11])
-            sensormsg.Data_08 = float(row[12])
-            sensormsg.Data_09 = float(row[13])
-            sensormsg.Data_10 = float(row[14])
-            sensordumper.pushmsg(sensormsg, sensordscp)
-            if extractadcdata:
-                adcmsg = messages_pb2.DataMessage()
-                adcmsg.id = adcid
-                adcmsg.sample_number = int(row[1])
-                adcmsg.unix_time = int(row[2])
-                adcmsg.unix_time_nsecs = int(row[3])
-                adcmsg.time_uncertainty = int(row[4])
-                adcmsg.Data_01 = float(row[15])
-                adcmsg.Data_02 = float(row[16])
-                adcmsg.Data_03 = float(row[17])
-                adcdumper.pushmsg(adcmsg, adcdscp)
+            try:
+                id = int(row[0])
+                if paramsdictjson['ID']==id:
+                    sensormsg.id = id
+                    sensormsg.sample_number = int(row[1])
+                    sensormsg.unix_time = int(row[2])
+                    sensormsg.unix_time_nsecs = int(row[3])
+                    sensormsg.time_uncertainty = int(row[4])
+                    sensormsg.Data_01 = float(row[5])
+                    sensormsg.Data_02 = float(row[6])
+                    sensormsg.Data_03 = float(row[7])
+                    sensormsg.Data_04 = float(row[8])
+                    sensormsg.Data_05 = float(row[9])
+                    sensormsg.Data_06 = float(row[10])
+                    sensormsg.Data_07 = float(row[11])
+                    sensormsg.Data_08 = float(row[12])
+                    sensormsg.Data_09 = float(row[13])
+                    sensormsg.Data_10 = float(row[14])
+                    sensordumper.pushmsg(sensormsg, sensordscp)
+                    if extractadcdata:
+                        adcmsg = messages_pb2.DataMessage()
+                        adcmsg.id = adcid
+                        adcmsg.sample_number = int(row[1])
+                        adcmsg.unix_time = int(row[2])
+                        adcmsg.unix_time_nsecs = int(row[3])
+                        adcmsg.time_uncertainty = int(row[4])
+                        adcmsg.Data_01 = float(row[15])
+                        adcmsg.Data_02 = float(row[16])
+                        adcmsg.Data_03 = float(row[17])
+                        adcdumper.pushmsg(adcmsg, adcdscp)
+                else:
+                    warnings.warn("Sensor ID in line mismatach! Line ignored", RuntimeWarning)
+            except ValueError as VE:
+                print(VE)
+                print(row)
+                warnings.warn("line could not converted to values!Lione ignored", RuntimeWarning)
         hdfdumpfile.flush()
         hdfdumpfile.close()
 
@@ -316,11 +326,11 @@ def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=Tru
     Datasets['N'].dims[0].attach_scale(Datasets['Frequency'])
 
 if __name__ == "__main__":
-    folder=r"C:\Users\seeger01\Desktop"
+    folder=r"C:\Users\benes\Downloads\Radial-Forge-Data-DOE1-SensorData"
     #find all dumpfiles in folder matching str
     dumpfilenames=findfilesmatchingstr(folder,r".dump") # input file name
 
-    hdffilename=r"out.hdf5"
+    hdffilename=r"C:\Users\benes\Downloads\Radial-Forge-Data-DOE1-SensorData\Radial-Forge-Data-DOE1-SensorData.hdf5"
     for dumpfilename in dumpfilenames:
         adddumptohdf(dumpfilename, hdffilename,extractadcdata = False)
     #find al spektra reference files
