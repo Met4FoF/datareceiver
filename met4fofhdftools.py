@@ -172,11 +172,11 @@ def adddumptohdf(dumpfilename,hdffilename,hdfdumplock=threading.Lock(),adcbaseid
                         adcmsg.Data_03 = float(row[17])
                         adcdumper.pushmsg(adcmsg, adcdscp)
                 else:
-                    warnings.warn("Sensor ID in line mismatach! Line ignored", RuntimeWarning)
+                    warnings.warn("Sensor ID in line mismatach! Line ignored", category=RuntimeWarning)
             except ValueError as VE:
                 print(VE)
                 print(row)
-                warnings.warn("line could not converted to values!Lione ignored", RuntimeWarning)
+                warnings.warn("line could not converted to values!Lione ignored", category=RuntimeWarning)
         hdfdumpfile.flush()
         hdfdumpfile.close()
 
@@ -189,7 +189,7 @@ def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, axis=2, isdeg=
         saccelerationreference1d = False
         refcsv = pd.read_csv(dataframeOrFilename, delimiter=";", comment='#')
         hdffile = hdffile
-        with open(csvfilename, "r") as file:
+        with open(dataframeOrFilename, "r") as file:
             first_line = file.readline()
             second_line = file.readline()
             third_line = file.readline()

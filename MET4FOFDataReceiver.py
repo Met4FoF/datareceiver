@@ -1179,7 +1179,7 @@ class HDF5Dumper:
         with self.hdflock:
             try:
                 self.group=self.f["RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')]
-                warnings.warn("GROUP RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')+" existed allready ! useing old group MAKE SHURE DESCRIPTINS ARE THE SAME TO AVOID DATA CORRUPTION")
+                warnings.warn("GROUP RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')+" existed allready ! useing old group MAKE SHURE DESCRIPTINS ARE THE SAME TO AVOID DATA CORRUPTION",category=RuntimeWarning)
                 self.Datasets['Absolutetime'] = self.group['Absolutetime']
                 self.Datasets['Absolutetime_uncertainty'] = self.group['Absolutetime_uncertainty']
                 self.Datasets['Sample_number'] = self.group['Sample_number']
