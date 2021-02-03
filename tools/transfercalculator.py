@@ -613,8 +613,8 @@ if __name__ == "__main__":
     start = time.time()
 
 
-    hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
-    revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
+    hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/MPU9250CEM.hdf5"
+    #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
 
     #hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
@@ -633,7 +633,7 @@ if __name__ == "__main__":
     #datafile.flush()
 
     # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    movementidx, movementtimes = test.detectmovment('0x1fe40000_MPU_9250', 'Acceleration', treshold=0.1,
+    movementidx, movementtimes = test.detectmovment('0xbccb0000_MPU_9250', 'Acceleration', treshold=0.1,
                                                     blocksinrow=100, blocksize=50, plot=True)
     manager = multiprocessing.Manager()
     mpdata = manager.dict()

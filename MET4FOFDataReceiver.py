@@ -1174,15 +1174,17 @@ class HDF5Dumper:
         else:
             raise TypeError("file needs to be either str or h5py._hl.files.File not "+str(type(file)))
         self.Datasets = {}
-        chunksize = 1000
         #chreate self.groups
         with self.hdflock:
             try:
                 self.group=self.f["RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')]
-                warnings.warn("GROUP RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')+" existed allready ! useing old group MAKE SHURE DESCRIPTINS ARE THE SAME TO AVOID DATA CORRUPTION",category=RuntimeWarning)
+                warnings.warn("GROUP RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')+" existed allready !")
                 self.Datasets['Absolutetime'] = self.group['Absolutetime']
                 self.Datasets['Absolutetime_uncertainty'] = self.group['Absolutetime_uncertainty']
                 self.Datasets['Sample_number'] = self.group['Sample_number']
+                if((self.Datasets['Absolutetime'].shape[1]/self.chunksize)/int(self.Datasets['Absolutetime'].shape[1]/self.chunksize)!=1):
+                    warnings.warn("CHECK Chunksize Actual datasize is not an multiple of the chunksize set",RuntimeWarning)
+                self.chunkswritten=int(self.Datasets['Absolutetime'].shape[1]/self.chunksize)
                 for groupname in self.hieracy:
                     self.Datasets[groupname] = self.group[groupname]
                     if not self.Datasets[groupname].attrs['Unit'] == self.hieracy[groupname]['UNIT']:
