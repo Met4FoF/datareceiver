@@ -19,7 +19,7 @@ def findfilesmatchingstr(folder,pattern):
         for filename in filenames:
             if filename.find(pattern) > -1:
                 matchingfiles.append(filename)
-    return matchingfiles
+    return sorted(matchingfiles)
 
 def readspektraprpasdf(filename):
     df=pd.read_csv(filename,decimal=',', sep='\t',encoding='ISO-8859-1',header=17,na_values=['Hz','m/s² Peak','mV/(m/s²)','%','dB','Degree','%','(Ref. value)'])
@@ -326,16 +326,16 @@ def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=Tru
     Datasets['N'].dims[0].attach_scale(Datasets['Frequency'])
 
 if __name__ == "__main__":
-    folder=r"C:\Users\benes\Downloads\Radial-Forge-Data-DOE1-SensorData"
-    folder=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM"
+    folder=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/"
     #find all dumpfiles in folder matching str
     dumpfilenames=findfilesmatchingstr(folder,r".dump") # input file name
 
-    hdffilename=r"C:\Users\benes\Downloads\Radial-Forge-Data-DOE1-SensorData\Radial-Forge-Data-DOE1-SensorData.hdf5"
-    hdffilename=r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/MPU9250CEM.hdf5"
+    hdffilename=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     for dumpfilename in dumpfilenames:
-        if(dumpfilename.find('MPU9250')!=-1):
+        if(dumpfilename.find('MPU_9250')!=-1):
             adddumptohdf(dumpfilename, hdffilename, extractadcdata = True)
+        elif(dumpfilename.find('MS5837')!=-1):
+            print("skipping MS5837 data")
         else:
             adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
     #find al spektra reference files
