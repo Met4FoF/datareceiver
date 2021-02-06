@@ -317,9 +317,9 @@ class experiment:
         self.Data = {}
         self.flags = {}
         for name in self.met4fofdatafile.senorsnames:
-            start = time.time()
             self.idxs[name] = self.met4fofdatafile.getnearestidxs(name, self.timepoints)
-            end = time.time()
+            if(self.idxs[name][1]-self.idxs[name][0]==0):
+                raise ValueError("EMPTY DATA SET")
             self.Data[name] = {}
             for dataset in self.met4fofdatafile.sensordatasets[name]:
                 self.Data[name][dataset] = {}
@@ -542,7 +542,7 @@ class sineexcitation(experiment):
                     fitfreq = self.Data[sensor][dataset]['Sin_Fit_freq']
                     print(refdataidx)
                     adcreftfname = analogrefchannelname
-                    adcreftfname = adcreftfname.replace('RAWDATA', 'REFENCEDATA')
+                    adcreftfname = adcreftfname.replace('RAWDATA', 'REFERENCEDATA')
                     reffreq = self.met4fofdatafile.hdffile[refdatagroupname]['Frequency'][i, 'value'][refdataidx]
                     ADCTF = transferfunktion(self.met4fofdatafile.hdffile[adcreftfname]['Transferfunction'])
                     if fitfreq != reffreq:
@@ -603,8 +603,8 @@ def processdata(i):
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
-    experiment.calculatetanloguephaserf1d('REFENCEDATA/Acceleration_refference', refidx,
-                                          'RAWDATA/0x1fe40a00_STM32_Internal_ADC', 0)
+    experiment.calculatetanloguephaserf1d('REFERENCEDATA/Acceleration_refference', refidx,
+                                          'RAWDATA/0xbccb0a00_STM32_Internal_ADC', 0)
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -613,7 +613,7 @@ if __name__ == "__main__":
     start = time.time()
 
 
-    hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/MPU9250CEM.hdf5"
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM//MPU9250CEM.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
 
     #hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000.hdf5"
@@ -648,7 +648,7 @@ if __name__ == "__main__":
     mpdata['refidx'] = refidx
     #refidx = np.array([0,0,1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33])
     mpdata['refidx'] = refidx
-    freqs = test.hdffile['REFENCEDATA/Acceleration_refference/Frequency'][2, :, 'value']
+    freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency'][2, :, 'value']
     unicefreqs = np.unique(freqs, axis=0)
     mpdata['uniquexfreqs'] = unicefreqs
     i = np.arange(refidx.size)
@@ -666,11 +666,11 @@ if __name__ == "__main__":
     phase = np.zeros(movementtimes.shape[0])
     i = 0
     for ex in results:
-        mag[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
-        examp[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
-        freqs[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
-        rawamp[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
-        phase[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['TF']['Phase'][2]['value']
+        mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
+        examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
+        freqs[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
+        rawamp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
+        phase[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Phase'][2]['value']
         i = i + 1
     # for ex in results:
     #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']

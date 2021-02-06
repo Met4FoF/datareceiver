@@ -205,7 +205,7 @@ def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, axis=2, isdeg=
                         "Looking for >>>loop;frequency;ex_amp;ex_amp_std;phase;phase_std<<< in csvfile first row got" + third_line)
     if isaccelerationreference1d:
         Datasets = {}
-        REFDATA = hdffile.create_group("REFENCEDATA")
+        REFDATA = hdffile.create_group("REFERENCEDATA")
         group = REFDATA.create_group("Acceleration_refference")
         group.attrs['Refference_name'] = "PTB HF acceleration standard"
         group.attrs['Sensor_name'] = group.attrs['Refference_name']
@@ -253,7 +253,7 @@ def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, axis=2, isdeg=
         hdffile.flush()
 
 
-def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=True):
+def addadctransferfunctiontodset(hdffile,adcname, jsonfilelist, isdeg=True):
     ADCCal = Met4FOFADCCall(Filenames=jsonfilelist)
     TFs = {}
     for channel in ADCCal.fitResults.keys():
@@ -272,14 +272,23 @@ def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=Tru
         i = i + 1
     channeloder = ['ADC1', 'ADC2', 'ADC3']
     Datasets = {}
-    group = topgroup.create_group("Transferfunction")
-    tragetsensor.attrs['Transferfunction'] = group
-    Datasets['Frequency'] = group.create_dataset('Frequency', ([freqpoints[0]]), dtype='float64')
+    try:
+        refgroup = hdffile["REFERENCEDATA"]
+        try:
+            adcrefgroup = refgroup[adcname]
+        except KeyError:
+            adcrefgroup = refgroup.create_group(adcname)
+    except KeyError:
+        refgroup = hdffile.create_group("REFERENCEDATA")
+        adcrefgroup= refgroup.create_group(adcname)
+    adctfgroup=adcrefgroup.create_group("Transferfunction")
+    hdffile['RAWDATA/'+adcname].attrs['Transferfunction'] = adctfgroup
+    Datasets['Frequency'] = adctfgroup.create_dataset('Frequency', ([freqpoints[0]]), dtype='float64')
     Datasets['Frequency'].make_scale("Frequency")
     Datasets['Frequency'].attrs['Unit'] = "/hertz"
     Datasets['Frequency'].attrs['Physical_quantity'] = "Excitation frequency"
     Datasets['Frequency'][0:] = TFs[channeloder[0]]['Frequencys']
-    Datasets['Magnitude'] = group.create_dataset('Magnitude', ([channelcount, freqpoints[0]]),
+    Datasets['Magnitude'] = adctfgroup.create_dataset('Magnitude', ([channelcount, freqpoints[0]]),
                                                  dtype=uncerval)
     Datasets['Magnitude'].attrs['Unit'] = "\\one"
     Datasets['Magnitude'].attrs['Physical_quantity'] = ['Magnitude response Voltage Ch 1',
@@ -294,7 +303,7 @@ def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=Tru
     Datasets['Magnitude'].dims[0].label = 'Frequency'
     Datasets['Magnitude'].dims[0].attach_scale(Datasets['Frequency'])
 
-    Datasets['Phase'] = group.create_dataset('Phase', ([channelcount, freqpoints[0]]),
+    Datasets['Phase'] = adctfgroup.create_dataset('Phase', ([channelcount, freqpoints[0]]),
                                              dtype=uncerval)
     Datasets['Phase'].attrs['Unit'] = "\\radian"
     Datasets['Phase'].attrs['Physical_quantity'] = ['Phase response Voltage Ch 1',
@@ -312,7 +321,7 @@ def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=Tru
     Datasets['Phase'].dims[0].label = 'Frequency'
     Datasets['Phase'].dims[0].attach_scale(Datasets['Frequency'])
 
-    Datasets['N'] = group.create_dataset('N', ([channelcount, freqpoints[0]]),
+    Datasets['N'] = adctfgroup.create_dataset('N', ([channelcount, freqpoints[0]]),
                                          dtype=np.int32)
     Datasets['N'].attrs['Unit'] = "\\one"
     Datasets['N'].attrs['Physical_quantity'] = ['Datapoints Voltage Ch 1',
@@ -324,6 +333,7 @@ def addadctransferfunctiontodset(topgroup, tragetsensor, jsonfilelist, isdeg=Tru
         i = i + 1
     Datasets['N'].dims[0].label = 'Frequency'
     Datasets['N'].dims[0].attach_scale(Datasets['Frequency'])
+    hdffile.flush()
 
 if __name__ == "__main__":
     folder=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/"
@@ -345,7 +355,6 @@ if __name__ == "__main__":
     hdffile=h5py.File(hdffilename, 'a')
     #add reference file
     add1dsinereferencedatatohdffile(cemref, hdffile, axis=2, isdeg=True)
-    #add adc tf
-    adc_tf_goup=hdffile.create_group("REFENCEDATA/0xbccb0a00_STM32_Internal_ADC")
-    addadctransferfunctiontodset(adc_tf_goup,adc_tf_goup, [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
+    addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
+    hdffile.close()
 
