@@ -17,7 +17,7 @@ from adccaldata import Met4FOFADCCall
 from scipy import stats  ## for Student T Coverragefactor
 from scipy.optimize import curve_fit  # for fiting of Groupdelay
 from scipy import interpolate  # for 1D amplitude estimation
-
+import json
 
 
 # used only in transfercalculation because of performance reasonsfrom uncertainties import ufloat
@@ -578,8 +578,7 @@ class sineexcitation(experiment):
                         elif phase.n>np.pi:
                             phase-=ufloat(2*np.pi,0)
                         self.Data[sensor][dataset]['TF']['Phase'][i] = ufloattouncerval(phase)
-                        if i == 2 and dataset == 'Acceleration':
-                            print("Hallo")
+
 
 def processdata(i):
     sys.stdout.flush()
@@ -599,15 +598,26 @@ def processdata(i):
     end = time.time()
     # print("FFT Time "+str(end - start))
     start = time.time()
-    experiment.do3paramsinefits(mpdata['uniquexfreqs'], periods=10)
+
+    #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency'][:, refidx]['value']
+    #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
+    axisfreqs=mpdata['uniquexfreqs']
+    experiment.do3paramsinefits(axisfreqs, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
     experiment.calculatetanloguephaserf1d('REFERENCEDATA/Acceleration_refference', refidx,
-                                          'RAWDATA/0xbccb0a00_STM32_Internal_ADC', 0)
+                                          'RAWDATA/0xbccb0a00_STM32_Internal_ADC', 1)
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
+def generateCEMrefIDXfromfreqs(freqs,removefreqs=np.array([2000.0])):
+    refidx=np.empty(0)
+    for i in np.arange(freqs.size):
+        if not freqs[i] in removefreqs:
+            refidx=np.append(refidx,i)
+            i=i+1
+    return refidx
 
 if __name__ == "__main__":
     start = time.time()
@@ -640,15 +650,18 @@ if __name__ == "__main__":
     mpdata['hdfinstance'] = test
     mpdata['movementtimes'] = movementtimes
 
-    # CALCULATE REFERENCE data index skipping one data set at the end of evry loop
-    mpdata['refidx'] = np.zeros([16 * 10])
-    refidx = np.zeros([17 * 10])
-    for i in np.arange(10):
-        refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-    mpdata['refidx'] = refidx
+    # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
+    # mpdata['refidx'] = np.zeros([16 * 10])
+    #refidx = np.zeros([17 * 10])
+    #for i in np.arange(10):
+    #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+    #mpdata['refidx'] = refidx
     #refidx = np.array([0,0,1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33])
-    mpdata['refidx'] = refidx
+
     freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency'][2, :, 'value']
+    refidx = generateCEMrefIDXfromfreqs(freqs)
+    mpdata['refidx'] = refidx
+
     unicefreqs = np.unique(freqs, axis=0)
     mpdata['uniquexfreqs'] = unicefreqs
     i = np.arange(refidx.size)
@@ -661,17 +674,23 @@ if __name__ == "__main__":
 
     freqs = np.zeros(movementtimes.shape[0])
     mag = np.zeros(movementtimes.shape[0])
+    maguncer = np.zeros(movementtimes.shape[0])
     examp = np.zeros(movementtimes.shape[0])
     rawamp = np.zeros(movementtimes.shape[0])
     phase = np.zeros(movementtimes.shape[0])
+    phaseuncer = np.zeros(movementtimes.shape[0])
     i = 0
     for ex in results:
         mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
+        maguncer[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['uncertainty']
         examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
         freqs[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
         rawamp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
         phase[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Phase'][2]['value']
+        phaseuncer[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Phase'][2]['uncertainty']
         i = i + 1
+    output = {'mag': mag, 'maguncer': maguncer, 'examp': examp, 'freqs': freqs, 'phase': phase,
+              'phaseuncer': phaseuncer}
     # for ex in results:
     #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
     #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
@@ -713,11 +732,3 @@ if __name__ == "__main__":
     # coefs = np.empty([len(results), 3])
     # for ex in results:
     #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
-
-    CEMFreqs=np.array([250. ,  10. ,  12.5,  16. ,  20. ,  25. ,  31.5,  40. ,  46.7,
-        50. ,  53.3,  63. ,  80. , 100. , 125. , 160. , 200. , 250. ])
-
-    CEMPhase=np.array([0.76607581, 3.04663103, 3.02287512, 2.98955853, 2.95162467,
-       2.90407428, 2.84232287, 2.76153583, 2.69795859, 2.66658932,
-       2.63509269, 2.54387006, 2.38167268, 2.19138501, 1.95305217,
-       1.62281459, 1.24135665, 0.76608718])
