@@ -39,7 +39,8 @@ def spektraprptohdfref(filenamelist):
     resultdf['frequency']=df['Frequency,']
     resultdf['frequency'] = df['Frequency,']
     resultdf['ex_amp']=df['Accel.,']
-    resultdf['ex_amp_std']=df['Accel.,']*(df['Stdrd. dev.,']/df['S,'])*2
+    #resultdf['ex_amp_std']=df['Accel.,']*(df['Stdrd. dev.,']/df['S,'])*2
+    resultdf['ex_amp_std'] = df['Accel.,']*0.001# ausimming 0.1% uncertanty
     resultdf['phase']=df['Phase,']
     resultdf['phase_std'] = 0.1
     return resultdf
@@ -205,7 +206,10 @@ def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, axis=2, isdeg=
                         "Looking for >>>loop;frequency;ex_amp;ex_amp_std;phase;phase_std<<< in csvfile first row got" + third_line)
     if isaccelerationreference1d:
         Datasets = {}
-        REFDATA = hdffile.create_group("REFERENCEDATA")
+        try:
+            REFDATA = hdffile["REFERENCEDATA"]
+        except KeyError:
+            REFDATA = hdffile.create_group("REFERENCEDATA")
         group = REFDATA.create_group("Acceleration_refference")
         group.attrs['Refference_name'] = "PTB HF acceleration standard"
         group.attrs['Sensor_name'] = group.attrs['Refference_name']
@@ -337,6 +341,7 @@ def addadctransferfunctiontodset(hdffile,adcname, jsonfilelist, isdeg=True):
 
 if __name__ == "__main__":
     folder=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/"
+    #reffile=r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     #find all dumpfiles in folder matching str
     dumpfilenames=findfilesmatchingstr(folder,r".dump") # input file name
 
