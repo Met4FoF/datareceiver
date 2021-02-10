@@ -561,6 +561,8 @@ class sineexcitation(experiment):
                         mag = ufmeasamp / ufexamp
                         self.Data[sensor][dataset]['TF']['Magnitude'][i] = ufloattouncerval(mag)
 
+                        if sensor=="0xbccb0000_MPU_9250" and dataset== "Acceleration" and i==2:
+                            print("DEBUG")
                         #calculate phase
                         adcname=analogrefchannelname.replace('RAWDATA/','')
 
@@ -585,7 +587,7 @@ def processdata(i):
     times = mpdata['movementtimes'][i]
     refidx = int(mpdata['refidx'][i])
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 2000000000
+    times[0] += 6000000000
     times[1] -= 2000000000
     if times[1].astype(np.int64) - times[0].astype(np.int64) < 0:
         raise ValueError("time after cutting is <0")
@@ -623,10 +625,10 @@ if __name__ == "__main__":
     start = time.time()
 
 
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM//MPU9250CEM.hdf5"
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
-
-    #hdffilename = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000.hdf5"
+    sensorname="0xbccb0000_MPU_9250"
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, 'r+', driver='core')
 
@@ -643,7 +645,7 @@ if __name__ == "__main__":
     #datafile.flush()
 
     # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    movementidx, movementtimes = test.detectmovment('0xbccb0000_MPU_9250', 'Acceleration', treshold=0.1,
+    movementidx, movementtimes = test.detectmovment(sensorname, 'Acceleration', treshold=0.1,
                                                     blocksinrow=100, blocksize=50, plot=True)
     manager = multiprocessing.Manager()
     mpdata = manager.dict()
@@ -681,16 +683,18 @@ if __name__ == "__main__":
     phaseuncer = np.zeros(movementtimes.shape[0])
     i = 0
     for ex in results:
-        mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
-        maguncer[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['uncertainty']
-        examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
-        freqs[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
-        rawamp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
-        phase[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Phase'][2]['value']
-        phaseuncer[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Phase'][2]['uncertainty']
+        mag[i] = ex.Data[sensorname]['Acceleration']['TF']['Magnitude'][2]['value']
+        maguncer[i] = ex.Data[sensorname]['Acceleration']['TF']['Magnitude'][2]['uncertainty']
+        examp[i] = ex.Data[sensorname]['Acceleration']['TF']['ExAmp'][2]['value']
+        freqs[i] = ex.Data[sensorname]['Acceleration']['SinPOpt'][2][2]
+        rawamp[i] = ex.Data[sensorname]['Acceleration']['SinPOpt'][2][0]
+        phase[i] = ex.Data[sensorname]['Acceleration']['TF']['Phase'][2]['value']
+        phaseuncer[i] = ex.Data[sensorname]['Acceleration']['TF']['Phase'][2]['uncertainty']
         i = i + 1
-    output = {'mag': mag, 'maguncer': maguncer, 'examp': examp, 'freqs': freqs, 'phase': phase,
+    output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
               'phaseuncer': phaseuncer}
+    df = pd.DataFrame(output)
+
     # for ex in results:
     #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
     #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
