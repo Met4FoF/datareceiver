@@ -39,8 +39,8 @@ def spektraprptohdfref(filenamelist):
     resultdf['frequency']=df['Frequency,']
     resultdf['frequency'] = df['Frequency,']
     resultdf['ex_amp']=df['Accel.,']
-    resultdf['ex_amp_std']=df['Accel.,']*(df['Stdrd. dev.,']/df['S,'])*2
-    #resultdf['ex_amp_std'] = df['Accel.,']*0.001# ausimming 0.1% uncertanty
+    #resultdf['ex_amp_std']=df['Accel.,']*(df['Stdrd. dev.,']/df['S,'])*2
+    resultdf['ex_amp_std'] = df['Accel.,']*0.001# aussimming 0.1% uncertanty
     resultdf['phase']=df['Phase,']
     resultdf['phase_std'] = 0.1
     return resultdf

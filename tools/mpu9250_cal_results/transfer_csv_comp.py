@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-scalefactor=3
+scalefactor=5
+MARKER_SIZE= 4*scalefactor
 SMALL_SIZE = 8*scalefactor
 MEDIUM_SIZE = 10*scalefactor
 BIGGER_SIZE = 12*scalefactor
@@ -14,7 +15,7 @@ plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)
 plt.rc('lines', linewidth=scalefactor)
-#plt.rc("text", usetex=True)
+plt.rc("text", usetex=True)
 
 PTB=pd.read_csv('MPU9250_PTB.csv')
 CEM=pd.read_csv('MPU9250_CEM.csv')
@@ -35,31 +36,31 @@ CEMmagmean=np.array([magmeans]*9).ravel()
 CEMPhasemean=np.array([phasemeans]*9).ravel()
 
 
-fig,ax=plt.subplots()
-ax.plot(PTB['freqs'],PTB['mag'],'o',label='PTB')
-ax.plot(CEM['freqs'],CEM['mag'],'o',label='CEM')
-ax.set(xlabel=r"Frequency $f$ in Hz", ylabel=r" $|S(f)|$" )
-ax.legend()
+fig,ax=plt.subplots(2, 1)
+ax[0].errorbar(PTB['freqs'],PTB['mag'],yerr=PTB['maguncer'],label='PTB', fmt='o',markersize=MARKER_SIZE)
+ax[0].errorbar(CEM['freqs'],CEM['mag'],yerr=CEM['maguncer'],label='CEM', fmt='o',markersize=MARKER_SIZE)
+ax[0].set(xlabel=r"Frequency $f$ in Hz", ylabel=r" $|S(f)|$" )
+ax[0].legend()
+ax[0].grid()
+ax[1].errorbar(PTB['freqs'],PTB['mag']-PTBmagmean,yerr=PTB['maguncer'],label='PTB', fmt='o',markersize=MARKER_SIZE)
+ax[1].errorbar(CEM['freqs'],CEM['mag']-CEMmagmean,yerr=CEM['maguncer'],label='CEM', fmt='o',markersize=MARKER_SIZE)
+ax[1].set(xlabel=r"Frequency $f$ in Hz", ylabel=r" $|S(f)|-\overline{|S(f)|}$" )
+ax[1].legend()
+ax[1].grid()
+fig.suptitle('Magnitude response')
 fig.show()
 
-fig2,ax2=plt.subplots()
-ax2.errorbar(PTB['freqs'],PTB['phase'],yerr=PTB['phaseuncer'],label='PTB', fmt='o')
-ax2.errorbar(CEM['freqs'],CEM['phase']-np.pi,yerr=CEM['phaseuncer'],label='CEM', fmt='o')
-ax2.set(xlabel=r"Frequency $f$ in Hz", ylabel=r"$\Delta\varphi(f)$ in deg")
-ax2.legend()
-fig.show()
 
-
-fig,ax=plt.subplots()
-ax.plot(PTB['freqs'],PTB['mag']-PTBmagmean,'o',label='PTB')
-ax.plot(CEM['freqs'],CEM['mag']-CEMmagmean,'o',label='CEM')
-ax.set(xlabel=r"Frequency $f$ in Hz", ylabel=r" $|S(f)|-\overline{|S(f)|}$" )
-ax.legend()
-fig.show()
-
-fig,ax=plt.subplots()
-ax.errorbar(PTB['freqs'],(PTB['phase']-PTBPhasemean),yerr=PTB['phaseuncer'],label='PTB', fmt='o')
-ax.errorbar(CEM['freqs'],(CEM['phase']-CEMPhasemean)-np.pi,yerr=CEM['phaseuncer'],label='CEM', fmt='o')
-ax.set(xlabel=r"Frequency $f$ in Hz", ylabel=r"$\Delta\varphi(f)-\overline{\Delta\varphi(f)}$ in deg")
-ax.legend()
+fig,ax=plt.subplots(2, 1)
+ax[0].errorbar(PTB['freqs'],PTB['phase'],yerr=PTB['phaseuncer'],label='PTB', fmt='o',markersize=MARKER_SIZE)
+ax[0].errorbar(CEM['freqs'],CEM['phase']-np.pi,yerr=CEM['phaseuncer'],label='CEM', fmt='o',markersize=MARKER_SIZE)
+ax[0].set(xlabel=r"Frequency $f$ in Hz", ylabel=r"$\Delta\varphi(f)$ in $^\circ$")
+ax[0].legend()
+ax[0].grid()
+ax[1].errorbar(PTB['freqs'],(PTB['phase']-PTBPhasemean)+np.pi,yerr=PTB['phaseuncer'],label='PTB', fmt='o',markersize=MARKER_SIZE)
+ax[1].errorbar(CEM['freqs'],(CEM['phase']-CEMPhasemean),yerr=CEM['phaseuncer'],label='CEM', fmt='o',markersize=MARKER_SIZE)
+ax[1].set(xlabel=r"Frequency $f$ in Hz", ylabel=r"$\Delta\varphi(f)-\overline{\Delta\varphi(f)}$ in $^\circ$")
+ax[1].legend()
+ax[1].grid()
+fig.suptitle('Phase response')
 fig.show()
