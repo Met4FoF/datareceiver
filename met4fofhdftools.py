@@ -10,6 +10,7 @@ import pandas as pd
 import os
 import warnings
 from tools.adccaldata import Met4FOFADCCall as Met4FOFADCCall
+import nptdms as tdms
 uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
 def findfilesmatchingstr(folder,pattern):
@@ -339,7 +340,22 @@ def addadctransferfunctiontodset(hdffile,adcname, jsonfilelist, isdeg=True):
     Datasets['N'].dims[0].attach_scale(Datasets['Frequency'])
     hdffile.flush()
 
+def add3compTDMSData(TDMSDatafile,hdffile):
+    tdms_file = tdms.TdmsFile.read(TDMSDatafile)
+    print("Grabbing Group -->"+str(tdms_file.groups()[0]))
+    group=tdms_file.groups()[0]
+    print("Channels-->"+str(tdms_file.groups()[0].channels()))
+    X = tdms_file.groups()[0]['PXI1Slot13_ai0']
+    Y = tdms_file.groups()[0]['PXI1Slot13_ai1']
+    Z = tdms_file.groups()[0]['PXI1Slot13_ai2']
+    Ref = tdms_file.groups()[0]['PXI1Slot13_ai4']
+    print("Assuming simultanious äquidistant sampling")
+    reltime=X.time_track()
+
+
+
 if __name__ == "__main__":
+    """
     folder=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/"
     #reffile=r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     #find all dumpfiles in folder matching str
@@ -362,4 +378,7 @@ if __name__ == "__main__":
     add1dsinereferencedatatohdffile(cemref, hdffile, axis=2, isdeg=True)
     addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
     hdffile.close()
+    """
+    add3compTDMSData(r'C:\Users\seeger01\Desktop\27_10_2020_102754\Spannung.tdms',None)
+
 
