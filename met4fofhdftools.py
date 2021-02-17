@@ -340,7 +340,7 @@ def addadctransferfunctiontodset(hdffile,adcname, jsonfilelist, isdeg=True):
     Datasets['N'].dims[0].attach_scale(Datasets['Frequency'])
     hdffile.flush()
 
-def add3compTDMSData(TDMSDatafile,hdffile):
+def add3compTDMSData(TDMSDatafile,hdffile,sensitivity=np.array([8.163,8.163,8.163]),chunksize=None):
     tdms_file = tdms.TdmsFile.read(TDMSDatafile)
     print("Grabbing Group -->"+str(tdms_file.groups()[0]))
     group=tdms_file.groups()[0]
@@ -351,6 +351,83 @@ def add3compTDMSData(TDMSDatafile,hdffile):
     Ref = tdms_file.groups()[0]['PXI1Slot13_ai4']
     print("Assuming simultanious äquidistant sampling")
     reltime=X.time_track()
+    if chunksize==None:
+        chunksize=int(1/reltime[1])
+    try:
+        rawrefgroup = hdffile["RAWREFERENCEDATA"]
+    except KeyError:
+        rawrefgroup = hdffile.create_group("RAWREFERENCEDATA")
+
+    try:
+        velodatagpr = rawrefgroup["0x00000000_PTB_3_Component"]
+    except KeyError:
+        velodatagpr = rawrefgroup.create_group("0x00000000_PTB_3_Component")
+
+    dsreltime=velodatagpr.create_dataset('Releativetime', ([1, chunksize]), maxshape=(1, reltime.size),
+                                                           dtype='uint64', compression="gzip",
+                                                           shuffle=True)
+    dsreltime.make_scale("Relative Time")
+    dsreltime.attrs['Unit'] = "\\nano\\seconds"
+    dsreltime.attrs['Physical_quantity'] = "Relative Time"
+    dsreltime.attrs['Resolution'] = np.exp2(64)
+    dsreltime.attrs['Max_scale'] = np.exp2(64)
+    dsreltime.attrs['Min_scale'] = 0
+
+
+    dsvelodata=velodatagpr.create_dataset('Velocity', ([3, chunksize]), maxshape=(3, reltime.size),
+                                                           dtype='float32', compression="gzip",
+                                                           shuffle=True)
+    dsvelodata.resize([3, reltime.size])
+    dsvelodata.attrs['Unit'] = "\\metre\\second\\tothe{-1}"
+    dsvelodata.attrs['Physical_quantity'] = ['Velocity X',
+                                                    'Velocity Y',
+                                                    'Velocity Z']
+    dsvelodata.attrs['Resolution'] = int(16777216/10*4)#TODO check this
+    dsvelodata.attrs['Max_scale'] = 2.0/np.mean(sensitivity)#TODO check this
+    dsvelodata.attrs['Min_scale'] = -2.0/np.mean(sensitivity)#TODO check this
+    dsvelodata.dims[0].label = "Relative Time"
+    dsvelodata.dims[0].attach_scale(dsreltime)
+
+    dsrefdata=velodatagpr.create_dataset('Reference voltage', ([1, chunksize]), maxshape=(1, reltime.size),
+                                                           dtype='float32', compression="gzip",
+                                                           shuffle=True)
+    dsrefdata.resize([1, reltime.size])
+    dsrefdata.attrs['Unit'] = "\\volt"
+    dsrefdata.attrs['Physical_quantity'] = ['Reference Signal']
+    dsrefdata.attrs['Resolution'] = int(16777216)
+    dsrefdata.attrs['Max_scale'] = 5.0
+    dsrefdata.attrs['Min_scale'] = -5.0
+    dsrefdata.dims[0].label = "Relative Time"
+    dsrefdata.dims[0].attach_scale(dsreltime)
+
+
+    dsSN = velodatagpr.create_dataset("Sample_number", ([1, chunksize]), maxshape=(1, reltime.size),
+                                      dtype='uint32', compression="gzip", shuffle=True)
+
+    dsSN.attrs['Unit'] = "/one"
+    dsSN.attrs['Physical_quantity'] = "Sample_number"
+    dsSN.attrs['Resolution'] = np.exp2(32)
+    dsSN.attrs['Max_scale'] = np.exp2(32)
+    dsSN.attrs['Min_scale'] = 0
+    dsSN.dims[0].label = "Relative Time"
+    dsSN.dims[0].attach_scale(dsreltime)
+    dsSN.resize([1, reltime.size])
+    dsSN[:]=np.arange(reltime.size)
+
+    dsreltime.resize([1, reltime.size])
+
+    dsvelodata[0, :] = X[:] / sensitivity[0]
+    dsvelodata[1, :] = Y[:] / sensitivity[1]
+    dsvelodata[2, :] = Z[:] / sensitivity[2]
+    #as it it is since its voltage
+    dsreltime[:] = Ref[:]
+
+    #convert to nanosecond uint64
+    nstime=reltime*1e9
+    dsreltime[:]=nstime.astype(np.uint64)
+
+    hdffile.flush()
+    hdffile.close()
 
 
 
@@ -379,6 +456,9 @@ if __name__ == "__main__":
     addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
     hdffile.close()
     """
-    add3compTDMSData(r'C:\Users\seeger01\Desktop\27_10_2020_102754\Spannung.tdms',None)
+    hdffilename = r"D:\tmp\test.hdf5"
+    hdffile = h5py.File(hdffilename, 'a')
+    add3compTDMSData(r'D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\27_10_2020_122245\Spannung.tdms',hdffile)
+
 
 

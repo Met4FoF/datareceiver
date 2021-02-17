@@ -63,6 +63,7 @@ def getplotableunitstring(unitstr, Latex=False):
             "\\micro\\tesla": "µT",
             "\\radian\\second\\tothe{-1}": "rad/s",
             "\\metre\\second\\tothe{-2}": "m/s^2",
+            "\\metre\\second\\tothe{-1}": "m/s",
             "\\volt": "v",
             "\\hertz": "Hz",
         }
@@ -71,8 +72,9 @@ def getplotableunitstring(unitstr, Latex=False):
             "\\degreecelsius": "$^\circ C$",
             "\\degree": "$^\circ$",
             "\\micro\\tesla": "$\micro T$",
-            "\\radian\\second\\tothe{-1}": "$\\frac{m}{s}$",
+            "\\radian\\second\\tothe{-1}": "$\\frac{rad}{s}$",
             "\\metre\\second\\tothe{-2}": "$\\frac{m}{s^2}",
+            "\\metre\\second\\tothe{-1}": "$\\frac{m}{s}",
             "\\volt": "v",
             "\\hertz": "Hz",
         }

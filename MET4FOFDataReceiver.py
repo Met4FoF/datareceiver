@@ -1210,21 +1210,21 @@ class HDF5Dumper:
                 self.Datasets['Absolutetime'] = self.group.create_dataset("Absolutetime", ([1, chunksize]), maxshape=(1, None),
                                                             dtype='uint64', compression="gzip", shuffle=True)
                 self.Datasets['Absolutetime'].make_scale("Absoluitetime")
-                self.Datasets['Absolutetime'].attrs['Unit'] = "/nano/seconds"
+                self.Datasets['Absolutetime'].attrs['Unit'] = "\\nano\\seconds"
                 self.Datasets['Absolutetime'].attrs['Physical_quantity'] = "Uinix_time_in_nanoseconds"
                 self.Datasets['Absolutetime'].attrs['Resolution'] = np.exp2(64)
                 self.Datasets['Absolutetime'].attrs['Max_scale'] = np.exp2(64)
                 self.Datasets['Absolutetime'].attrs['Min_scale'] = 0
                 self.Datasets['Absolutetime_uncertainty'] = self.group.create_dataset("Absolutetime_uncertainty", ([1, chunksize]), maxshape=(1, None),
                                                              dtype='uint32', compression="gzip", shuffle=True)
-                self.Datasets['Absolutetime_uncertainty'].attrs['Unit'] = "/nano/seconds"
+                self.Datasets['Absolutetime_uncertainty'].attrs['Unit'] = "\\nano\\seconds"
                 self.Datasets['Absolutetime_uncertainty'].attrs['Physical_quantity'] = "Uinix_time_uncertainty_in_nanosconds"
                 self.Datasets['Absolutetime_uncertainty'].attrs['Resolution'] = np.exp2(32)
                 self.Datasets['Absolutetime_uncertainty'].attrs['Max_scale'] = np.exp2(32)
                 self.Datasets['Absolutetime_uncertainty'].attrs['Min_scale'] = 0
                 self.Datasets['Sample_number'] = self.group.create_dataset("Sample_number", ([1, chunksize]), maxshape=(1, None),
                                                              dtype='uint32', compression="gzip", shuffle=True)
-                self.Datasets['Sample_number'].attrs['Unit'] = "/one"
+                self.Datasets['Sample_number'].attrs['Unit'] = "\\one"
                 self.Datasets['Sample_number'].attrs['Physical_quantity'] = "Sample_number"
                 self.Datasets['Sample_number'].attrs['Resolution'] = np.exp2(32)
                 self.Datasets['Sample_number'].attrs['Max_scale'] = np.exp2(32)
