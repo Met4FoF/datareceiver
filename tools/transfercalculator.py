@@ -9,7 +9,7 @@ import multiprocessing
 import sys
 import time
 import sinetools.SineTools as st
-import yappi
+#import yappi
 import warnings
 
 import os
@@ -587,7 +587,7 @@ def processdata(i):
     times = mpdata['movementtimes'][i]
     refidx = int(mpdata['refidx'][i])
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 6000000000
+    times[0] += 10000000000
     times[1] -= 2000000000
     if times[1].astype(np.int64) - times[0].astype(np.int64) < 0:
         raise ValueError("time after cutting is <0")
@@ -625,7 +625,7 @@ if __name__ == "__main__":
     start = time.time()
 
 
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
+    hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     sensorname="0xbccb0000_MPU_9250"
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"

@@ -36,6 +36,11 @@ CEMmagmean=np.array([magmeans]*9).ravel()
 CEMPhasemean=np.array([phasemeans]*9).ravel()
 
 
+fig,ax=plt.subplots()
+ax.errorbar(PTB['freqs'],PTB['mag'],yerr=PTB['maguncer'],label='PTB', fmt='o')
+ax.errorbar(CEM['freqs'],CEM['mag'],yerr=CEM['maguncer'],label='CEM', fmt='o')
+ax.set(xlabel=r"Frequency $f$ in Hz", ylabel=r" $|S(f)|$" )
+ax.legend()
 fig,ax=plt.subplots(2, 1)
 ax[0].errorbar(PTB['freqs'],PTB['mag'],yerr=PTB['maguncer'],label='PTB', fmt='o',markersize=MARKER_SIZE)
 ax[0].errorbar(CEM['freqs'],CEM['mag'],yerr=CEM['maguncer'],label='CEM', fmt='o',markersize=MARKER_SIZE)
@@ -51,6 +56,12 @@ fig.suptitle('Magnitude response')
 fig.show()
 
 
+
+fig,ax=plt.subplots()
+ax.errorbar(PTB['freqs'],PTB['mag']-PTBmagmean,yerr=PTB['maguncer'],label='PTB', fmt='o')
+ax.errorbar(CEM['freqs'],CEM['mag']-CEMmagmean,yerr=CEM['maguncer'],label='CEM', fmt='o')
+ax.set(xlabel=r"Frequency $f$ in Hz", ylabel=r" $|S(f)|-\overline{|S(f)|}$" )
+ax.legend()
 fig,ax=plt.subplots(2, 1)
 ax[0].errorbar(PTB['freqs'],PTB['phase']/np.pi*180,yerr=PTB['phaseuncer']/np.pi*180,label='PTB', fmt='o',markersize=MARKER_SIZE)
 ax[0].errorbar(CEM['freqs'],(CEM['phase']-np.pi)/np.pi*180,yerr=CEM['phaseuncer']/np.pi*180,label='CEM', fmt='o',markersize=MARKER_SIZE)
@@ -63,4 +74,11 @@ ax[1].set(xlabel=r"Frequency $f$ in Hz", ylabel=r"$\Delta\varphi(f)-\overline{\D
 ax[1].legend()
 ax[1].grid()
 fig.suptitle('Phase response')
+fig.show()
+
+fig,ax=plt.subplots()
+ax.errorbar(PTB['freqs'],(PTB['phase']-PTBPhasemean)+np.pi,yerr=PTB['phaseuncer'],label='PTB', fmt='o')
+ax.errorbar(CEM['freqs'],(CEM['phase']-CEMPhasemean),yerr=CEM['phaseuncer'],label='CEM', fmt='o')
+ax.set(xlabel=r"Frequency $f$ in Hz", ylabel=r"$\Delta\varphi(f)-\overline{\Delta\varphi(f)}$ in deg")
+ax.legend()
 fig.show()
