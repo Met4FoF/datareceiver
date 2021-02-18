@@ -132,18 +132,18 @@ class hdfmet4fofdatafile:
         print("RAW Datasets are " + str(self.sensordatasets))
 
     def calcblockwiesestd(self, dataset, blocksize=100):
-        start = time.time()
+        #start = time.time()
         blockcount = int(np.floor(dataset.size / blocksize))
         std = np.zeros(blockcount)
         split = np.split(dataset[:blocksize * blockcount], blockcount, axis=0)
         std = np.std(split, axis=1)
-        end = time.time()
-        print("bwstd for dataset " + str(dataset) + "took " + str(end - start) + " secs")
+        #end = time.time()
+        #print("bwstd for dataset " + str(dataset) + "took " + str(end - start) + " secs")
         return std
 
-    def detectnomovment(self, sensorname, quantitiy, treshold=0.05, blocksinrow=5, blocksize=100):
-        tmpData = np.squeeze(self.hdffile['RAWDATA/' + sensorname + '/' + quantitiy])
-        tmpTime = np.squeeze(self.hdffile['RAWDATA/' + sensorname + '/' + 'Absolutetime'])  # fetch data from hdffile
+    def detectnomovment(self, datahdfpath, timehdfpath, treshold=0.05, blocksinrow=5, blocksize=100):
+        tmpData = np.squeeze(self.hdffile[datahdfpath])
+        tmpTime = np.squeeze(self.hdffile[timehdfpath])  # fetch data from hdffile
         mag = np.linalg.norm(tmpData, axis=0)
         std = self.calcblockwiesestd(mag, blocksize=blocksize)
         wasvalide = 0
@@ -166,9 +166,9 @@ class hdfmet4fofdatafile:
         nomovementidx = np.array(nomovementtidx)
         return nomovementidx, np.array(nomovementtimes)
 
-    def detectmovment(self, sensorname, quantitiy, treshold=0.5, blocksinrow=5, blocksize=100, plot=False):
-        tmpData = np.squeeze(self.hdffile['RAWDATA/' + sensorname + '/' + quantitiy])
-        tmpTime = np.squeeze(self.hdffile['RAWDATA/' + sensorname + '/' + 'Absolutetime'])  # fetch data from hdffile
+    def detectmovment(self, datahdfpath, timehdfpath, treshold=0.5, blocksinrow=5, blocksize=100, plot=False):
+        tmpData = np.squeeze(self.hdffile[datahdfpath])
+        tmpTime = np.squeeze(self.hdffile[timehdfpath])  # fetch data from hdffile
         mag = np.linalg.norm(tmpData, axis=0)
         std = self.calcblockwiesestd(mag, blocksize=blocksize)
         wasvalide = 0
@@ -188,8 +188,8 @@ class hdfmet4fofdatafile:
         if plot:
             fig, ax = plt.subplots()
             reltime = (tmpTime - tmpTime[0]) / 1e9
-            blocktime = reltime[0::blocksize][:-1]  # cut one block out--> garden fence problem
-            ax.plot(blocktime, std, label='Data')
+            blocktime = reltime[0::blocksize]  # cut one block out--> garden fence problem
+            ax.plot(blocktime[:std.size], std, label='Data')
             for i in np.arange(len(movementtimes)):
                 relmovementimes = (movementtimes[i] - tmpTime[0]) / 1e9
                 ax.plot(relmovementimes, np.array([treshold, treshold]), label=str(i))
@@ -610,8 +610,8 @@ def processdata(i):
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
-    experiment.calculatetanloguephaserf1d('REFERENCEDATA/Acceleration_refference', refidx,
-                                          'RAWDATA/0xbccb0a00_STM32_Internal_ADC', 1)
+    #experiment.calculatetanloguephaserf1d('REFERENCEDATA/Acceleration_refference', refidx,
+     #                                     'RAWDATA/0xbccb0a00_STM32_Internal_ADC', 1)
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -627,7 +627,8 @@ if __name__ == "__main__":
     start = time.time()
 
 
-    hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
+    #hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
+    hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     sensorname="0xbccb0000_MPU_9250"
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
@@ -647,8 +648,10 @@ if __name__ == "__main__":
     #datafile.flush()
 
     # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    movementidx, movementtimes = test.detectmovment(sensorname, 'Acceleration', treshold=0.1,
-                                                    blocksinrow=100, blocksize=50, plot=True)
+    REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
+                                                    blocksinrow=100, blocksize=10000, plot=True)
+    movementidx, movementtimes = test.detectmovment('RAWDATA/0xf1030008_MPU_9250/Acceleration', 'RAWDATA/0xf1030008_MPU_9250/Absolutetime', treshold=0.075,
+                                                    blocksinrow=100, blocksize=100, plot=True)
     manager = multiprocessing.Manager()
     mpdata = manager.dict()
     mpdata['hdfinstance'] = test
