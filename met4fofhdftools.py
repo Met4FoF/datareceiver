@@ -10,7 +10,6 @@ import pandas as pd
 import os
 import warnings
 from tools.adccaldata import Met4FOFADCCall as Met4FOFADCCall
-import nptdms as tdms
 uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
 def findfilesmatchingstr(folder,pattern):
@@ -182,7 +181,7 @@ def adddumptohdf(dumpfilename,hdffilename,hdfdumplock=threading.Lock(),adcbaseid
         hdfdumpfile.flush()
         hdfdumpfile.close()
 
-def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, axis=2, isdeg=True):
+def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, refference_name, axis, isdeg=True):
     if isinstance(dataframeOrFilename, pd.DataFrame):
         refcsv=dataframeOrFilename
         isaccelerationreference1d = True
@@ -212,9 +211,10 @@ def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, axis=2, isdeg=
         except KeyError:
             REFDATA = hdffile.create_group("REFERENCEDATA")
         group = REFDATA.create_group("Acceleration_refference")
-        group.attrs['Refference_name'] = "PTB HF acceleration standard"
-        group.attrs['Sensor_name'] = group.attrs['Refference_name']
-        group.attrs['Refference_type'] = "1D acceleration"
+        group.attrs['Refference name'] = refference_name
+        group.attrs['Sensor name'] = group.attrs['Refference name']
+        group.attrs['Refference type'] = "1D Acceleration"
+        group.attrs['Refference Qauntitiy'] = 'Acceleration'
         Datasets['Frequency'] = group.create_dataset('Frequency', ([3, refcsv.shape[0]]),
                                                      dtype=uncerval)
         Datasets['Frequency'].make_scale("Frequency")
@@ -230,10 +230,11 @@ def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, axis=2, isdeg=
         Datasets['Repetition count'].dims[0].attach_scale(Datasets['Frequency'])
         Datasets['Excitation amplitude'] = group.create_dataset('Excitation amplitude', ([3, refcsv.shape[0]]),
                                                                 dtype=uncerval)
+        Datasets['Excitation amplitude'][:]=np.NaN
         Datasets['Excitation amplitude'].attrs['Unit'] = "\\metre\\second\\tothe{-2}"
-        Datasets['Excitation amplitude'].attrs['Physical_quantity'] = ["X Excitation amplitude",
-                                                                       "Y Excitation amplitude",
-                                                                       "Z Excitation amplitude"]
+        Datasets['Excitation amplitude'].attrs['Physical_quantity'] = ["X Acceleration excitation amplitude",
+                                                                       "Y Acceleration excitation amplitude",
+                                                                       "Z Acceleration excitation amplitude"]
         Datasets['Excitation amplitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
         Datasets['Excitation amplitude'][axis, :, "value"] = refcsv['ex_amp'].to_numpy()
         Datasets['Excitation amplitude'][axis, :, "uncertainty"] = refcsv['ex_amp_std'].to_numpy()
@@ -242,10 +243,11 @@ def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, axis=2, isdeg=
 
         Datasets['Phase'] = group.create_dataset('Phase', ([3, refcsv.shape[0]]),
                                                  dtype=uncerval)
+        Datasets['Phase'][:]=np.NaN
         Datasets['Phase'].attrs['Unit'] = "\\degree"
-        Datasets['Phase'].attrs['Physical_quantity'] = ["X Phase",
-                                                        "Y Phase",
-                                                        "Z Phase"]
+        Datasets['Phase'].attrs['Physical_quantity'] = ["X Inertial phase",
+                                                        "Y Inertial phase",
+                                                        "Z Inertial phase"]
         Datasets['Phase'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
         Datasets['Phase'][axis, :, "value"] = refcsv['phase'].to_numpy()
         Datasets['Phase'][axis, :, "uncertainty"] = refcsv['phase_std'].to_numpy()
@@ -341,6 +343,7 @@ def addadctransferfunctiontodset(hdffile,adcname, jsonfilelist, isdeg=True):
     hdffile.flush()
 
 def add3compTDMSData(TDMSDatafile,hdffile,sensitivity=np.array([8.163,8.163,8.163]),chunksize=None):
+    import nptdms as tdms
     tdms_file = tdms.TdmsFile.read(TDMSDatafile)
     print("Grabbing Group -->"+str(tdms_file.groups()[0]))
     group=tdms_file.groups()[0]
@@ -432,13 +435,13 @@ def add3compTDMSData(TDMSDatafile,hdffile,sensitivity=np.array([8.163,8.163,8.16
 
 
 if __name__ == "__main__":
-    """
-    folder=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/"
-    #reffile=r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
+
+    folder=r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/"
+    reffile=r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     #find all dumpfiles in folder matching str
     dumpfilenames=findfilesmatchingstr(folder,r".dump") # input file name
 
-    hdffilename=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
+    hdffilename=r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     for dumpfilename in dumpfilenames:
         if(dumpfilename.find('MPU_9250')!=-1):
             adddumptohdf(dumpfilename, hdffilename, extractadcdata = True)
@@ -447,18 +450,17 @@ if __name__ == "__main__":
         else:
             adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
     #find al spektra reference files
-    reffilenames = findfilesmatchingstr(folder, 'prp.txt')
+    #reffilenames = findfilesmatchingstr(folder, 'prp.txt')
     #parse spektra reference files
-    cemref=spektraprptohdfref(reffilenames)
+    #cemref=spektraprptohdfref(reffilenames)
     hdffile=h5py.File(hdffilename, 'a')
     #add reference file
-    add1dsinereferencedatatohdffile(cemref, hdffile, axis=2, isdeg=True)
-    addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
+    add1dsinereferencedatatohdffile(reffile, hdffile,"PTB HF acceleration standard", 2, isdeg=True)
+    #addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
+    addadctransferfunctiontodset(hdffile, '0x1fe40a00_STM32_Internal_ADC', [
+        r"/home/benedikt/datareceiver/cal_data/1FE4_AC_CAL/200615_1FE4_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
     hdffile.close()
-    """
-    hdffilename = r"D:\tmp\test.hdf5"
-    hdffile = h5py.File(hdffilename, 'a')
-    add3compTDMSData(r'D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\27_10_2020_122245\Spannung.tdms',hdffile)
+
 
 
 
