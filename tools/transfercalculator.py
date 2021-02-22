@@ -14,10 +14,8 @@ import warnings
 
 import os
 from adccaldata import Met4FOFADCCall
-from scipy import stats  ## for Student T Coverragefactor
 from scipy.optimize import curve_fit  # for fiting of Groupdelay
 from scipy import interpolate  # for 1D amplitude estimation
-import json
 
 
 # used only in transfercalculation because of performance reasonsfrom uncertainties import ufloat
@@ -25,9 +23,9 @@ import json
 from uncertainties import ufloat
 from uncertainties.umath import *  # sin(), etc.
 from met4fofhdftools import add1dsinereferencedatatohdffile
-from met4fofhdftools import uncerval #uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
-#from met4fofhdftools import add1dsinereferencedatatohdffile
 #from met4fofhdftools import addadctransferfunctiontodset
+from met4fofhdftools import uncerval #uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+
 def ufloatfromuncerval(uncerval):
     return ufloat(uncerval['value'], uncerval['uncertainty'])
 
@@ -236,12 +234,12 @@ class transferfunktion:
             raise ValueError("Invalide Key:  > " + str(
                 key) + " <Use either [Channel] eg ['ADC1] or [Channel,Frequency] eg ['ADC1',1000]  as key ")
 
-    def getGroupDelay(self, Channel):
-        freqs = self.TransferFunctions[Channel]['Frequencys']
-        phases = self.TransferFunctions[Channel]['Phase']
-        phaseUncer = self.TransferFunctions[Channel]['PhaseUncer']
-        popt, pcov = curve_fit(PhaseFunc, freqs, phases, sigma=phaseUncer, absolute_sigma=True)
-        return [popt, pcov]
+    #def getGroupDelay(self, Channel):
+    #    freqs = self.TransferFunctions[Channel]['Frequencys']
+    #    phases = self.TransferFunctions[Channel]['Phase']
+    #    phaseUncer = self.TransferFunctions[Channel]['PhaseUncer']
+    #    popt, pcov = curve_fit(PhaseFunc, freqs, phases, sigma=phaseUncer, absolute_sigma=True)
+    #    return [popt, pcov]
 
     def getInterPolatedAmplitude(self, channel, freq):
         Freqs = self.group['Frequency'][:]
@@ -403,9 +401,9 @@ class sineexcitation(experiment):
                 except NameError:
                     self.dofft()
                 freqidx = binarySearch(uniquexfreqs, fftmaxfreq)
-                f0 = uniquexfreqs[freqidx]
-                self.Data[sensor][dataset]['Sin_Fit_freq'] = f0
                 datasetrows = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset].shape[0]
+                f0 = uniquexfreqs[freqidx]
+                self.Data[sensor][dataset]['Sin_Fit_freq'] = f0*np.ones(datasetrows)
                 # calc first row and create output array[:,idxs[0]:idxs[1]]
                 sineparams = st.seq_threeparsinefit(
                     self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset][0, idxs[0]:idxs[1]], reltime, f0,
@@ -531,57 +529,60 @@ class sineexcitation(experiment):
             icol = icol + 1
         fig.show()
 
-    # todo finish implementation
-    def calculatetanloguephaserf1d(self, refdatagroupname, refdataidx, analogrefchannelname, analogrefchannelidx,analogchannelquantity='Voltage'):
+    def calculatetanloguephaseref1freq(self, refdatagroupname, refdataidx, analogrefchannelname, analogrefchannelidx,analogchannelquantity='Voltage'):
+        adcreftfname = analogrefchannelname
+        adcreftfname = adcreftfname.replace('RAWDATA', 'REFERENCEDATA')
+        ADCTF = transferfunktion(self.met4fofdatafile.hdffile[adcreftfname]['Transferfunction'])
         for sensor in self.met4fofdatafile.sensordatasets:
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 datasetrows = self.met4fofdatafile.hdffile['RAWDATA/' + sensor + '/' + dataset].shape[0]
                 self.Data[sensor][dataset]['TF'] = {}
-                self.Data[sensor][dataset]['TF']['Magnitude'] = np.empty(datasetrows, dtype=uncerval)
-                self.Data[sensor][dataset]['TF']['Phase'] = np.empty(datasetrows, dtype=uncerval)
-                self.Data[sensor][dataset]['TF']['ExAmp'] = np.empty(datasetrows, dtype=uncerval)
-                for i in np.arange(0, datasetrows):
-                    fitfreq = self.Data[sensor][dataset]['Sin_Fit_freq']
-                    print(refdataidx)
-                    adcreftfname = analogrefchannelname
-                    adcreftfname = adcreftfname.replace('RAWDATA', 'REFERENCEDATA')
-                    reffreq = self.met4fofdatafile.hdffile[refdatagroupname]['Frequency'][i, 'value'][refdataidx]
-                    ADCTF = transferfunktion(self.met4fofdatafile.hdffile[adcreftfname]['Transferfunction'])
-                    if fitfreq != reffreq:
-                        warinigstr = "Frequency mismatach in Sesnor" + sensor + ' ' + dataset + " fit[" + str(
-                            i) + "]= " + str(fitfreq) + " ref[" + str(refdataidx) + "]= " + str(
-                            reffreq) + " Transferfunction will be invaladie !!"
-                        warnings.warn(warinigstr, RuntimeWarning)
-                    else:
-                        # calculate magnitude response
-                        self.Data[sensor][dataset]['TF']['ExAmp'][i] = \
-                        self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx]
-                        ufexamp = ufloatfromuncerval(
-                            self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][i][refdataidx])
-                        ufmeasamp = ufloat(self.Data[sensor][dataset]['SinPOpt'][i][0],
-                                           self.Data[sensor][dataset]['SinPCov'][i][0, 0])
-                        mag = ufmeasamp / ufexamp
-                        self.Data[sensor][dataset]['TF']['Magnitude'][i] = ufloattouncerval(mag)
+                TF=self.Data[sensor][dataset]['TF'][self.met4fofdatafile.hdffile[refdatagroupname].attrs['Refference Qauntitiy']]={}
+                TF['Magnitude'] = np.zeros([datasetrows,datasetrows], dtype=uncerval)
+                TF['ExAmp'] = np.zeros([datasetrows,datasetrows], dtype=uncerval)
+                TF['Phase'] = np.zeros([datasetrows,datasetrows], dtype=uncerval)
+                TF['Magnitude'][:]=np.NaN
+                TF['Phase'][:] = np.NaN
+                TF['ExAmp'][:] = np.NaN
+                for j in np.arange(0, datasetrows):
+                    for i in np.arange(0, datasetrows):
+                        fitfreq = self.Data[sensor][dataset]['Sin_Fit_freq'][j]
+                        print(refdataidx)
+                        reffreq = self.met4fofdatafile.hdffile[refdatagroupname]['Frequency'][i, 'value'][refdataidx]
+                        if fitfreq != reffreq:
+                            warinigstr = "Frequency mismatach in Sesnor" + sensor + ' ' + dataset + " fit[" + str(
+                                i) + "]= " + str(fitfreq) + " ref[" + str(refdataidx) + "]= " + str(
+                                reffreq) + " Transferfunction will be invaladie !!"
+                            warnings.warn(warinigstr, RuntimeWarning)
+                        else:
+                            # calculate magnitude response
+                            TF['ExAmp'][j,i] = self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][j][refdataidx]
+                            ufexamp = ufloatfromuncerval(
+                                self.met4fofdatafile.hdffile[refdatagroupname]['Excitation amplitude'][j][refdataidx])
+                            if ufexamp==0:
+                                ufexamp=np.NaN
+                            ufmeasamp = ufloat(self.Data[sensor][dataset]['SinPOpt'][i][0],
+                                               self.Data[sensor][dataset]['SinPCov'][i][0, 0])
+                            mag = ufmeasamp / ufexamp
+                            TF['Magnitude'][j,i] = ufloattouncerval(mag)
+                            #calculate phase
+                            adcname=analogrefchannelname.replace('RAWDATA/','')
 
-                        if sensor=="0xbccb0000_MPU_9250" and dataset== "Acceleration" and i==2:
-                            print("DEBUG")
-                        #calculate phase
-                        adcname=analogrefchannelname.replace('RAWDATA/','')
+                            ufdutphase = ufloat(self.Data[sensor][dataset]['SinPOpt'][j][3],
+                                                self.Data[sensor][dataset]['SinPCov'][j][3, 3])
 
-                        ufdutphase = ufloat(self.Data[sensor][dataset]['SinPOpt'][i][3],
-                                            self.Data[sensor][dataset]['SinPCov'][i][3, 3])
+                            ufanalogrefphase = ufloat(self.Data[adcname][analogchannelquantity]['SinPOpt'][analogrefchannelidx][3],
+                                                self.Data[adcname][analogchannelquantity]['SinPCov'][analogrefchannelidx][3, 3])
 
-                        ufanalogrefphase = ufloat(self.Data[adcname][analogchannelquantity]['SinPOpt'][analogrefchannelidx][3],
-                                            self.Data[adcname][analogchannelquantity]['SinPCov'][analogrefchannelidx][3, 3])
-
-                        ufADCTFphase = ufloatfromuncerval(ADCTF.getNearestTF(analogrefchannelidx, fitfreq)['Phase'])
-                        ufrefphase = ufloatfromuncerval(self.met4fofdatafile.hdffile[refdatagroupname]['Phase'][i][refdataidx])  # in rad
-                        phase = ufdutphase-(ufanalogrefphase+ufADCTFphase)+ufrefphase
-                        if phase.n<-np.pi:
-                            phase+=ufloat(2*np.pi,0)
-                        elif phase.n>np.pi:
-                            phase-=ufloat(2*np.pi,0)
-                        self.Data[sensor][dataset]['TF']['Phase'][i] = ufloattouncerval(phase)
+                            ufADCTFphase = ufloatfromuncerval(ADCTF.getNearestTF(analogrefchannelidx, fitfreq)['Phase'])
+                            ufrefphase = ufloatfromuncerval(self.met4fofdatafile.hdffile[refdatagroupname]['Phase'][j][refdataidx])  # in rad
+                            phase = ufdutphase-(ufanalogrefphase+ufADCTFphase)+ufrefphase
+                            if phase.n<-np.pi:
+                                phase+=ufloat(2*np.pi,0)
+                            elif phase.n>np.pi:
+                                phase-=ufloat(2*np.pi,0)
+                            TF['Phase'][j,i] = ufloattouncerval(phase)
+        pass
 
 
 def processdata(i):
@@ -610,8 +611,8 @@ def processdata(i):
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
-    #experiment.calculatetanloguephaserf1d('REFERENCEDATA/Acceleration_refference', refidx,
-     #                                     'RAWDATA/0xbccb0a00_STM32_Internal_ADC', 1)
+    experiment.calculatetanloguephaseref1freq('REFERENCEDATA/Acceleration_refference', refidx,
+                                          'RAWDATA/0x1fe40a00_STM32_Internal_ADC', 0)
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -628,10 +629,10 @@ if __name__ == "__main__":
 
 
     #hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
-    hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
-    #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
-    sensorname="0xbccb0000_MPU_9250"
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3.hdf5"
+    #hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
+    ##revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
+    sensorname="0x1fe40000_MPU_9250"
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, 'r+', driver='core')
 
@@ -648,9 +649,9 @@ if __name__ == "__main__":
     #datafile.flush()
 
     # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
-                                                    blocksinrow=100, blocksize=10000, plot=True)
-    movementidx, movementtimes = test.detectmovment('RAWDATA/0xf1030008_MPU_9250/Acceleration', 'RAWDATA/0xf1030008_MPU_9250/Absolutetime', treshold=0.075,
+    #REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
+    #                                                blocksinrow=100, blocksize=10000, plot=True)
+    movementidx, movementtimes = test.detectmovment('RAWDATA/0x1fe40000_MPU_9250/Acceleration', 'RAWDATA/0x1fe40000_MPU_9250/Absolutetime', treshold=0.2,
                                                     blocksinrow=100, blocksize=100, plot=True)
     manager = multiprocessing.Manager()
     mpdata = manager.dict()
@@ -658,16 +659,16 @@ if __name__ == "__main__":
     mpdata['movementtimes'] = movementtimes
 
     # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
-    # mpdata['refidx'] = np.zeros([16 * 10])
-    #refidx = np.zeros([17 * 10])
-    #for i in np.arange(10):
-    #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-    #mpdata['refidx'] = refidx
+    mpdata['refidx'] = np.zeros([16 * 10])
+    refidx = np.zeros([17 * 10])
+    for i in np.arange(10):
+        refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+    mpdata['refidx'] = refidx
     #refidx = np.array([0,0,1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33])
 
     freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency'][2, :, 'value']
-    refidx = generateCEMrefIDXfromfreqs(freqs)
-    mpdata['refidx'] = refidx
+    #refidx = generateCEMrefIDXfromfreqs(freqs)
+    #mpdata['refidx'] = refidx
 
     unicefreqs = np.unique(freqs, axis=0)
     mpdata['uniquexfreqs'] = unicefreqs
@@ -688,13 +689,13 @@ if __name__ == "__main__":
     phaseuncer = np.zeros(movementtimes.shape[0])
     i = 0
     for ex in results:
-        mag[i] = ex.Data[sensorname]['Acceleration']['TF']['Magnitude'][2]['value']
-        maguncer[i] = ex.Data[sensorname]['Acceleration']['TF']['Magnitude'][2]['uncertainty']
-        examp[i] = ex.Data[sensorname]['Acceleration']['TF']['ExAmp'][2]['value']
+        mag[i] = ex.Data[sensorname]['Acceleration']['TF']['Acceleration']['Magnitude'][2,2]['value']
+        maguncer[i] = ex.Data[sensorname]['Acceleration']['TF']['Acceleration']['Magnitude'][2,2]['uncertainty']
+        examp[i] = ex.Data[sensorname]['Acceleration']['TF']['Acceleration']['ExAmp'][2,2]['value']
         freqs[i] = ex.Data[sensorname]['Acceleration']['SinPOpt'][2][2]
         rawamp[i] = ex.Data[sensorname]['Acceleration']['SinPOpt'][2][0]
-        phase[i] = ex.Data[sensorname]['Acceleration']['TF']['Phase'][2]['value']
-        phaseuncer[i] = ex.Data[sensorname]['Acceleration']['TF']['Phase'][2]['uncertainty']
+        phase[i] = ex.Data[sensorname]['Acceleration']['TF']['Acceleration']['Phase'][2,2]['value']
+        phaseuncer[i] = ex.Data[sensorname]['Acceleration']['TF']['Acceleration']['Phase'][2,2]['uncertainty']
         i = i + 1
     output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
               'phaseuncer': phaseuncer}
