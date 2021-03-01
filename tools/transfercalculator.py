@@ -1,6 +1,6 @@
 # import h5py
 import h5pickle as h5py
-import h5py as h5py_plaint
+import h5py as h5py_plain
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
@@ -615,15 +615,25 @@ class sineexcitation(experiment):
         experimentGroup=self.createHDFGroup()
         for sensor in self.met4fofdatafile.sensordatasets:
             sensorGroup=experimentGroup.create_group(sensor)
+            try:
+                abstime = self.datafile['RAWDATA/' + sensor + '/' +'Absolutetime']
+                dsetswithtime = self.met4fofdatafile.sensordatasets[sensor] + ['Absolutetime','Absolutetime_uncertainty','Sample_number']
+            except KeyError:
+                try:
+                    reltime = self.datafile['RAWDATA/' + sensor + '/' + 'Releativetime']
+                    dsetswithtime = self.met4fofdatafile.sensordatasets[sensor] + ['Releativetime','Sample_number']
+                except KeyError:
+                    warnings.warn(">>>Absolutetime<<< or >>>Releativetime<<< not found")
+                    break
+            for dataset in dsetswithtime:
+                dsgroup=sensorGroup.create_group(dataset)
+                for key in self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs.keys():
+                    dsgroup.attrs[key]=self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs[key]
+                dsgroup.attrs['Region refference']=self.datafile['RAWDATA/' + sensor + '/' + dataset].regionref[:, self.idxs[sensor][0]:self.idxs[sensor][1]]
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                rows=self.datafile['RAWDATA/' + sensor + '/' + dataset].shape[0]
-                stratidx=self.idxs[sensor][0]
-                stopidx=self.idxs[sensor][1]
-                len=stopidx-stratidx
-                refDataSet=sensorGroup.create_dataset(dataset, (rows,len), dtype=h5py_plaint.ref_dtype)
-                dset=self.datafile['RAWDATA/' + sensor + '/' + dataset]
-                ref =dset.regionref[:,stratidx:stopidx]
-                refDataSet=ref
+                dsgroup = self.datafile['RAWDATA/' + sensor + '/' + dataset]
+                print(self.data[sensor][dataset]['Transfer coefficients'])
+        self.datafile.flush()
 
 
 def processdata(i):
@@ -673,7 +683,10 @@ if __name__ == "__main__":
     #hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
     ##revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     sensorname="0x1fe40000_MPU_9250"
-    os.remove(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
+    try:
+        os.remove(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
+    except FileNotFoundError:
+        pass
     shutil.copyfile(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB (copy).hdf5", r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
     hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
