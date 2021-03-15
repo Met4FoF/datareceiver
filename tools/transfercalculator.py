@@ -15,10 +15,12 @@ import warnings
 
 import os
 import shutil
+from pathlib import Path
 from adccaldata import Met4FOFADCCall
 from scipy.optimize import curve_fit  # for fiting of Groupdelay
 from scipy import interpolate  # for 1D amplitude estimation
 
+import deepdish as dd #for dict to hdf serialisation
 
 # used only in transfercalculation because of performance reasonsfrom uncertainties import ufloat
 # >>> from uncertainties.umath import *  # sin(), etc.
@@ -562,14 +564,24 @@ class sineexcitation(experiment):
         for sensor in self.met4fofdatafile.sensordatasets:
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 datasetrows = self.datafile['RAWDATA/' + sensor + '/' + dataset].shape[0]
-                self.data[sensor][dataset]['Transfer coefficients'] = {}
-                TC=self.data[sensor][dataset]['Transfer coefficients'][self.datafile[refdatagroupname].attrs['Refference Qauntitiy']]={}
-                TC['Magnitude response'] = np.zeros([datasetrows,datasetrows], dtype=uncerval)
-                TC['Excitation amplitude'] = np.zeros([datasetrows,datasetrows], dtype=uncerval)
-                TC['Phase response'] = np.zeros([datasetrows,datasetrows], dtype=uncerval)
-                TC['Magnitude response'][:]=np.NaN
-                TC['Phase response'][:] = np.NaN
-                TC['Excitation amplitude'][:] = np.NaN
+                self.data[sensor][dataset]['Transfer_coefficients'] = {}
+                TC=self.data[sensor][dataset]['Transfer_coefficients'][self.datafile[refdatagroupname].attrs['Refference Qauntitiy']]={}
+                TC['Magnitude response'] = {}
+                TC['Magnitude response']['value']=np.zeros([datasetrows,datasetrows])
+                TC['Magnitude response']['value'][:]=np.NAN
+                TC['Magnitude response']['uncertainty'] = np.zeros([datasetrows, datasetrows])
+                TC['Magnitude response']['uncertainty'][:] = np.NAN
+
+                TC['Excitation amplitude']={}
+                TC['Excitation amplitude']['value'] = np.zeros([datasetrows,datasetrows])
+                TC['Excitation amplitude']['value'][:] = np.NAN
+                TC['Excitation amplitude']['uncertainty'] = np.zeros([datasetrows, datasetrows])
+                TC['Excitation amplitude']['uncertainty'][:] = np.NAN
+                TC['Phase response'] = {}
+                TC['Phase response']['value'] = np.zeros([datasetrows,datasetrows])
+                TC['Phase response']['value'][:] = np.NAN
+                TC['Phase response']['uncertainty']  = np.zeros([datasetrows,datasetrows])
+                TC['Phase response']['uncertainty'][:] = np.NAN
                 for j in np.arange(0, datasetrows):
                     for i in np.arange(0, datasetrows):
                         fitfreq = self.data[sensor][dataset]['Sin_Fit_freq'][j]
@@ -583,7 +595,8 @@ class sineexcitation(experiment):
                         else:
 
                             # calculate magnitude response
-                            TC['Excitation amplitude'][j,i] = self.datafile[refdatagroupname]['Excitation amplitude'][j][refdataidx]
+                            TC['Excitation amplitude']['value'][j,i] = self.datafile[refdatagroupname]['Excitation amplitude'][j][refdataidx]['value']
+                            TC['Excitation amplitude']['uncertainty'][j, i] = self.datafile[refdatagroupname]['Excitation amplitude'][j][refdataidx]['uncertainty']
                             ufexamp = ufloatfromuncerval(
                                 self.datafile[refdatagroupname]['Excitation amplitude'][j][refdataidx])
                             if ufexamp==0:
@@ -591,7 +604,8 @@ class sineexcitation(experiment):
                             ufmeasamp = ufloat(self.data[sensor][dataset]['SinPOpt'][i][0],
                                                self.data[sensor][dataset]['SinPCov'][i][0, 0])
                             mag = ufmeasamp / ufexamp
-                            TC['Magnitude response'][j,i] = ufloattouncerval(mag)
+                            TC['Magnitude response']['value'][j,i] = mag.n
+                            TC['Magnitude response']['uncertainty'][j, i] = mag.s
                             #calculate phase
                             adcname=analogrefchannelname.replace('RAWDATA/','')
 
@@ -608,9 +622,41 @@ class sineexcitation(experiment):
                                 phase+=ufloat(2*np.pi,0)
                             elif phase.n>np.pi:
                                 phase-=ufloat(2*np.pi,0)
-                            TC['Phase response'][j,i] = ufloattouncerval(phase)
+                            TC['Phase response']['value'][j,i] = phase.n
+                            TC['Phase response']['uncertainty'][j, i] = phase.s
         pass
 
+    def saveToHdf(self):
+        experimentGroup=self.createHDFGroup()
+        """
+        for sensor in self.met4fofdatafile.sensordatasets:
+            sensorGroup=experimentGroup.create_group(sensor)
+            try:
+                abstime = self.datafile['RAWDATA/' + sensor + '/' +'Absolutetime']
+                dsetswithtime = self.met4fofdatafile.sensordatasets[sensor] + ['Absolutetime','Absolutetime_uncertainty','Sample_number']
+            except KeyError:
+                try:
+                    reltime = self.datafile['RAWDATA/' + sensor + '/' + 'Releativetime']
+                    dsetswithtime = self.met4fofdatafile.sensordatasets[sensor] + ['Releativetime','Sample_number']
+                except KeyError:
+                    warnings.warn(">>>Absolutetime<<< or >>>Releativetime<<< not found")
+                    break
+            for dataset in dsetswithtime:
+                dsgroup=sensorGroup.create_group(dataset)
+                for key in self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs.keys():
+                    dsgroup.attrs[key]=self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs[key]
+                dsgroup.attrs['Region refference']=self.datafile['RAWDATA/' + sensor + '/' + dataset].regionref[:, self.idxs[sensor][0]:self.idxs[sensor][1]]
+            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
+                dsgroup = sensorGroup[dataset]
+        self.datafile.flush()
+        """
+        Path("tmp").mkdir(parents=True, exist_ok=True)
+        dd.io.save('tmp/'+self.experiemntID+'.hdf5' ,self.data)
+        h5df=h5py.File('tmp/'+self.experiemntID+'.hdf5', 'r')
+        for key in h5df.keys():
+            self.datafile.copy(h5df[key], experimentGroup)
+
+"""
     def saveToHdf(self):
         experimentGroup=self.createHDFGroup()
         for sensor in self.met4fofdatafile.sensordatasets:
@@ -631,10 +677,22 @@ class sineexcitation(experiment):
                     dsgroup.attrs[key]=self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs[key]
                 dsgroup.attrs['Region refference']=self.datafile['RAWDATA/' + sensor + '/' + dataset].regionref[:, self.idxs[sensor][0]:self.idxs[sensor][1]]
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                dsgroup = self.datafile['RAWDATA/' + sensor + '/' + dataset]
-                print(self.data[sensor][dataset]['Transfer coefficients'])
-        self.datafile.flush()
+                dsgroup = sensorGroup[dataset]
+                TCTopGroup=dsgroup.create_group('Transfer coefficients')
+                for key in self.data[sensor][dataset]['Transfer coefficients'].keys():
+                    print(self.data[sensor][dataset]['Transfer coefficients'][key])
+                    TCGroup=TCTopGroup.create_group(key)
+                    for subkey in self.data[sensor][dataset]['Transfer coefficients'][key].keys():
+                        if self.data[sensor][dataset]['Transfer coefficients'][key][subkey].shape==(3,3):
+                            DS=TCGroup.create_dataset(subkey,(3,3,1),dtype=uncerval)
+                            for i in range(3):
+                                for j in range(3):
+                                    DS[i,j,0]=self.data[sensor][dataset]['Transfer coefficients'][key][subkey][i,j]
+                        else:
+                            print(sensor+' '+dataset+' '+'Transfer coefficients'+' '+key+' '+subkey+' '+'Have dimension different from (3,3) skiping')
 
+        self.datafile.flush()
+"""
 
 def processdata(i):
     sys.stdout.flush()
@@ -729,14 +787,19 @@ if __name__ == "__main__":
     unicefreqs = np.unique(freqs, axis=0)
     mpdata['uniquexfreqs'] = unicefreqs
     i = np.arange(refidx.size)
-    i = np.arange(1)
+    #i = np.arange(10)
     # i=np.arange(4)
-    with multiprocessing.Pool(1) as p:
-        results = p.map(processdata, i)
+    #with multiprocessing.Pool(15) as p:
+    #    results = p.map(processdata, i)
+    ex=processdata(1)
+    ex.saveToHdf()
+
     end = time.time()
     print(end - start)
     i = 0
 
+    datafile.close()
+"""
     freqs = np.zeros(movementtimes.shape[0])
     mag = np.zeros(movementtimes.shape[0])
     maguncer = np.zeros(movementtimes.shape[0])
@@ -759,7 +822,7 @@ if __name__ == "__main__":
     output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
               'phaseuncer': phaseuncer}
     df = pd.DataFrame(output)
-
+    """
     # for ex in results:
     #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
     #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
