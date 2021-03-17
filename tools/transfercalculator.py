@@ -629,12 +629,16 @@ class sineexcitation(experiment):
 
     def saveToHdf(self):
         experimentGroup=self.createHDFGroup()
+        experimentGroup.attrs['Start Time']=self.timepoints[0]
+        experimentGroup.attrs['End Time'] = self.timepoints[1]
         self.datafile.flush()
         Path("tmp").mkdir(parents=True, exist_ok=True)
         dd.io.save('tmp/'+self.experiemntID+'.hdf5' ,self.data)
         h5df=h5py_plain.File('tmp/'+self.experiemntID+'.hdf5', 'r')
         for key in h5df.keys():
             self.datafile.copy(h5df[key], experimentGroup)
+            experimentGroup[key].attrs['Start Index']=self.idxs[key][0]
+            experimentGroup[key].attrs['Stop Index']=self.idxs[key][1]
             self.datafile.flush()
 
 def processdata(i):
@@ -740,29 +744,29 @@ if __name__ == "__main__":
     i = 0
 
 
-    freqs = np.zeros(movementtimes.shape[0])
-    mag = np.zeros(movementtimes.shape[0])
-    maguncer = np.zeros(movementtimes.shape[0])
-    examp = np.zeros(movementtimes.shape[0])
-    rawamp = np.zeros(movementtimes.shape[0])
-    phase = np.zeros(movementtimes.shape[0])
-    phaseuncer = np.zeros(movementtimes.shape[0])
-    i = 0
-    for ex in results:
+    #freqs = np.zeros(movementtimes.shape[0])
+    #mag = np.zeros(movementtimes.shape[0])
+    #maguncer = np.zeros(movementtimes.shape[0])
+    #examp = np.zeros(movementtimes.shape[0])
+    #rawamp = np.zeros(movementtimes.shape[0])
+    #phase = np.zeros(movementtimes.shape[0])
+    #phaseuncer = np.zeros(movementtimes.shape[0])
+    for i in range(len(results)):
+        ex=results[i]
         if(i==99):
             print("DEBUG")
-        mag[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Magnitude response']['value'][2,2]
-        maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Magnitude response']['uncertainty'][2,2]
-        examp[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Excitation amplitude']['value'][2,2]
-        freqs[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][2]
-        rawamp[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][0]
-        phase[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Phase response']['value'][2,2]
-        phaseuncer[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Phase response']['uncertainty'][2,2]
+        #mag[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Magnitude response']['value'][2,2]
+        #maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Magnitude response']['uncertainty'][2,2]
+        #examp[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Excitation amplitude']['value'][2,2]
+        #freqs[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][2]
+        #rawamp[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][0]
+        #phase[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Phase response']['value'][2,2]
+        #phaseuncer[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Phase response']['uncertainty'][2,2]
         ex.saveToHdf()
-        i = i + 1
-    output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
-              'phaseuncer': phaseuncer}
-    df = pd.DataFrame(output)
+    #output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
+    #         'phaseuncer': phaseuncer}
+    #df = pd.DataFrame(output)
+    #datafile.close()
     # for ex in results:
     #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
     #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
