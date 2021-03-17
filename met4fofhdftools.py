@@ -432,7 +432,7 @@ def add3compTDMSData(TDMSDatafile,hdffile,sensitivity=np.array([8.163,8.163,8.16
 
 
 if __name__ == "__main__":
-    """
+
     folder=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/"
     #reffile=r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     #find all dumpfiles in folder matching str
@@ -441,24 +441,27 @@ if __name__ == "__main__":
     hdffilename=r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     for dumpfilename in dumpfilenames:
         if(dumpfilename.find('MPU_9250')!=-1):
-            adddumptohdf(dumpfilename, hdffilename, extractadcdata = True)
+            adddumptohdf(dumpfilename, hdffilename, extractadcdata = False)
         elif(dumpfilename.find('MS5837')!=-1):
             print("skipping MS5837 data")
         else:
             adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
     #find al spektra reference files
-    reffilenames = findfilesmatchingstr(folder, 'prp.txt')
+    #reffilenames = findfilesmatchingstr(folder, 'prp.txt')
     #parse spektra reference files
-    cemref=spektraprptohdfref(reffilenames)
+    #cemref=spektraprptohdfref(reffilenames)
     hdffile=h5py.File(hdffilename, 'a')
     #add reference file
-    add1dsinereferencedatatohdffile(cemref, hdffile, axis=2, isdeg=True)
-    addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
+    #add1dsinereferencedatatohdffile(cemref, hdffile, axis=2, isdeg=True)
+    #addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
     hdffile.close()
-    """
-    hdffilename = r"D:\tmp\test.hdf5"
-    hdffile = h5py.File(hdffilename, 'a')
-    add3compTDMSData(r'D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\27_10_2020_122245\Spannung.tdms',hdffile)
+
+    #hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
+    #TDMSDatafile = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\27_10_2020_122245\Spannung.tdms"
+    #hdffile=h5py.File(hdffilename, 'a')
+    #add3compTDMSData(TDMSDatafile, hdffile)
+
+
 
 
 
