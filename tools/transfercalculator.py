@@ -1,5 +1,6 @@
 # import h5py
-import h5pickle as h5py
+#TODO implent proper multi threaded hdf file handling
+import h5pickle as h5py #be carefull opining more than 100 files in a row kills first file handle !!!
 import h5py as h5py_plain
 import numpy as np
 import matplotlib.pyplot as plt
@@ -564,8 +565,8 @@ class sineexcitation(experiment):
         for sensor in self.met4fofdatafile.sensordatasets:
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 datasetrows = self.datafile['RAWDATA/' + sensor + '/' + dataset].shape[0]
-                self.data[sensor][dataset]['Transfer_coefficients'] = {}
-                TC=self.data[sensor][dataset]['Transfer_coefficients'][self.datafile[refdatagroupname].attrs['Refference Qauntitiy']]={}
+                self.data[sensor][dataset]['Transfer coefficients'] = {}
+                TC=self.data[sensor][dataset]['Transfer coefficients'][self.datafile[refdatagroupname].attrs['Refference Qauntitiy']]={}
                 TC['Magnitude response'] = {}
                 TC['Magnitude response']['value']=np.zeros([datasetrows,datasetrows])
                 TC['Magnitude response']['value'][:]=np.NAN
@@ -628,71 +629,13 @@ class sineexcitation(experiment):
 
     def saveToHdf(self):
         experimentGroup=self.createHDFGroup()
-        """
-        for sensor in self.met4fofdatafile.sensordatasets:
-            sensorGroup=experimentGroup.create_group(sensor)
-            try:
-                abstime = self.datafile['RAWDATA/' + sensor + '/' +'Absolutetime']
-                dsetswithtime = self.met4fofdatafile.sensordatasets[sensor] + ['Absolutetime','Absolutetime_uncertainty','Sample_number']
-            except KeyError:
-                try:
-                    reltime = self.datafile['RAWDATA/' + sensor + '/' + 'Releativetime']
-                    dsetswithtime = self.met4fofdatafile.sensordatasets[sensor] + ['Releativetime','Sample_number']
-                except KeyError:
-                    warnings.warn(">>>Absolutetime<<< or >>>Releativetime<<< not found")
-                    break
-            for dataset in dsetswithtime:
-                dsgroup=sensorGroup.create_group(dataset)
-                for key in self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs.keys():
-                    dsgroup.attrs[key]=self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs[key]
-                dsgroup.attrs['Region refference']=self.datafile['RAWDATA/' + sensor + '/' + dataset].regionref[:, self.idxs[sensor][0]:self.idxs[sensor][1]]
-            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                dsgroup = sensorGroup[dataset]
         self.datafile.flush()
-        """
         Path("tmp").mkdir(parents=True, exist_ok=True)
         dd.io.save('tmp/'+self.experiemntID+'.hdf5' ,self.data)
-        h5df=h5py.File('tmp/'+self.experiemntID+'.hdf5', 'r')
+        h5df=h5py_plain.File('tmp/'+self.experiemntID+'.hdf5', 'r')
         for key in h5df.keys():
             self.datafile.copy(h5df[key], experimentGroup)
-
-"""
-    def saveToHdf(self):
-        experimentGroup=self.createHDFGroup()
-        for sensor in self.met4fofdatafile.sensordatasets:
-            sensorGroup=experimentGroup.create_group(sensor)
-            try:
-                abstime = self.datafile['RAWDATA/' + sensor + '/' +'Absolutetime']
-                dsetswithtime = self.met4fofdatafile.sensordatasets[sensor] + ['Absolutetime','Absolutetime_uncertainty','Sample_number']
-            except KeyError:
-                try:
-                    reltime = self.datafile['RAWDATA/' + sensor + '/' + 'Releativetime']
-                    dsetswithtime = self.met4fofdatafile.sensordatasets[sensor] + ['Releativetime','Sample_number']
-                except KeyError:
-                    warnings.warn(">>>Absolutetime<<< or >>>Releativetime<<< not found")
-                    break
-            for dataset in dsetswithtime:
-                dsgroup=sensorGroup.create_group(dataset)
-                for key in self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs.keys():
-                    dsgroup.attrs[key]=self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs[key]
-                dsgroup.attrs['Region refference']=self.datafile['RAWDATA/' + sensor + '/' + dataset].regionref[:, self.idxs[sensor][0]:self.idxs[sensor][1]]
-            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                dsgroup = sensorGroup[dataset]
-                TCTopGroup=dsgroup.create_group('Transfer coefficients')
-                for key in self.data[sensor][dataset]['Transfer coefficients'].keys():
-                    print(self.data[sensor][dataset]['Transfer coefficients'][key])
-                    TCGroup=TCTopGroup.create_group(key)
-                    for subkey in self.data[sensor][dataset]['Transfer coefficients'][key].keys():
-                        if self.data[sensor][dataset]['Transfer coefficients'][key][subkey].shape==(3,3):
-                            DS=TCGroup.create_dataset(subkey,(3,3,1),dtype=uncerval)
-                            for i in range(3):
-                                for j in range(3):
-                                    DS[i,j,0]=self.data[sensor][dataset]['Transfer coefficients'][key][subkey][i,j]
-                        else:
-                            print(sensor+' '+dataset+' '+'Transfer coefficients'+' '+key+' '+subkey+' '+'Have dimension different from (3,3) skiping')
-
-        self.datafile.flush()
-"""
+            self.datafile.flush()
 
 def processdata(i):
     sys.stdout.flush()
@@ -748,7 +691,7 @@ if __name__ == "__main__":
     shutil.copyfile(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB (copy).hdf5", r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
     hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
-    datafile = h5py.File(hdffilename, 'r+', driver='core')
+    datafile = h5py.File(hdffilename, 'r+')
 
     test = hdfmet4fofdatafile(datafile)
 
@@ -789,17 +732,14 @@ if __name__ == "__main__":
     i = np.arange(refidx.size)
     #i = np.arange(10)
     # i=np.arange(4)
-    #with multiprocessing.Pool(15) as p:
-    #    results = p.map(processdata, i)
-    ex=processdata(1)
-    ex.saveToHdf()
+    with multiprocessing.Pool(14) as p:
+        results = p.map(processdata, i)
 
     end = time.time()
     print(end - start)
     i = 0
 
-    datafile.close()
-"""
+
     freqs = np.zeros(movementtimes.shape[0])
     mag = np.zeros(movementtimes.shape[0])
     maguncer = np.zeros(movementtimes.shape[0])
@@ -809,20 +749,20 @@ if __name__ == "__main__":
     phaseuncer = np.zeros(movementtimes.shape[0])
     i = 0
     for ex in results:
-        mag[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Magnitude response'][2,2]['value']
-        maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Magnitude response'][2,2]['uncertainty']
-        examp[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Excitation amplitude'][2,2]['value']
+        if(i==99):
+            print("DEBUG")
+        mag[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Magnitude response']['value'][2,2]
+        maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Magnitude response']['uncertainty'][2,2]
+        examp[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Excitation amplitude']['value'][2,2]
         freqs[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][2]
         rawamp[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][0]
-        phase[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Phase response'][2,2]['value']
-        phaseuncer[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Phase response'][2,2]['uncertainty']
-        i = i + 1
-        print(ex.createHDFGroup())
+        phase[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Phase response']['value'][2,2]
+        phaseuncer[i] = ex.data[sensorname]['Acceleration']['Transfer coefficients']['Acceleration']['Phase response']['uncertainty'][2,2]
         ex.saveToHdf()
+        i = i + 1
     output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
               'phaseuncer': phaseuncer}
     df = pd.DataFrame(output)
-    """
     # for ex in results:
     #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
     #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
