@@ -680,6 +680,26 @@ def generateCEMrefIDXfromfreqs(freqs,removefreqs=np.array([2000.0])):
             i=i+1
     return refidx
 
+def getRAWTFFromExperiemnts(group,sensor,numeratorQuantity='Acceleration',denominatorQuantity='Acceleration',type='1D_Z'):
+    keys=group.keys()
+    length = len(keys)
+    originalshape=group[keys[0]+'/'+sensor+numeratorQuantity+'/Transfer coefficients/'+denominatorQuantity]['Magnitude response']['value'].shape
+    if type=='1D_X' or type=='1D_Y' or type=='1D_Z':
+        Freqs=np.zeros(length)
+        Magnitude=np.zeros(length)
+        Magnitudeuncer = np.zeros(length)
+        Phase = np.zeros(length)
+        PhaseUncer = np.zeros(length)
+    if type=='1D_X':
+        TCIdx=(1,1)
+    if type=='1D_Y':
+        TCIdx=(1,1)
+    if type == '1D_Z':
+        TCIdx = (2, 2)
+    if type == 'nD':
+        TCidx=(slice(None), slice(None))
+
+
 if __name__ == "__main__":
     start = time.time()
 
@@ -712,6 +732,7 @@ if __name__ == "__main__":
     # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
     #REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
     #                                                blocksinrow=100, blocksize=10000, plot=True)
+    """
     movementidx, movementtimes = test.detectmovment('RAWDATA/0x1fe40000_MPU_9250/Acceleration', 'RAWDATA/0x1fe40000_MPU_9250/Absolutetime', treshold=0.2,
                                                     blocksinrow=100, blocksize=100, plot=True)
     manager = multiprocessing.Manager()
@@ -808,3 +829,4 @@ if __name__ == "__main__":
     # coefs = np.empty([len(results), 3])
     # for ex in results:
     #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
+"""
