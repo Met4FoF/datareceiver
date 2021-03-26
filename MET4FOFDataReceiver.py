@@ -1167,6 +1167,7 @@ class HDF5Dumper:
         self.chunkswritten=0
         self.msgbufferd=0
         self.hieracy = dscp.gethieracyasdict()
+        self.startimewritten=False
         if  isinstance(file,str):
             self.f = h5py.File(file, 'a')
         elif isinstance(file,h5py._hl.files.File):
@@ -1252,7 +1253,6 @@ class HDF5Dumper:
                 with self.hdflock:
                     startIDX = (self.chunksize * self.chunkswritten)
                     print("Start index is "+str(startIDX))
-
                     self.Datasets['Absolutetime'].resize([1,startIDX+self.chunksize])
                     time = (self.buffer[1,:]* 1e9 + self.buffer[2,:startIDX+self.chunksize]).astype(np.uint64)
                     self.Datasets['Absolutetime'][:,startIDX:] = time
@@ -1260,8 +1260,10 @@ class HDF5Dumper:
                     self.Datasets['Absolutetime_uncertainty'].resize([1,startIDX+self.chunksize])
                     Absolutetime_uncertainty=self.buffer[3,:].astype(np.uint32)
                     self.Datasets['Absolutetime_uncertainty'][:,startIDX:]=Absolutetime_uncertainty
-
-
+                    if not self.startimewritten:
+                        self.group.attrs['Start_time']=time[0]
+                        self.group.attrs['Start_time_uncertainty'] = Absolutetime_uncertainty[0]
+                        self.startimewritten=True
                     self.Datasets['Sample_number'].resize([1,startIDX+self.chunksize])
                     samplenumbers=self.buffer[0,:].astype(np.uint32)
                     self.Datasets['Sample_number'][:,startIDX:] = samplenumbers
