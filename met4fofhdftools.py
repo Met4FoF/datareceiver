@@ -221,25 +221,25 @@ def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, refference_nam
         Datasets['Frequency'].attrs['Unit'] = "/hertz"
         Datasets['Frequency'].attrs['Physical_quantity'] = "Excitation frequency"
         Datasets['Frequency'][axis, :, "value"] = refcsv['frequency'].to_numpy()
-        Datasets['Repetition count'] = group.create_dataset('repetition count', ([refcsv.shape[0]]),
+        Datasets['Repetition_count'] = group.create_dataset('Repetition_count', ([refcsv.shape[0]]),
                                                             dtype='int32')
-        Datasets['Repetition count'].attrs['Unit'] = "/one"
-        Datasets['Repetition count'].attrs['Physical_quantity'] = "Repetition count"
-        Datasets['Repetition count'][:] = refcsv['loop'].to_numpy()
-        Datasets['Repetition count'].dims[0].label = 'Frequency'
-        Datasets['Repetition count'].dims[0].attach_scale(Datasets['Frequency'])
-        Datasets['Excitation amplitude'] = group.create_dataset('Excitation amplitude', ([3, refcsv.shape[0]]),
+        Datasets['Repetition_count'].attrs['Unit'] = "/one"
+        Datasets['Repetition_count'].attrs['Physical_quantity'] = "Repetition_count"
+        Datasets['Repetition_count'][:] = refcsv['loop'].to_numpy()
+        Datasets['Repetition_count'].dims[0].label = 'Frequency'
+        Datasets['Repetition_count'].dims[0].attach_scale(Datasets['Frequency'])
+        Datasets['Excitation_amplitude'] = group.create_dataset('Excitation_amplitude', ([3, refcsv.shape[0]]),
                                                                 dtype=uncerval)
-        Datasets['Excitation amplitude'][:]=np.NaN
-        Datasets['Excitation amplitude'].attrs['Unit'] = "\\metre\\second\\tothe{-2}"
-        Datasets['Excitation amplitude'].attrs['Physical_quantity'] = ["X Acceleration excitation amplitude",
-                                                                       "Y Acceleration excitation amplitude",
-                                                                       "Z Acceleration excitation amplitude"]
-        Datasets['Excitation amplitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
-        Datasets['Excitation amplitude'][axis, :, "value"] = refcsv['ex_amp'].to_numpy()
-        Datasets['Excitation amplitude'][axis, :, "uncertainty"] = refcsv['ex_amp_std'].to_numpy()
-        Datasets['Excitation amplitude'].dims[0].label = 'Frequency'
-        Datasets['Excitation amplitude'].dims[0].attach_scale(Datasets['Frequency'])
+        Datasets['Excitation_amplitude'][:]=np.NaN
+        Datasets['Excitation_amplitude'].attrs['Unit'] = "\\metre\\second\\tothe{-2}"
+        Datasets['Excitation_amplitude'].attrs['Physical_quantity'] = ["X Acceleration Excitation_amplitude",
+                                                                       "Y Acceleration Excitation_amplitude",
+                                                                       "Z Acceleration Excitation_amplitude"]
+        Datasets['Excitation_amplitude'].attrs['UNCERTAINTY_TYPE'] = "95% coverage gausian"
+        Datasets['Excitation_amplitude'][axis, :, "value"] = refcsv['ex_amp'].to_numpy()
+        Datasets['Excitation_amplitude'][axis, :, "uncertainty"] = refcsv['ex_amp_std'].to_numpy()
+        Datasets['Excitation_amplitude'].dims[0].label = 'Frequency'
+        Datasets['Excitation_amplitude'].dims[0].attach_scale(Datasets['Frequency'])
 
         Datasets['Phase'] = group.create_dataset('Phase', ([3, refcsv.shape[0]]),
                                                  dtype=uncerval)
@@ -444,7 +444,7 @@ if __name__ == "__main__":
     hdffilename=r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     for dumpfilename in dumpfilenames:
         if(dumpfilename.find('MPU_9250')!=-1):
-            adddumptohdf(dumpfilename, hdffilename, extractadcdata = False)
+            adddumptohdf(dumpfilename, hdffilename, extractadcdata = True)
         elif(dumpfilename.find('MS5837')!=-1):
             print("skipping MS5837 data")
         else:
