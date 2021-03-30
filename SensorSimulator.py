@@ -22,7 +22,7 @@ class SensorSimulator:
         paramupdateratehz=0.5,
     ):
         """
-        
+
 
         Parameters
         ----------

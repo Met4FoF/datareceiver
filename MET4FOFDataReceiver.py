@@ -21,7 +21,8 @@ import datetime
 import copy
 import json
 import h5py
-#from mpi4py import MPI #for multi threaded hdf writing on Windows MSMPI needs to be installed https://www.microsoft.com/en-us/download/details.aspx?id=57467
+
+# from mpi4py import MPI #for multi threaded hdf writing on Windows MSMPI needs to be installed https://www.microsoft.com/en-us/download/details.aspx?id=57467
 
 
 # for live plotting
@@ -31,12 +32,13 @@ import numpy as np
 # proptobuff message encoding
 from google.protobuf.internal.encoder import _VarintBytes
 from google.protobuf.internal.decoder import _DecodeVarint32
+
 CURR_DIR = os.path.dirname(os.path.abspath(__file__))
 print(CURR_DIR)
 sys.path.append(CURR_DIR)
 import messages_pb2
 
-#matplotlib.use('Qt5Agg')
+# matplotlib.use('Qt5Agg')
 
 
 class DataReceiver:
@@ -294,29 +296,37 @@ class DataReceiver:
         """
         self.socket.close()
 
-
-    def StartDumpingAllSensorsASCII(self,folder="data",filenamePrefix="",splittime=86400,force=False):
-        AllDscsCompleete=True
+    def StartDumpingAllSensorsASCII(
+        self, folder="data", filenamePrefix="", splittime=86400, force=False
+    ):
+        AllDscsCompleete = True
         for SensorID in self.AllSensors:
-            if self.AllSensors[SensorID].Description._complete==False:
-                print("Description incompelte for sensor "+str(self.AllSensors[SensorID]))
+            if self.AllSensors[SensorID].Description._complete == False:
+                print(
+                    "Description incompelte for sensor "
+                    + str(self.AllSensors[SensorID])
+                )
                 if force != True:
-                    AllDscsCompleete=False
-        if AllDscsCompleete==False:
-            raise RuntimeError("not all descriptions are complete dumping not started."
-                               " Wait until descriptions are complete or use function argument force=true to start anyway")
+                    AllDscsCompleete = False
+        if AllDscsCompleete == False:
+            raise RuntimeError(
+                "not all descriptions are complete dumping not started."
+                " Wait until descriptions are complete or use function argument force=true to start anyway"
+            )
         if folder != "":
             if not os.path.exists(folder):
                 os.makedirs(folder)
-        filenamePrefixwFolder=os.path.join(folder,filenamePrefix)
+        filenamePrefixwFolder = os.path.join(folder, filenamePrefix)
         for SensorID in self.AllSensors:
-            self.AllSensors[SensorID].StartDumpingToFileASCII(filenamePrefix=filenamePrefixwFolder,splittime=splittime)
+            self.AllSensors[SensorID].StartDumpingToFileASCII(
+                filenamePrefix=filenamePrefixwFolder, splittime=splittime
+            )
 
-
-    def StopDumpingAllSensorsASCII(self,):
+    def StopDumpingAllSensorsASCII(
+        self,
+    ):
         for SensorID in self.AllSensors:
             self.AllSensors[SensorID].StopDumpingToFileASCII()
-
 
 
 ### classes to proces sensor descriptions
@@ -366,10 +376,10 @@ class ChannelDescription:
         # self.Description['SpecialKey']
         return self.Description[key]
 
-    def __setitem__(self, key,item):
+    def __setitem__(self, key, item):
         # if key='SpecialKey':
         # self.Description['SpecialKey']
-        self.Description[key]=item
+        self.Description[key] = item
 
     def __repr__(self):
         """
@@ -465,7 +475,7 @@ class SensorDescription:
                             )
                     print("Channel " + str(i) + " read from dict")
                 except KeyError:
-                    #ok maybe the channels are coded as string
+                    # ok maybe the channels are coded as string
                     try:
                         channelDict = fromDict[str(i)]
                         for key in channelDict.keys():
@@ -543,7 +553,6 @@ class SensorDescription:
         # self.Description['SpecialKey']
         return self.Channels[key]
 
-
     def __repr__(self):
         return "Descripton of" + self.SensorName + hex(self.ID)
 
@@ -578,43 +587,70 @@ class SensorDescription:
         return self.Channels.keys()
 
     def gethieracyasdict(self):
-        self.hiracydict={}
-        channelsperdatasetcount={}
-        #loop over all channels to extract gropus and count elemnts perfomance dosent matter since only a few channels (16 max) are expected per description
+        self.hiracydict = {}
+        channelsperdatasetcount = {}
+        # loop over all channels to extract gropus and count elemnts perfomance dosent matter since only a few channels (16 max) are expected per description
         for Channel in self.Channels:
-            splittedhieracy=self.Channels[Channel]["HIERARCHY"].split('/')
-            if len(splittedhieracy) !=2:
+            splittedhieracy = self.Channels[Channel]["HIERARCHY"].split("/")
+            if len(splittedhieracy) != 2:
                 print(self.Channels[Channel]["HIERARCHY"])
-                raise ValueError("HIERACY "+Channel["HIERARCHY"]+" is invalide since it was no split in two parts")
+                raise ValueError(
+                    "HIERACY "
+                    + Channel["HIERARCHY"]
+                    + " is invalide since it was no split in two parts"
+                )
             try:
-                splittedhieracy[1]=int(splittedhieracy[1])
+                splittedhieracy[1] = int(splittedhieracy[1])
             except ValueError:
-                raise ValueError("HIERACY "+Channel["HIERARCHY"]+"is invalide since last part is not an integer")
+                raise ValueError(
+                    "HIERACY "
+                    + Channel["HIERARCHY"]
+                    + "is invalide since last part is not an integer"
+                )
             if splittedhieracy[0] in channelsperdatasetcount:
-                channelsperdatasetcount[splittedhieracy[0]]=channelsperdatasetcount[splittedhieracy[0]]+1
+                channelsperdatasetcount[splittedhieracy[0]] = (
+                    channelsperdatasetcount[splittedhieracy[0]] + 1
+                )
             else:
-                channelsperdatasetcount[splittedhieracy[0]] =1
+                channelsperdatasetcount[splittedhieracy[0]] = 1
         print(channelsperdatasetcount)
         for key in channelsperdatasetcount.keys():
-            self.hiracydict[key] = {'copymask':np.zeros(channelsperdatasetcount[key]).astype(int)}
-            self.hiracydict[key]['PHYSICAL_QUANTITY'] = [None] * channelsperdatasetcount[key]
-            self.hiracydict[key]['RESOLUTION'] = np.zeros(channelsperdatasetcount[key])
-            self.hiracydict[key]['MIN_SCALE'] = np.zeros(channelsperdatasetcount[key])
-            self.hiracydict[key]['MAX_SCALE'] = np.zeros(channelsperdatasetcount[key])
+            self.hiracydict[key] = {
+                "copymask": np.zeros(channelsperdatasetcount[key]).astype(int)
+            }
+            self.hiracydict[key]["PHYSICAL_QUANTITY"] = [
+                None
+            ] * channelsperdatasetcount[key]
+            self.hiracydict[key]["RESOLUTION"] = np.zeros(channelsperdatasetcount[key])
+            self.hiracydict[key]["MIN_SCALE"] = np.zeros(channelsperdatasetcount[key])
+            self.hiracydict[key]["MAX_SCALE"] = np.zeros(channelsperdatasetcount[key])
 
-        #print(self.hiracydict)
+        # print(self.hiracydict)
         # loop a second time infecient but don't care error check no nessary since done before
         # no align chann
         for Channel in self.Channels:
-            splittedhieracy=self.Channels[Channel]["HIERARCHY"].split('/')
-            self.hiracydict[splittedhieracy[0]]['copymask'][int(splittedhieracy[1])] = self.Channels[Channel]["CHID"] - 1
-            self.hiracydict[splittedhieracy[0]]['MIN_SCALE'][int(splittedhieracy[1])]=self.Channels[Channel]["MIN_SCALE"]
-            self.hiracydict[splittedhieracy[0]]['MAX_SCALE'][int(splittedhieracy[1])] = self.Channels[Channel]["MAX_SCALE"]
-            self.hiracydict[splittedhieracy[0]]['RESOLUTION'][int(splittedhieracy[1])] = self.Channels[Channel]["RESOLUTION"]
-            self.hiracydict[splittedhieracy[0]]['PHYSICAL_QUANTITY'][int(splittedhieracy[1])] = self.Channels[Channel]["PHYSICAL_QUANTITY"]
-            self.hiracydict[splittedhieracy[0]]['UNIT'] = self.Channels[Channel]["UNIT"]# tehy ned to have the same unit by definition so we will over write it mybe some times but will not change anny thing
+            splittedhieracy = self.Channels[Channel]["HIERARCHY"].split("/")
+            self.hiracydict[splittedhieracy[0]]["copymask"][int(splittedhieracy[1])] = (
+                self.Channels[Channel]["CHID"] - 1
+            )
+            self.hiracydict[splittedhieracy[0]]["MIN_SCALE"][
+                int(splittedhieracy[1])
+            ] = self.Channels[Channel]["MIN_SCALE"]
+            self.hiracydict[splittedhieracy[0]]["MAX_SCALE"][
+                int(splittedhieracy[1])
+            ] = self.Channels[Channel]["MAX_SCALE"]
+            self.hiracydict[splittedhieracy[0]]["RESOLUTION"][
+                int(splittedhieracy[1])
+            ] = self.Channels[Channel]["RESOLUTION"]
+            self.hiracydict[splittedhieracy[0]]["PHYSICAL_QUANTITY"][
+                int(splittedhieracy[1])
+            ] = self.Channels[Channel]["PHYSICAL_QUANTITY"]
+            self.hiracydict[splittedhieracy[0]]["UNIT"] = self.Channels[Channel][
+                "UNIT"
+            ]  # tehy ned to have the same unit by definition so we will over write it mybe some times but will not change anny thing
         print(self.hiracydict)
         return self.hiracydict
+
 
 class Sensor:
     """Class for Processing the Data from Datareceiver class. All instances of this class will be swaned in Datareceiver.AllSensors
@@ -666,7 +702,7 @@ class Sensor:
         3: "RESOLUTION",
         4: "MIN_SCALE",
         5: "MAX_SCALE",
-        6: "HIERARCHY"
+        6: "HIERARCHY",
     }
 
     def __init__(self, ID, BufferSize=25e5):
@@ -690,7 +726,7 @@ class Sensor:
         self.buffersize = BufferSize
         self.flags = {
             "DumpToFile": False,
-            "DumpToFileProto":False,
+            "DumpToFileProto": False,
             "DumpToFileASCII": False,
             "PrintProcessedCounts": True,
             "callbackSet": False,
@@ -717,12 +753,12 @@ class Sensor:
         self.thread.start()
         self.ProcessedPacekts = 0
         self.datarate = 0
-        self.timeoutOccured=False
+        self.timeoutOccured = False
         self.timeSinceLastPacket = 0
-        self.ASCIIDumpStartTime= None
-        self.ASCIIDumpFileCount=0
+        self.ASCIIDumpStartTime = None
+        self.ASCIIDumpFileCount = 0
         self.ASCIIDumpFilePrefix = ""
-        self.ASCIIDumpSplittime=86400
+        self.ASCIIDumpSplittime = 86400
         self.ASCIIDumpNextSplittime = 0
 
     def __repr__(self):
@@ -736,8 +772,7 @@ class Sensor:
         """
         return hex(self.Description.ID) + " " + self.Description.SensorName
 
-
-    def StartDumpingToFileASCII(self, filenamePrefix="",splittime=86400):
+    def StartDumpingToFileASCII(self, filenamePrefix="", splittime=86400):
         """
         Activate dumping Messages in a file ASCII encoded ; seperated.
 
@@ -751,32 +786,31 @@ class Sensor:
         None.
 
         """
-        self.ASCIIDumpFilePrefix=filenamePrefix
+        self.ASCIIDumpFilePrefix = filenamePrefix
         self.ASCIIDumpStartTime = time.monotonic()
         self.ASCIIDumpStartTimeLocal = datetime.datetime.now()
         self.flags["DumpToFileASCII"] = True
-        if splittime>0:
-            self.ASCIIDumpSplittime=splittime
+        if splittime > 0:
+            self.ASCIIDumpSplittime = splittime
         self.initNewASCIIFile()
-
 
     def initNewASCIIFile(self):
         try:
             self.DumpfileASCII.close()
         except:
-            pass #the file is not opend or existing and there fore cant be closed
+            pass  # the file is not opend or existing and there fore cant be closed
         filename = os.path.join(
-                self.ASCIIDumpFilePrefix,
-                self.ASCIIDumpStartTimeLocal.strftime("%Y%m%d%H%M%S")
-                + "_"
-                + str(self.Description.SensorName).replace(" ", "_")
-                + "_"
-                + hex(self.Description.ID)
-                + "_"
-                + str(self.ASCIIDumpFileCount).zfill(5)
-                + ".dump"
+            self.ASCIIDumpFilePrefix,
+            self.ASCIIDumpStartTimeLocal.strftime("%Y%m%d%H%M%S")
+            + "_"
+            + str(self.Description.SensorName).replace(" ", "_")
+            + "_"
+            + hex(self.Description.ID)
+            + "_"
+            + str(self.ASCIIDumpFileCount).zfill(5)
+            + ".dump",
         )
-        print("created new dumpfile "+filename)
+        print("created new dumpfile " + filename)
         self.DumpfileASCII = open(filename, "a")
         json.dump(self.Description.asDict(), self.DumpfileASCII)
         self.DumpfileASCII.write("\n")
@@ -784,8 +818,10 @@ class Sensor:
             "id;sample_number;unix_time;unix_time_nsecs;time_uncertainty;Data_01;Data_02;Data_03;Data_04;Data_05;Data_06;Data_07;Data_08;Data_09;Data_10;Data_11;Data_12;Data_13;Data_14;Data_15;Data_16\n"
         )
         self.params["DumpFileNameASCII"] = filename
-        self.ASCIIDumpFileCount=self.ASCIIDumpFileCount+1
-        self.ASCIIDumpNextSplittime=self.ASCIIDumpStartTime+self.ASCIIDumpSplittime*self.ASCIIDumpFileCount
+        self.ASCIIDumpFileCount = self.ASCIIDumpFileCount + 1
+        self.ASCIIDumpNextSplittime = (
+            self.ASCIIDumpStartTime + self.ASCIIDumpSplittime * self.ASCIIDumpFileCount
+        )
 
     def StopDumpingToFileASCII(self):
         """
@@ -902,7 +938,7 @@ class Sensor:
                                 0,
                                 1,
                                 2,
-                                6
+                                6,
                             ]:  # ["PHYSICAL_QUANTITY","UNIT","UNCERTAINTY_TYPE"]
                                 # print(Description)
                                 # string Processing
@@ -927,7 +963,7 @@ class Sensor:
                             if Description.Description_Type in [
                                 3,
                                 4,
-                                5
+                                5,
                             ]:  # ["RESOLUTION","MIN_SCALE","MAX_SCALE"]
                                 self.DescriptionsProcessed[
                                     Description.Description_Type
@@ -986,8 +1022,8 @@ class Sensor:
                             pass
                 if self.flags["DumpToFileASCII"]:
                     if message["Type"] == "Data":
-                        if time.monotonic()>self.ASCIIDumpNextSplittime:
-                            #TODO remove bug in this line
+                        if time.monotonic() > self.ASCIIDumpNextSplittime:
+                            # TODO remove bug in this line
                             self.initNewASCIIFile()
                         try:
                             self.__dumpMsgToFileASCII(message["ProtMsg"])
@@ -1002,14 +1038,14 @@ class Sensor:
                             print("-" * 60)
                             pass
             except Exception as inst:
-                 if self.timeoutOccured == False:
-                     self.timeoutOccured = True
-                     self.timeSinceLastPacket=0
-                 else:
-                     self.timeSinceLastPacket+=0.1
-    def donothingcb(self,message,Description):
-        pass
+                if self.timeoutOccured == False:
+                    self.timeoutOccured = True
+                    self.timeSinceLastPacket = 0
+                else:
+                    self.timeSinceLastPacket += 0.1
 
+    def donothingcb(self, message, Description):
+        pass
 
     def SetCallback(self, callback):
         """
@@ -1028,7 +1064,9 @@ class Sensor:
         self.flags["callbackSet"] = True
         self.callback = callback
 
-    def UnSetCallback(self,):
+    def UnSetCallback(
+        self,
+    ):
         """
         deactivates the callback.
 
@@ -1158,135 +1196,289 @@ class Sensor:
 
 
 class HDF5Dumper:
-    def __init__(self,dscp,file,hdfffilelock,chunksize=2048):
-        self.hdflock=hdfffilelock
+    def __init__(self, dscp, file, hdfffilelock, chunksize=2048):
+        self.hdflock = hdfffilelock
         self.pushlock = threading.Lock()
         self.dataframindexoffset = 4
-        self.chunksize=chunksize
-        self.buffer=np.zeros([20,self.chunksize])
-        self.chunkswritten=0
-        self.msgbufferd=0
+        self.chunksize = chunksize
+        self.buffer = np.zeros([20, self.chunksize])
+        self.chunkswritten = 0
+        self.msgbufferd = 0
         self.hieracy = dscp.gethieracyasdict()
-        self.startimewritten=False
-        if  isinstance(file,str):
-            self.f = h5py.File(file, 'a')
-        elif isinstance(file,h5py._hl.files.File):
-            self.f=file
+        self.startimewritten = False
+        if isinstance(file, str):
+            self.f = h5py.File(file, "a")
+        elif isinstance(file, h5py._hl.files.File):
+            self.f = file
         else:
-            raise TypeError("file needs to be either str or h5py._hl.files.File not "+str(type(file)))
+            raise TypeError(
+                "file needs to be either str or h5py._hl.files.File not "
+                + str(type(file))
+            )
         self.Datasets = {}
-        #chreate self.groups
+        # chreate self.groups
         with self.hdflock:
             try:
-                self.group=self.f["RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')]
-                warnings.warn("GROUP RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_')+" existed allready !")
-                self.Datasets['Absolutetime'] = self.group['Absolutetime']
-                self.Datasets['Absolutetime_uncertainty'] = self.group['Absolutetime_uncertainty']
-                self.Datasets['Sample_number'] = self.group['Sample_number']
-                if((self.Datasets['Absolutetime'].shape[1]/self.chunksize)/int(self.Datasets['Absolutetime'].shape[1]/self.chunksize)!=1):
-                    warnings.warn("CHECK Chunksize Actual datasize is not an multiple of the chunksize set",RuntimeWarning)
-                self.chunkswritten=int(self.Datasets['Absolutetime'].shape[1]/self.chunksize)
+                self.group = self.f[
+                    "RAWDATA/" + hex(dscp.ID) + "_" + dscp.SensorName.replace(" ", "_")
+                ]
+                warnings.warn(
+                    "GROUP RAWDATA/"
+                    + hex(dscp.ID)
+                    + "_"
+                    + dscp.SensorName.replace(" ", "_")
+                    + " existed allready !"
+                )
+                self.Datasets["Absolutetime"] = self.group["Absolutetime"]
+                self.Datasets["Absolutetime_uncertainty"] = self.group[
+                    "Absolutetime_uncertainty"
+                ]
+                self.Datasets["Sample_number"] = self.group["Sample_number"]
+                if (self.Datasets["Absolutetime"].shape[1] / self.chunksize) / int(
+                    self.Datasets["Absolutetime"].shape[1] / self.chunksize
+                ) != 1:
+                    warnings.warn(
+                        "CHECK Chunksize Actual datasize is not an multiple of the chunksize set",
+                        RuntimeWarning,
+                    )
+                self.chunkswritten = int(
+                    self.Datasets["Absolutetime"].shape[1] / self.chunksize
+                )
                 for groupname in self.hieracy:
                     self.Datasets[groupname] = self.group[groupname]
-                    if not self.Datasets[groupname].attrs['Unit'] == self.hieracy[groupname]['UNIT']:
-                        raise RuntimeError("Unit missmatch !" +self.Datasets[groupname].attrs['Unit'] +" "+ self.hieracy[groupname]['UNIT'])
+                    if (
+                        not self.Datasets[groupname].attrs["Unit"]
+                        == self.hieracy[groupname]["UNIT"]
+                    ):
+                        raise RuntimeError(
+                            "Unit missmatch !"
+                            + self.Datasets[groupname].attrs["Unit"]
+                            + " "
+                            + self.hieracy[groupname]["UNIT"]
+                        )
 
-                    if not (self.Datasets[groupname].attrs['Physical_quantity'] == self.hieracy[groupname]['PHYSICAL_QUANTITY']).all():
-                        raise RuntimeError("Physical_quantity missmatch !" +self.Datasets[groupname].attrs['Physical_quantity'] +" "+ self.hieracy[groupname]['PHYSICAL_QUANTITY'])
+                    if not (
+                        self.Datasets[groupname].attrs["Physical_quantity"]
+                        == self.hieracy[groupname]["PHYSICAL_QUANTITY"]
+                    ).all():
+                        raise RuntimeError(
+                            "Physical_quantity missmatch !"
+                            + self.Datasets[groupname].attrs["Physical_quantity"]
+                            + " "
+                            + self.hieracy[groupname]["PHYSICAL_QUANTITY"]
+                        )
 
-                    if not (self.Datasets[groupname].attrs['Resolution'] == self.hieracy[groupname]['RESOLUTION']).all():
-                        raise RuntimeError("Resolution  missmatch !" +self.Datasets[groupname].attrs['Resolution'] +" "+ self.hieracy[groupname]['RESOLUTION'])
+                    if not (
+                        self.Datasets[groupname].attrs["Resolution"]
+                        == self.hieracy[groupname]["RESOLUTION"]
+                    ).all():
+                        raise RuntimeError(
+                            "Resolution  missmatch !"
+                            + self.Datasets[groupname].attrs["Resolution"]
+                            + " "
+                            + self.hieracy[groupname]["RESOLUTION"]
+                        )
 
-                    if not (self.Datasets[groupname].attrs['Max_scale'] == self.hieracy[groupname]['MAX_SCALE']).all():
-                        raise RuntimeError("Max scale missmatch !" +self.Datasets[groupname].attrs['Max_scale'] +" "+ self.hieracy[groupname]['MAX_SCALE'])
+                    if not (
+                        self.Datasets[groupname].attrs["Max_scale"]
+                        == self.hieracy[groupname]["MAX_SCALE"]
+                    ).all():
+                        raise RuntimeError(
+                            "Max scale missmatch !"
+                            + self.Datasets[groupname].attrs["Max_scale"]
+                            + " "
+                            + self.hieracy[groupname]["MAX_SCALE"]
+                        )
 
-                    if not (self.Datasets[groupname].attrs['Min_scale'] == self.hieracy[groupname]['MIN_SCALE']).all():
-                        raise RuntimeError("Min scale missmatch !" +self.Datasets[groupname].attrs['Min_scale'] +" "+ self.hieracy[groupname]['MIN_SCALE'])
+                    if not (
+                        self.Datasets[groupname].attrs["Min_scale"]
+                        == self.hieracy[groupname]["MIN_SCALE"]
+                    ).all():
+                        raise RuntimeError(
+                            "Min scale missmatch !"
+                            + self.Datasets[groupname].attrs["Min_scale"]
+                            + " "
+                            + self.hieracy[groupname]["MIN_SCALE"]
+                        )
             except KeyError:
-                self.group = self.f.create_group("RAWDATA/"+hex(dscp.ID) + '_' + dscp.SensorName.replace(' ', '_'))
-                self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
-                self.group.attrs['Sensor_name'] = dscp.SensorName
-                self.group.attrs['Sensor_ID'] = dscp.ID
-                self.group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
-                self.Datasets['Absolutetime'] = self.group.create_dataset("Absolutetime", ([1, chunksize]), maxshape=(1, None),
-                                                            dtype='uint64', compression="gzip", shuffle=True)
-                self.Datasets['Absolutetime'].make_scale("Absoluitetime")
-                self.Datasets['Absolutetime'].attrs['Unit'] = "\\nano\\seconds"
-                self.Datasets['Absolutetime'].attrs['Physical_quantity'] = "Uinix_time_in_nanoseconds"
-                self.Datasets['Absolutetime'].attrs['Resolution'] = np.exp2(64)
-                self.Datasets['Absolutetime'].attrs['Max_scale'] = np.exp2(64)
-                self.Datasets['Absolutetime'].attrs['Min_scale'] = 0
-                self.Datasets['Absolutetime_uncertainty'] = self.group.create_dataset("Absolutetime_uncertainty", ([1, chunksize]), maxshape=(1, None),
-                                                             dtype='uint32', compression="gzip", shuffle=True)
-                self.Datasets['Absolutetime_uncertainty'].attrs['Unit'] = "\\nano\\seconds"
-                self.Datasets['Absolutetime_uncertainty'].attrs['Physical_quantity'] = "Uinix_time_uncertainty_in_nanosconds"
-                self.Datasets['Absolutetime_uncertainty'].attrs['Resolution'] = np.exp2(32)
-                self.Datasets['Absolutetime_uncertainty'].attrs['Max_scale'] = np.exp2(32)
-                self.Datasets['Absolutetime_uncertainty'].attrs['Min_scale'] = 0
-                self.Datasets['Sample_number'] = self.group.create_dataset("Sample_number", ([1, chunksize]), maxshape=(1, None),
-                                                             dtype='uint32', compression="gzip", shuffle=True)
-                self.Datasets['Sample_number'].attrs['Unit'] = "\\one"
-                self.Datasets['Sample_number'].attrs['Physical_quantity'] = "Sample_number"
-                self.Datasets['Sample_number'].attrs['Resolution'] = np.exp2(32)
-                self.Datasets['Sample_number'].attrs['Max_scale'] = np.exp2(32)
-                self.Datasets['Sample_number'].attrs['Min_scale'] = 0
+                self.group = self.f.create_group(
+                    "RAWDATA/" + hex(dscp.ID) + "_" + dscp.SensorName.replace(" ", "_")
+                )
+                self.group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
+                self.group.attrs["Sensor_name"] = dscp.SensorName
+                self.group.attrs["Sensor_ID"] = dscp.ID
+                self.group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
+                self.Datasets["Absolutetime"] = self.group.create_dataset(
+                    "Absolutetime",
+                    ([1, chunksize]),
+                    maxshape=(1, None),
+                    dtype="uint64",
+                    compression="gzip",
+                    shuffle=True,
+                )
+                self.Datasets["Absolutetime"].make_scale("Absoluitetime")
+                self.Datasets["Absolutetime"].attrs["Unit"] = "\\nano\\seconds"
+                self.Datasets["Absolutetime"].attrs[
+                    "Physical_quantity"
+                ] = "Uinix_time_in_nanoseconds"
+                self.Datasets["Absolutetime"].attrs["Resolution"] = np.exp2(64)
+                self.Datasets["Absolutetime"].attrs["Max_scale"] = np.exp2(64)
+                self.Datasets["Absolutetime"].attrs["Min_scale"] = 0
+                self.Datasets["Absolutetime_uncertainty"] = self.group.create_dataset(
+                    "Absolutetime_uncertainty",
+                    ([1, chunksize]),
+                    maxshape=(1, None),
+                    dtype="uint32",
+                    compression="gzip",
+                    shuffle=True,
+                )
+                self.Datasets["Absolutetime_uncertainty"].attrs[
+                    "Unit"
+                ] = "\\nano\\seconds"
+                self.Datasets["Absolutetime_uncertainty"].attrs[
+                    "Physical_quantity"
+                ] = "Uinix_time_uncertainty_in_nanosconds"
+                self.Datasets["Absolutetime_uncertainty"].attrs["Resolution"] = np.exp2(
+                    32
+                )
+                self.Datasets["Absolutetime_uncertainty"].attrs["Max_scale"] = np.exp2(
+                    32
+                )
+                self.Datasets["Absolutetime_uncertainty"].attrs["Min_scale"] = 0
+                self.Datasets["Sample_number"] = self.group.create_dataset(
+                    "Sample_number",
+                    ([1, chunksize]),
+                    maxshape=(1, None),
+                    dtype="uint32",
+                    compression="gzip",
+                    shuffle=True,
+                )
+                self.Datasets["Sample_number"].attrs["Unit"] = "\\one"
+                self.Datasets["Sample_number"].attrs[
+                    "Physical_quantity"
+                ] = "Sample_number"
+                self.Datasets["Sample_number"].attrs["Resolution"] = np.exp2(32)
+                self.Datasets["Sample_number"].attrs["Max_scale"] = np.exp2(32)
+                self.Datasets["Sample_number"].attrs["Min_scale"] = 0
                 for groupname in self.hieracy:
-                    vectorlength = len(self.hieracy[groupname]['copymask'])
-                    self.Datasets[groupname] = self.group.create_dataset(groupname, ([vectorlength, chunksize]), maxshape=(3, None),
-                                                           dtype='float32', compression="gzip",
-                                                           shuffle=True)  # compression="gzip",shuffle=True,
+                    vectorlength = len(self.hieracy[groupname]["copymask"])
+                    self.Datasets[groupname] = self.group.create_dataset(
+                        groupname,
+                        ([vectorlength, chunksize]),
+                        maxshape=(3, None),
+                        dtype="float32",
+                        compression="gzip",
+                        shuffle=True,
+                    )  # compression="gzip",shuffle=True,
                     self.Datasets[groupname].dims[0].label = "Absoluitetime"
-                    self.Datasets[groupname].dims[0].attach_scale(self.Datasets['Absolutetime'])
-                    self.Datasets[groupname].attrs['Unit'] = self.hieracy[groupname]['UNIT']
-                    self.Datasets[groupname].attrs['Physical_quantity'] = self.hieracy[groupname]['PHYSICAL_QUANTITY']
-                    self.Datasets[groupname].attrs['Resolution'] = self.hieracy[groupname]['RESOLUTION']
-                    self.Datasets[groupname].attrs['Max_scale'] = self.hieracy[groupname]['MAX_SCALE']
-                    self.Datasets[groupname].attrs['Min_scale'] = self.hieracy[groupname]['MIN_SCALE']
+                    self.Datasets[groupname].dims[0].attach_scale(
+                        self.Datasets["Absolutetime"]
+                    )
+                    self.Datasets[groupname].attrs["Unit"] = self.hieracy[groupname][
+                        "UNIT"
+                    ]
+                    self.Datasets[groupname].attrs["Physical_quantity"] = self.hieracy[
+                        groupname
+                    ]["PHYSICAL_QUANTITY"]
+                    self.Datasets[groupname].attrs["Resolution"] = self.hieracy[
+                        groupname
+                    ]["RESOLUTION"]
+                    self.Datasets[groupname].attrs["Max_scale"] = self.hieracy[
+                        groupname
+                    ]["MAX_SCALE"]
+                    self.Datasets[groupname].attrs["Min_scale"] = self.hieracy[
+                        groupname
+                    ]["MIN_SCALE"]
                 self.f.flush()
 
-
-    def pushmsg(self,message,Description):
+    def pushmsg(self, message, Description):
         with self.pushlock:
-            self.buffer[:,self.msgbufferd]=np.array([message.sample_number,message.unix_time,message.unix_time_nsecs,message.time_uncertainty,message.Data_01,message.Data_02,message.Data_03,message.Data_04,message.Data_05,message.Data_06,message.Data_07,message.Data_08,message.Data_09,message.Data_10,message.Data_11,message.Data_12,message.Data_13,message.Data_14,message.Data_15,message.Data_16])
-            self.msgbufferd=self.msgbufferd+1
-            if self.msgbufferd==self.chunksize:
+            self.buffer[:, self.msgbufferd] = np.array(
+                [
+                    message.sample_number,
+                    message.unix_time,
+                    message.unix_time_nsecs,
+                    message.time_uncertainty,
+                    message.Data_01,
+                    message.Data_02,
+                    message.Data_03,
+                    message.Data_04,
+                    message.Data_05,
+                    message.Data_06,
+                    message.Data_07,
+                    message.Data_08,
+                    message.Data_09,
+                    message.Data_10,
+                    message.Data_11,
+                    message.Data_12,
+                    message.Data_13,
+                    message.Data_14,
+                    message.Data_15,
+                    message.Data_16,
+                ]
+            )
+            self.msgbufferd = self.msgbufferd + 1
+            if self.msgbufferd == self.chunksize:
                 with self.hdflock:
-                    startIDX = (self.chunksize * self.chunkswritten)
-                    print("Start index is "+str(startIDX))
-                    self.Datasets['Absolutetime'].resize([1,startIDX+self.chunksize])
-                    time = (self.buffer[1,:]* 1e9 + self.buffer[2,:startIDX+self.chunksize]).astype(np.uint64)
-                    self.Datasets['Absolutetime'][:,startIDX:] = time
+                    startIDX = self.chunksize * self.chunkswritten
+                    print("Start index is " + str(startIDX))
+                    self.Datasets["Absolutetime"].resize([1, startIDX + self.chunksize])
+                    time = (
+                        self.buffer[1, :] * 1e9
+                        + self.buffer[2, : startIDX + self.chunksize]
+                    ).astype(np.uint64)
+                    self.Datasets["Absolutetime"][:, startIDX:] = time
 
-                    self.Datasets['Absolutetime_uncertainty'].resize([1,startIDX+self.chunksize])
-                    Absolutetime_uncertainty=self.buffer[3,:].astype(np.uint32)
-                    self.Datasets['Absolutetime_uncertainty'][:,startIDX:]=Absolutetime_uncertainty
+                    self.Datasets["Absolutetime_uncertainty"].resize(
+                        [1, startIDX + self.chunksize]
+                    )
+                    Absolutetime_uncertainty = self.buffer[3, :].astype(np.uint32)
+                    self.Datasets["Absolutetime_uncertainty"][
+                        :, startIDX:
+                    ] = Absolutetime_uncertainty
                     if not self.startimewritten:
-                        self.group.attrs['Start_time']=time[0]
-                        self.group.attrs['Start_time_uncertainty'] = Absolutetime_uncertainty[0]
-                        self.startimewritten=True
-                    self.Datasets['Sample_number'].resize([1,startIDX+self.chunksize])
-                    samplenumbers=self.buffer[0,:].astype(np.uint32)
-                    self.Datasets['Sample_number'][:,startIDX:] = samplenumbers
+                        self.group.attrs["Start_time"] = time[0]
+                        self.group.attrs[
+                            "Start_time_uncertainty"
+                        ] = Absolutetime_uncertainty[0]
+                        self.startimewritten = True
+                    self.Datasets["Sample_number"].resize(
+                        [1, startIDX + self.chunksize]
+                    )
+                    samplenumbers = self.buffer[0, :].astype(np.uint32)
+                    self.Datasets["Sample_number"][:, startIDX:] = samplenumbers
 
                     for groupname in self.hieracy:
-                        vectorlength = len(self.hieracy[groupname]['copymask'])
-                        self.Datasets[groupname].resize([vectorlength,startIDX+self.chunksize])
-                        data=self.buffer[(self.hieracy[groupname]['copymask']+self.dataframindexoffset),:].astype('float32')
-                        self.Datasets[groupname][:,startIDX:]=data
-                    #self.f.flush()
-                    self.msgbufferd=0
-                    self.chunkswritten=self.chunkswritten+1
+                        vectorlength = len(self.hieracy[groupname]["copymask"])
+                        self.Datasets[groupname].resize(
+                            [vectorlength, startIDX + self.chunksize]
+                        )
+                        data = self.buffer[
+                            (
+                                self.hieracy[groupname]["copymask"]
+                                + self.dataframindexoffset
+                            ),
+                            :,
+                        ].astype("float32")
+                        self.Datasets[groupname][:, startIDX:] = data
+                    # self.f.flush()
+                    self.msgbufferd = 0
+                    self.chunkswritten = self.chunkswritten + 1
+
 
 def startdumpingallsensorshdf(filename):
     hdfdumplock = threading.Lock()
-    hdfdumpfile = h5py.File(filename, 'a')
-    hdfdumper=[]
+    hdfdumpfile = h5py.File(filename, "a")
+    hdfdumper = []
     for SensorID in DR.AllSensors:
-        hdfdumper.append(HDF5Dumper(DR.AllSensors[SensorID].Description,hdfdumpfile,hdfdumplock))
+        hdfdumper.append(
+            HDF5Dumper(DR.AllSensors[SensorID].Description, hdfdumpfile, hdfdumplock)
+        )
         DR.AllSensors[SensorID].SetCallback(hdfdumper[-1].pushmsg)
-    return hdfdumper,hdfdumpfile
+    return hdfdumper, hdfdumpfile
 
-def stopdumpingallsensorshdf(dumperlist,dumpfile):
+
+def stopdumpingallsensorshdf(dumperlist, dumpfile):
     for SensorID in DR.AllSensors:
         DR.AllSensors[SensorID].UnSetCallback()
     for dumper in dumperlist:
@@ -1297,4 +1489,4 @@ def stopdumpingallsensorshdf(dumperlist,dumpfile):
 
 if __name__ == "__main__":
     DR = DataReceiver("192.168.0.200", 7654)
-    #hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
+    # hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')

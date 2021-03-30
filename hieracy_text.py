@@ -3,6 +3,7 @@ import pandas
 import h5py
 import json
 import os
+
 ### classes to proces sensor descriptions
 class AliasDict(dict):
     def __init__(self, *args, **kwargs):
@@ -50,10 +51,10 @@ class ChannelDescription:
         # self.Description['SpecialKey']
         return self.Description[key]
 
-    def __setitem__(self, key,item):
+    def __setitem__(self, key, item):
         # if key='SpecialKey':
         # self.Description['SpecialKey']
-        self.Description[key]=item
+        self.Description[key] = item
 
     def __repr__(self):
         """
@@ -149,7 +150,7 @@ class SensorDescription:
                             )
                     print("Channel " + str(i) + " read from dict")
                 except KeyError:
-                    #ok maybe the channels are coded as string
+                    # ok maybe the channels are coded as string
                     try:
                         channelDict = fromDict[str(i)]
                         for key in channelDict.keys():
@@ -227,7 +228,6 @@ class SensorDescription:
         # self.Description['SpecialKey']
         return self.Channels[key]
 
-
     def __repr__(self):
         return "Descripton of" + self.SensorName + hex(self.ID)
 
@@ -262,95 +262,144 @@ class SensorDescription:
         return self.Channels.keys()
 
     def gethieracyasdict(self):
-        self.hiracydict={}
-        channelsperdatasetcount={}
-        #loop over all channels to extract gropus and count elemnts perfomance dosent matter since only a few channels (16 max) are expected per description
+        self.hiracydict = {}
+        channelsperdatasetcount = {}
+        # loop over all channels to extract gropus and count elemnts perfomance dosent matter since only a few channels (16 max) are expected per description
         for Channel in self.Channels:
-            splittedhieracy=self.Channels[Channel]["HIERARCHY"].split('/')
-            if len(splittedhieracy) !=2:
-                raise ValueError("HIERACY "+Channel["HIERARCHY"]+" is invalide since it was no split in two parts")
+            splittedhieracy = self.Channels[Channel]["HIERARCHY"].split("/")
+            if len(splittedhieracy) != 2:
+                raise ValueError(
+                    "HIERACY "
+                    + Channel["HIERARCHY"]
+                    + " is invalide since it was no split in two parts"
+                )
             try:
-                splittedhieracy[1]=int(splittedhieracy[1])
+                splittedhieracy[1] = int(splittedhieracy[1])
             except ValueError:
-                raise ValueError("HIERACY "+Channel["HIERARCHY"]+"is invalide since last part is not an integer")
+                raise ValueError(
+                    "HIERACY "
+                    + Channel["HIERARCHY"]
+                    + "is invalide since last part is not an integer"
+                )
             if splittedhieracy[0] in channelsperdatasetcount:
-                channelsperdatasetcount[splittedhieracy[0]]=channelsperdatasetcount[splittedhieracy[0]]+1
+                channelsperdatasetcount[splittedhieracy[0]] = (
+                    channelsperdatasetcount[splittedhieracy[0]] + 1
+                )
             else:
-                channelsperdatasetcount[splittedhieracy[0]] =1
+                channelsperdatasetcount[splittedhieracy[0]] = 1
         print(channelsperdatasetcount)
         for key in channelsperdatasetcount.keys():
-            self.hiracydict[key] = {'copymask':np.zeros(channelsperdatasetcount[key]).astype(int)}
-            self.hiracydict[key]['PHYSICAL_QUANTITY'] = [None] * channelsperdatasetcount[key]
-            self.hiracydict[key]['RESOLUTION'] = np.zeros(channelsperdatasetcount[key])
-            self.hiracydict[key]['MIN_SCALE'] = np.zeros(channelsperdatasetcount[key])
-            self.hiracydict[key]['MAX_SCALE'] = np.zeros(channelsperdatasetcount[key])
+            self.hiracydict[key] = {
+                "copymask": np.zeros(channelsperdatasetcount[key]).astype(int)
+            }
+            self.hiracydict[key]["PHYSICAL_QUANTITY"] = [
+                None
+            ] * channelsperdatasetcount[key]
+            self.hiracydict[key]["RESOLUTION"] = np.zeros(channelsperdatasetcount[key])
+            self.hiracydict[key]["MIN_SCALE"] = np.zeros(channelsperdatasetcount[key])
+            self.hiracydict[key]["MAX_SCALE"] = np.zeros(channelsperdatasetcount[key])
 
-        #print(self.hiracydict)
+        # print(self.hiracydict)
         # loop a second time infecient but don't care error check no nessary since done before
         # no align chann
         for Channel in self.Channels:
-            splittedhieracy=self.Channels[Channel]["HIERARCHY"].split('/')
-            self.hiracydict[splittedhieracy[0]]['copymask'][int(splittedhieracy[1])] = self.Channels[Channel]["CHID"] - 1
-            self.hiracydict[splittedhieracy[0]]['MIN_SCALE'][int(splittedhieracy[1])]=self.Channels[Channel]["MIN_SCALE"]
-            self.hiracydict[splittedhieracy[0]]['MAX_SCALE'][int(splittedhieracy[1])] = self.Channels[Channel]["MAX_SCALE"]
-            self.hiracydict[splittedhieracy[0]]['RESOLUTION'][int(splittedhieracy[1])] = self.Channels[Channel]["RESOLUTION"]
-            self.hiracydict[splittedhieracy[0]]['PHYSICAL_QUANTITY'][int(splittedhieracy[1])] = self.Channels[Channel]["PHYSICAL_QUANTITY"]
-            self.hiracydict[splittedhieracy[0]]['UNIT'] = self.Channels[Channel]["UNIT"]# tehy ned to have the same unit by definition so we will over write it mybe some times but will not change anny thing
+            splittedhieracy = self.Channels[Channel]["HIERARCHY"].split("/")
+            self.hiracydict[splittedhieracy[0]]["copymask"][int(splittedhieracy[1])] = (
+                self.Channels[Channel]["CHID"] - 1
+            )
+            self.hiracydict[splittedhieracy[0]]["MIN_SCALE"][
+                int(splittedhieracy[1])
+            ] = self.Channels[Channel]["MIN_SCALE"]
+            self.hiracydict[splittedhieracy[0]]["MAX_SCALE"][
+                int(splittedhieracy[1])
+            ] = self.Channels[Channel]["MAX_SCALE"]
+            self.hiracydict[splittedhieracy[0]]["RESOLUTION"][
+                int(splittedhieracy[1])
+            ] = self.Channels[Channel]["RESOLUTION"]
+            self.hiracydict[splittedhieracy[0]]["PHYSICAL_QUANTITY"][
+                int(splittedhieracy[1])
+            ] = self.Channels[Channel]["PHYSICAL_QUANTITY"]
+            self.hiracydict[splittedhieracy[0]]["UNIT"] = self.Channels[Channel][
+                "UNIT"
+            ]  # tehy ned to have the same unit by definition so we will over write it mybe some times but will not change anny thing
         print(self.hiracydict)
         return self.hiracydict
+
 
 def convertdumpfile(dumpfile):
     with open(dumpfile) as f:
         jsonstring = f.readline()
-        dscp=json.loads(jsonstring)
+        dscp = json.loads(jsonstring)
     print(dscp)
-    df=pandas.read_csv(dumpfile,sep=';',header=1)
-    hdf5filename=dumpfile.replace('csv','hdf5')
-    #hdffile = h5py.File(hdf5filename, 'a')
-    #group=hdffile.create_group(hex(dscp[ID]))
-    return dscp,df
-
+    df = pandas.read_csv(dumpfile, sep=";", header=1)
+    hdf5filename = dumpfile.replace("csv", "hdf5")
+    # hdffile = h5py.File(hdf5filename, 'a')
+    # group=hdffile.create_group(hex(dscp[ID]))
+    return dscp, df
 
 
 if __name__ == "__main__":
 
     dscpstr, df = convertdumpfile(
-        r"D:\datareceiver\data\20201012133232_MPU_9250_0x60ad0100_00000.dump")
-    dscp=SensorDescription(fromDict=dscpstr)
-    hieracy=dscp.gethieracyasdict()
+        r"D:\datareceiver\data\20201012133232_MPU_9250_0x60ad0100_00000.dump"
+    )
+    dscp = SensorDescription(fromDict=dscpstr)
+    hieracy = dscp.gethieracyasdict()
     os.remove("test2.hdf5")
-    f = h5py.File(r"test2.hdf5",'a')
-    rawvalues=df.values.transpose()
-    dataframindexoffset=5
-    Datasets={}
-    chunksize=1000
-    group=f.create_group(hex(dscp.ID)+'_'+dscp.SensorName.replace(' ','_'))
-    group.attrs['Data_description_json']=json.dumps(dscp.asDict())
-    group.attrs['Sensor_name'] = dscp.SensorName
-    group.attrs['Sensor_ID'] = dscp.ID
-    group.attrs['Data_description_json'] = json.dumps(dscp.asDict())
-    Datasets['Absolutetime'] =group.create_dataset("Absolutetime",([1,chunksize]),maxshape=(1,None),
-                          dtype='float64',compression="gzip",shuffle=True)
-    Datasets['Absolutetime'].resize([1, rawvalues.shape[1]])
-    time=rawvalues[2]+rawvalues[3]*1e-9
-    Datasets['Absolutetime'][...] =time.astype(np.float64)
-    Datasets['Absolutetime'].make_scale("Absoluitetime")
-    Datasets['Sample_number'] =group.create_dataset("Sample_number",([1,chunksize]),maxshape=(1,None),
-                          dtype='float64',compression="gzip",shuffle=True)
-    Datasets['Sample_number'].resize([1, rawvalues.shape[1]])
-    Datasets['Sample_number'][...] =rawvalues[1].astype(np.uint32)
+    f = h5py.File(r"test2.hdf5", "a")
+    rawvalues = df.values.transpose()
+    dataframindexoffset = 5
+    Datasets = {}
+    chunksize = 1000
+    group = f.create_group(hex(dscp.ID) + "_" + dscp.SensorName.replace(" ", "_"))
+    group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
+    group.attrs["Sensor_name"] = dscp.SensorName
+    group.attrs["Sensor_ID"] = dscp.ID
+    group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
+    Datasets["Absolutetime"] = group.create_dataset(
+        "Absolutetime",
+        ([1, chunksize]),
+        maxshape=(1, None),
+        dtype="float64",
+        compression="gzip",
+        shuffle=True,
+    )
+    Datasets["Absolutetime"].resize([1, rawvalues.shape[1]])
+    time = rawvalues[2] + rawvalues[3] * 1e-9
+    Datasets["Absolutetime"][...] = time.astype(np.float64)
+    Datasets["Absolutetime"].make_scale("Absoluitetime")
+    Datasets["Sample_number"] = group.create_dataset(
+        "Sample_number",
+        ([1, chunksize]),
+        maxshape=(1, None),
+        dtype="float64",
+        compression="gzip",
+        shuffle=True,
+    )
+    Datasets["Sample_number"].resize([1, rawvalues.shape[1]])
+    Datasets["Sample_number"][...] = rawvalues[1].astype(np.uint32)
     for Groupname in hieracy:
-        vectorlength=len(hieracy[Groupname]['copymask'])
-        Datasets[Groupname]=group.create_dataset(Groupname,([vectorlength,chunksize]),maxshape=(3,None),
-                          dtype='float32',compression="gzip",shuffle=True)#compression="gzip",shuffle=True,
-        Datasets[Groupname].resize([vectorlength,rawvalues.shape[1]])
-        Datasets[Groupname][...]=rawvalues[hieracy[Groupname]['copymask']+dataframindexoffset].astype('float32')
+        vectorlength = len(hieracy[Groupname]["copymask"])
+        Datasets[Groupname] = group.create_dataset(
+            Groupname,
+            ([vectorlength, chunksize]),
+            maxshape=(3, None),
+            dtype="float32",
+            compression="gzip",
+            shuffle=True,
+        )  # compression="gzip",shuffle=True,
+        Datasets[Groupname].resize([vectorlength, rawvalues.shape[1]])
+        Datasets[Groupname][...] = rawvalues[
+            hieracy[Groupname]["copymask"] + dataframindexoffset
+        ].astype("float32")
         Datasets[Groupname].dims[0].label = "Absoluitetime"
-        Datasets[Groupname].dims[0].attach_scale(Datasets['Absolutetime'])
-        Datasets[Groupname].attrs['Unit']=hieracy[Groupname]['UNIT']
-        Datasets[Groupname].attrs['Physical_quantity'] = hieracy[Groupname]['PHYSICAL_QUANTITY']
-        Datasets[Groupname].attrs['Resolution'] = hieracy[Groupname]['RESOLUTION']
-        Datasets[Groupname].attrs['Max_scale'] = hieracy[Groupname]['MAX_SCALE']
-        Datasets[Groupname].attrs['Min_scale'] = hieracy[Groupname]['MIN_SCALE']
+        Datasets[Groupname].dims[0].attach_scale(Datasets["Absolutetime"])
+        Datasets[Groupname].attrs["Unit"] = hieracy[Groupname]["UNIT"]
+        Datasets[Groupname].attrs["Physical_quantity"] = hieracy[Groupname][
+            "PHYSICAL_QUANTITY"
+        ]
+        Datasets[Groupname].attrs["Resolution"] = hieracy[Groupname]["RESOLUTION"]
+        Datasets[Groupname].attrs["Max_scale"] = hieracy[Groupname]["MAX_SCALE"]
+        Datasets[Groupname].attrs["Min_scale"] = hieracy[Groupname]["MIN_SCALE"]
     f.flush()
     f.close()

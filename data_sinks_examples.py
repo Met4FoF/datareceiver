@@ -1,4 +1,3 @@
-
 # USAGE
 # create Buffer instance with ExampleBuffer=genericPlotter:(1000)
 # Bind Sensor Callback to Buffer PushData function
@@ -6,7 +5,7 @@
 # wait until buffer is Full
 # Data can be acessed over the atribute ExampleBuffer.Buffer[0]
 class genericPlotter:
-    def __init__(self, BufferLength,pushDevider=1):
+    def __init__(self, BufferLength, pushDevider=1):
         """
         Creates an Datebuffer witch is plotting the Sensor data after the buffer is full, one Subplot for every unique physical unit [°C,deg/s,m/s^2,µT]. in the data stream
 
@@ -22,11 +21,11 @@ class genericPlotter:
         """
         self.BufferLength = BufferLength
         self.Buffer = [None] * BufferLength
-        self.pushDevider=pushDevider
+        self.pushDevider = pushDevider
         self.Datasetpushed = 0
-        self.Devidercount=0
+        self.Devidercount = 0
         self.FullmesaggePrinted = False
-        self.flags = {"callbackSet" : False}
+        self.flags = {"callbackSet": False}
         # TODO change to actual time values""
         self.x = np.arange(BufferLength)
         self.Y = np.zeros([16, BufferLength])
@@ -50,7 +49,7 @@ class genericPlotter:
         plt.ion()
         # setting up subplot
         self.fig, self.ax = plt.subplots(self.Numofplots, 1, sharex=True)
-        self.Plots=[None]*self.Numofplots
+        self.Plots = [None] * self.Numofplots
         for ax in self.ax:
             ax.set_xlim(0, self.BufferLength)
         self.fig.suptitle(
@@ -118,7 +117,7 @@ class genericPlotter:
         None.
 
         """
-        if self.Devidercount%self.pushDevider==0:
+        if self.Devidercount % self.pushDevider == 0:
             if self.Datasetpushed == 0:
                 self.Description = copy.deepcopy(Description)
                 # ok fig was not inited do it now
@@ -164,30 +163,41 @@ class genericPlotter:
                     i = i + 1
                 # self.line1.set_ydata(self.y1)
                 self.fig.canvas.draw()
-                time=np.zeros(self.BufferLength)
+                time = np.zeros(self.BufferLength)
                 time_uncer = np.zeros(self.BufferLength)
 
-                #_______ Peprare Data reshaping for agent comunication ________
+                # _______ Peprare Data reshaping for agent comunication ________
                 #                     generate time index
                 for i in range(self.BufferLength):
-                    time[i]=self.Buffer[i].unix_time+self.Buffer[i].unix_time_nsecs*10e-9
-                    time_uncer[i]=self.Buffer[i].time_uncertainty*10e-9
-                self.index=np.array(time)
-                activeChannels=self.Description.getActiveChannelsIDs()
-                OutDataDescripton={}
+                    time[i] = (
+                        self.Buffer[i].unix_time
+                        + self.Buffer[i].unix_time_nsecs * 10e-9
+                    )
+                    time_uncer[i] = self.Buffer[i].time_uncertainty * 10e-9
+                self.index = np.array(time)
+                activeChannels = self.Description.getActiveChannelsIDs()
+                OutDataDescripton = {}
                 for ac in activeChannels:
-                    OutDataDescripton[ac-1]=self.Description[ac]
-                coppyMask=np.array(list(activeChannels))
+                    OutDataDescripton[ac - 1] = self.Description[ac]
+                coppyMask = np.array(list(activeChannels))
                 timeDescription = {
-                    'PHYSICAL_QUANTITY' : "Time",
-                    'UNIT' : "unixSeconds",
+                    "PHYSICAL_QUANTITY": "Time",
+                    "UNIT": "unixSeconds",
                     "UNCERTAINTY_TYPE": "2sigma convidence",
                 }
-                OutDescription={"Index":[timeDescription],"Data":OutDataDescripton,"TimeStamp":self.index[0]}
-                coppyMask =coppyMask-1
+                OutDescription = {
+                    "Index": [timeDescription],
+                    "Data": OutDataDescripton,
+                    "TimeStamp": self.index[0],
+                }
+                coppyMask = coppyMask - 1
                 if self.flags["callbackSet"]:
                     try:
-                        self.callback(Index=self.index, Data = self.Y[coppyMask, :], Descripton = OutDescription)
+                        self.callback(
+                            Index=self.index,
+                            Data=self.Y[coppyMask, :],
+                            Descripton=OutDescription,
+                        )
                     except Exception:
                         print(
                             " Generic Plotter for  id:"
@@ -201,7 +211,7 @@ class genericPlotter:
                 # flush Buffer
                 self.Buffer = [None] * self.BufferLength
                 self.Datasetpushed = 0
-        self.Devidercount+=1
+        self.Devidercount += 1
 
     def SetCallback(self, callback):
         """
@@ -220,7 +230,9 @@ class genericPlotter:
         self.flags["callbackSet"] = True
         self.callback = callback
 
-    def UnSetCallback(self,):
+    def UnSetCallback(
+        self,
+    ):
         """
         deactivates the callback.
 
@@ -232,41 +244,46 @@ class genericPlotter:
         self.flags["callbackSet"] = False
         self.callback = doNothingCb
 
-class RealFFTNodeCore:
-    def __init__(self,Name):
-        self.parmas={"Name":Name}
 
-    def pushData(self,Index, Data, Descripton):
-        self.Data=Data
-        self.Index=Index
-        self.Description=Descripton
+class RealFFTNodeCore:
+    def __init__(self, Name):
+        self.parmas = {"Name": Name}
+
+    def pushData(self, Index, Data, Descripton):
+        self.Data = Data
+        self.Index = Index
+        self.Description = Descripton
         self.doRFFT()
 
     def doRFFT(self):
-        self.outData=np.fft.rfft(self.Data,axis=0)
-        #TODO add FTT scalfactor right to have power spectral density
-        FFTScalfactor=1
-        self.outData=self.outData*FFTScalfactor
-        deltaT=np.mean(np.diff(self.Index))
-        self.OutIndex=np.fft.rfftfreq(self.Data.shape[0],d=deltaT)
-        #TODO generate description
-        #think abou how to convert unit to fft units
+        self.outData = np.fft.rfft(self.Data, axis=0)
+        # TODO add FTT scalfactor right to have power spectral density
+        FFTScalfactor = 1
+        self.outData = self.outData * FFTScalfactor
+        deltaT = np.mean(np.diff(self.Index))
+        self.OutIndex = np.fft.rfftfreq(self.Data.shape[0], d=deltaT)
+        # TODO generate description
+        # think abou how to convert unit to fft units
         for DataChannels in self.Description["Data"]:
-            candesc=self.Description["Data"][DataChannels]
-            candesc["PHYSICAL_QUANTITY"]= candesc["PHYSICAL_QUANTITY"]+" power spectraldensity"
-            candesc["UNIT"]="FFT UNIT" #INUIT^2/sqrt(HZ),
-            candesc["UNCERTAINTY_TYPE"]= False
-            candesc["RESOLUTION"]= candesc["RESOLUTION"]*self.Data.shape[0]
-            candesc["MAX_SCALE"]: np.sqrt(2)*candesc["MAX_SCALE"]-candesc["MIN_SCALE"]# Peak to peak efective value is maximum for an fft bin
-            candesc["MIN_SCALE"]: -1.0*candesc["MAX_SCALE"]
+            candesc = self.Description["Data"][DataChannels]
+            candesc["PHYSICAL_QUANTITY"] = (
+                candesc["PHYSICAL_QUANTITY"] + " power spectraldensity"
+            )
+            candesc["UNIT"] = "FFT UNIT"  # INUIT^2/sqrt(HZ),
+            candesc["UNCERTAINTY_TYPE"] = False
+            candesc["RESOLUTION"] = candesc["RESOLUTION"] * self.Data.shape[0]
+            candesc["MAX_SCALE"]: np.sqrt(2) * candesc["MAX_SCALE"] - candesc[
+                "MIN_SCALE"
+            ]  # Peak to peak efective value is maximum for an fft bin
+            candesc["MIN_SCALE"]: -1.0 * candesc["MAX_SCALE"]
         freqDescription = {
-        'PHYSICAL_QUANTITY': "Time frequency",
-        'UNIT': "//Herz",
-        "RESOLUTION":self.outData.shape[0],
-        "MIN_SCALE" : self.Index[0],
-        "MAX_SCALE" : self.Index[-1]
+            "PHYSICAL_QUANTITY": "Time frequency",
+            "UNIT": "//Herz",
+            "RESOLUTION": self.outData.shape[0],
+            "MIN_SCALE": self.Index[0],
+            "MAX_SCALE": self.Index[-1],
         }
-        self.Description["Index"]=freqDescription
+        self.Description["Index"] = freqDescription
         print(self.parmas["Name"])
         print("___RFFT DONE !!! ____")
         print("Index " + str(self.OutIndex))
@@ -274,16 +291,13 @@ class RealFFTNodeCore:
         print("Data " + str(self.outData))
 
 
-
-
-
-
 def ExampleDataPrinter(Index, Data, Descripton):
-    #set breakpoint below this line to examine data structure
+    # set breakpoint below this line to examine data structure
     print("___DATA PRINTER ____")
-    print("Index "+str(Index))
-    print("Description "+str(Descripton))
-    print("Data "+str(Data))
+    print("Index " + str(Index))
+    print("Description " + str(Descripton))
+    print("Data " + str(Data))
+
 
 # Example for DSCP Messages
 # Quant b'\x08\x80\x80\xac\xe6\x0b\x12\x08MPU 9250\x18\x00"\x0eX Acceleration*\x0eY Acceleration2\x0eZ Acceleration:\x12X Angular velocityB\x12Y Angular velocityJ\x12Z Angular velocityR\x17X Magnetic flux densityZ\x17Y Magnetic flux densityb\x17Z Magnetic flux densityj\x0bTemperature'

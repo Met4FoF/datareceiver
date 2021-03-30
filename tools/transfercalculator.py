@@ -1,6 +1,6 @@
 # import h5py
-#TODO implent proper multi threaded hdf file handling
-import h5pickle as h5py #be carefull opining more than 100 files in a row kills first file handle !!!
+# TODO implent proper multi threaded hdf file handling
+import h5pickle as h5py  # be carefull opining more than 100 files in a row kills first file handle !!!
 import h5py as h5py_plain
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,7 +11,8 @@ import multiprocessing
 import sys
 import time
 import sinetools.SineTools as st
-#import yappi
+
+# import yappi
 import warnings
 
 import os
@@ -21,24 +22,28 @@ from adccaldata import Met4FOFADCCall
 from scipy.optimize import curve_fit  # for fiting of Groupdelay
 from scipy import interpolate  # for 1D amplitude estimation
 
-import deepdish as dd #for dict to hdf serialisation
+import deepdish as dd  # for dict to hdf serialisation
 
 # used only in transfercalculation because of performance reasonsfrom uncertainties import ufloat
 # >>> from uncertainties.umath import *  # sin(), etc.
 from uncertainties import ufloat
 from uncertainties.umath import *  # sin(), etc.
 from met4fofhdftools import add1dsinereferencedatatohdffile
-#from met4fofhdftools import addadctransferfunctiontodset
-from met4fofhdftools import uncerval #uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+
+# from met4fofhdftools import addadctransferfunctiontodset
+from met4fofhdftools import (
+    uncerval,
+)  # uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+
 
 def ufloatfromuncerval(uncerval):
-    return ufloat(uncerval['value'], uncerval['uncertainty'])
+    return ufloat(uncerval["value"], uncerval["uncertainty"])
 
 
 def ufloattouncerval(ufloat):
     result = np.empty([1], dtype=uncerval)
-    result['value'] = ufloat.n
-    result['uncertainty'] = ufloat.s
+    result["value"] = ufloat.n
+    result["uncertainty"] = ufloat.s
     return result
 
 
@@ -49,13 +54,13 @@ SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 15 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
 
-plt.rc('font', size=SMALL_SIZE)  # controls default text sizes
-plt.rc('axes', titlesize=SMALL_SIZE)  # fontsize of the axes title
-plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-plt.rc('xtick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
-plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
+plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
+plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
+plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
 def getplotableunitstring(unitstr, Latex=False):
@@ -119,32 +124,43 @@ def binarySearch(data, val):
 class hdfmet4fofdatafile:
     def __init__(self, hdffile):
         self.hdffile = hdffile
-        self.senorsnames = list(self.hdffile['RAWDATA'].keys())
+        self.senorsnames = list(self.hdffile["RAWDATA"].keys())
         self.sensordatasets = {}
         for name in self.senorsnames:
-            datasets = list(self.hdffile['RAWDATA/' + name].keys())
-            keystocheckandremove = ['Absolutetime', 'Absolutetime_uncertainty', 'Sample_number']
+            datasets = list(self.hdffile["RAWDATA/" + name].keys())
+            keystocheckandremove = [
+                "Absolutetime",
+                "Absolutetime_uncertainty",
+                "Sample_number",
+            ]
             for key in keystocheckandremove:
                 try:
                     datasets.remove(key)
                 except ValueError:
-                    raise RuntimeWarning(str(name) + " doese not contain " + str(key) + " dataset is maybe corrupted!")
+                    raise RuntimeWarning(
+                        str(name)
+                        + " doese not contain "
+                        + str(key)
+                        + " dataset is maybe corrupted!"
+                    )
             self.sensordatasets[name] = datasets
         print("INIT DONE")
         print("RAW DataGroups are " + str(self.senorsnames))
         print("RAW Datasets are " + str(self.sensordatasets))
 
     def calcblockwiesestd(self, dataset, blocksize=100):
-        #start = time.time()
+        # start = time.time()
         blockcount = int(np.floor(dataset.size / blocksize))
         std = np.zeros(blockcount)
-        split = np.split(dataset[:blocksize * blockcount], blockcount, axis=0)
+        split = np.split(dataset[: blocksize * blockcount], blockcount, axis=0)
         std = np.std(split, axis=1)
-        #end = time.time()
-        #print("bwstd for dataset " + str(dataset) + "took " + str(end - start) + " secs")
+        # end = time.time()
+        # print("bwstd for dataset " + str(dataset) + "took " + str(end - start) + " secs")
         return std
 
-    def detectnomovment(self, datahdfpath, timehdfpath, treshold=0.05, blocksinrow=5, blocksize=100):
+    def detectnomovment(
+        self, datahdfpath, timehdfpath, treshold=0.05, blocksinrow=5, blocksize=100
+    ):
         tmpData = np.squeeze(self.hdffile[datahdfpath])
         tmpTime = np.squeeze(self.hdffile[timehdfpath])  # fetch data from hdffile
         mag = np.linalg.norm(tmpData, axis=0)
@@ -169,7 +185,15 @@ class hdfmet4fofdatafile:
         nomovementidx = np.array(nomovementtidx)
         return nomovementidx, np.array(nomovementtimes)
 
-    def detectmovment(self, datahdfpath, timehdfpath, treshold=0.5, blocksinrow=5, blocksize=100, plot=False):
+    def detectmovment(
+        self,
+        datahdfpath,
+        timehdfpath,
+        treshold=0.5,
+        blocksinrow=5,
+        blocksize=100,
+        plot=False,
+    ):
         tmpData = np.squeeze(self.hdffile[datahdfpath])
         tmpTime = np.squeeze(self.hdffile[timehdfpath])  # fetch data from hdffile
         mag = np.linalg.norm(tmpData, axis=0)
@@ -191,8 +215,10 @@ class hdfmet4fofdatafile:
         if plot:
             fig, ax = plt.subplots()
             reltime = (tmpTime - tmpTime[0]) / 1e9
-            blocktime = reltime[0::blocksize]  # cut one block out--> garden fence problem
-            ax.plot(blocktime[:std.size], std, label='Data')
+            blocktime = reltime[
+                0::blocksize
+            ]  # cut one block out--> garden fence problem
+            ax.plot(blocktime[: std.size], std, label="Data")
             for i in np.arange(len(movementtimes)):
                 relmovementimes = (movementtimes[i] - tmpTime[0]) / 1e9
                 ax.plot(relmovementimes, np.array([treshold, treshold]), label=str(i))
@@ -200,10 +226,10 @@ class hdfmet4fofdatafile:
         return movementidx, np.array(movementtimes)
 
     def getnearestidxs(self, sensorname, time):
-        absolutimegroupname = 'RAWDATA/' + sensorname + '/' + 'Absolutetime'
+        absolutimegroupname = "RAWDATA/" + sensorname + "/" + "Absolutetime"
         absolutetimes = np.squeeze(self.hdffile[absolutimegroupname])
         idxs = np.copy(time)
-        with np.nditer(idxs, op_flags=['readwrite']) as it:
+        with np.nditer(idxs, op_flags=["readwrite"]) as it:
             for x in it:
                 x[...] = binarySearch(absolutetimes, x)
         return idxs
@@ -214,21 +240,22 @@ class transferfunktion:
         self.group = tfgroup
 
     def getNearestTF(self, channel, freq):
-        Freqs = self.group['Frequency']
+        Freqs = self.group["Frequency"]
         testFreqIDX = np.argmin(abs(Freqs - freq))
-        if Freqs[testFreqIDX] - freq == 0:  # ok we hit an calibrated point no need to interpolate
-            return {'frequency': Freqs[testFreqIDX],
-                    'Magnitude': self.group['Magnitude'][channel][testFreqIDX],
-                    'Phase': self.group['Phase'][channel][testFreqIDX],
-                    'N': self.group['N'][channel][testFreqIDX]}
+        if (
+            Freqs[testFreqIDX] - freq == 0
+        ):  # ok we hit an calibrated point no need to interpolate
+            return {
+                "frequency": Freqs[testFreqIDX],
+                "Magnitude": self.group["Magnitude"][channel][testFreqIDX],
+                "Phase": self.group["Phase"][channel][testFreqIDX],
+                "N": self.group["N"][channel][testFreqIDX],
+            }
         else:
             # interpolate
             A = self.getInterPolatedAmplitude(channel, freq)
             P = self.getInterPolatedPhase(channel, freq)
-            return {'Frequency': freq,
-                    'Magnitude': A,
-                    'Phase': P,
-                    'N': np.NaN}
+            return {"Frequency": freq, "Magnitude": A, "Phase": P, "N": np.NaN}
 
     def __getitem__(self, key):
         if len(key) == 4:
@@ -236,10 +263,13 @@ class transferfunktion:
         if len(key) == 2:
             return self.getNearestTF(key[0], key[1])
         else:
-            raise ValueError("Invalide Key:  > " + str(
-                key) + " <Use either [Channel] eg ['ADC1] or [Channel,Frequency] eg ['ADC1',1000]  as key ")
+            raise ValueError(
+                "Invalide Key:  > "
+                + str(key)
+                + " <Use either [Channel] eg ['ADC1] or [Channel,Frequency] eg ['ADC1',1000]  as key "
+            )
 
-    #def getGroupDelay(self, Channel):
+    # def getGroupDelay(self, Channel):
     #    freqs = self.TransferFunctions[Channel]['Frequencys']
     #    phases = self.TransferFunctions[Channel]['Phase']
     #    phaseUncer = self.TransferFunctions[Channel]['PhaseUncer']
@@ -247,8 +277,8 @@ class transferfunktion:
     #    return [popt, pcov]
 
     def getInterPolatedAmplitude(self, channel, freq):
-        Freqs = self.group['Frequency'][:]
-        Ampls = self.group['Magnitude'][channel, :]
+        Freqs = self.group["Frequency"][:]
+        Ampls = self.group["Magnitude"][channel, :]
         testFreqIDX = np.argmin(abs(Freqs - freq))
         DeltaInterpolIDX = 0
         if freq - Freqs[testFreqIDX] < 0:
@@ -257,11 +287,17 @@ class transferfunktion:
             DeltaInterpolIDX = 1
         if testFreqIDX + DeltaInterpolIDX < 0:
             assert RuntimeWarning(
-                str(freq) + " is to SMALL->Extrapolation is not recomended! minimal Frequency is " + str(Freqs[0]))
+                str(freq)
+                + " is to SMALL->Extrapolation is not recomended! minimal Frequency is "
+                + str(Freqs[0])
+            )
             return Ampls[0]
         if testFreqIDX + DeltaInterpolIDX >= Freqs.size:
             raise ValueError(
-                str(freq) + " is to BIG->Extrapolation not supported! maximal Frequency is " + str(Freqs[-1]))
+                str(freq)
+                + " is to BIG->Extrapolation not supported! maximal Frequency is "
+                + str(Freqs[-1])
+            )
         if DeltaInterpolIDX == 0:
             return Ampls[testFreqIDX]
         elif DeltaInterpolIDX == -1:
@@ -269,20 +305,24 @@ class transferfunktion:
         elif DeltaInterpolIDX == 1:
             IDX = [testFreqIDX, testFreqIDX + 1]
         x = Freqs[IDX]
-        A = Ampls[IDX]['value']
+        A = Ampls[IDX]["value"]
         AErr = Ampls[IDX]["uncertainty"]
         fA = interpolate.interp1d(x, A)
         fAErr = interpolate.interp1d(x, AErr)
-        print('Interpolateded transferfunction for Channel ' + str(channel) + 'at Freq ' + str(
-            freq))  # will not print anything
+        print(
+            "Interpolateded transferfunction for Channel "
+            + str(channel)
+            + "at Freq "
+            + str(freq)
+        )  # will not print anything
         result = np.empty([1], dtype=uncerval)
-        result['value'] = fA(freq)
-        result['uncertainty'] = fAErr(freq)
+        result["value"] = fA(freq)
+        result["uncertainty"] = fAErr(freq)
         return result
 
     def getInterPolatedPhase(self, channel, freq):
-        Freqs = self.group['Frequency'][:]
-        Phases = self.group['Phase'][channel, :]
+        Freqs = self.group["Frequency"][:]
+        Phases = self.group["Phase"][channel, :]
         testFreqIDX = np.argmin(abs(Freqs - freq))
         DeltaInterpolIDX = 0
         if freq - Freqs[testFreqIDX] < 0:
@@ -291,10 +331,15 @@ class transferfunktion:
             DeltaInterpolIDX = 1
         if testFreqIDX + DeltaInterpolIDX < 0:
             assert RuntimeWarning(
-                str(freq) + " is to SMALL->Extrapolation is not recomended! minimal Frequency is " + str(Freqs[0]))
+                str(freq)
+                + " is to SMALL->Extrapolation is not recomended! minimal Frequency is "
+                + str(Freqs[0])
+            )
             return Phases[0]
         if testFreqIDX + DeltaInterpolIDX >= Freqs.size:
-            raise ValueError("Extrapolation not supported! maximal Frequency is" + Freqs[-1])
+            raise ValueError(
+                "Extrapolation not supported! maximal Frequency is" + Freqs[-1]
+            )
         if DeltaInterpolIDX == 0:
             return Phases[testFreqIDX]
         elif DeltaInterpolIDX == -1:
@@ -302,33 +347,41 @@ class transferfunktion:
         elif DeltaInterpolIDX == 1:
             IDX = [testFreqIDX, testFreqIDX + 1]
         x = Freqs[IDX]
-        P = Phases[IDX]['value']
-        PErr = Phases[IDX]['uncertainty']
+        P = Phases[IDX]["value"]
+        PErr = Phases[IDX]["uncertainty"]
         fP = interpolate.interp1d(x, P)
         fPErr = interpolate.interp1d(x, PErr)
-        print('Interpolateded transferfunction for Channel ' + str(channel) + 'at Freq ' + str(
-            freq))  # will not print anything
+        print(
+            "Interpolateded transferfunction for Channel "
+            + str(channel)
+            + "at Freq "
+            + str(freq)
+        )  # will not print anything
         result = np.empty([1], dtype=uncerval)
-        result['value'] = fP(freq)
-        result['uncertainty'] = fPErr(freq)
+        result["value"] = fP(freq)
+        result["uncertainty"] = fPErr(freq)
         return result
 
 
 class experiment:
-    def __init__(self, hdfmet4fofdatafile,times,experemientTypeName,experiementID):
-        self.params={'experemientTypeName':experemientTypeName,}
+    def __init__(self, hdfmet4fofdatafile, times, experemientTypeName, experiementID):
+        self.params = {
+            "experemientTypeName": experemientTypeName,
+        }
         self.met4fofdatafile = hdfmet4fofdatafile
-        self.datafile= self.met4fofdatafile.hdffile
-        self.experiemntID=experiementID
+        self.datafile = self.met4fofdatafile.hdffile
+        self.experiemntID = experiementID
         self.timepoints = times
         self.idxs = {}
-        self.data={}#all elements in this dict are new an will be saved in the hdf file
+        self.data = (
+            {}
+        )  # all elements in this dict are new an will be saved in the hdf file
         self.runtimeData = {}  # all data here will NOT saved into the hdf file
         self.flags = {}
 
         for name in self.met4fofdatafile.senorsnames:
             self.idxs[name] = self.met4fofdatafile.getnearestidxs(name, self.timepoints)
-            if(self.idxs[name][1]-self.idxs[name][0]==0):
+            if self.idxs[name][1] - self.idxs[name][0] == 0:
                 raise ValueError("EMPTY DATA SET")
             self.data[name] = {}
             self.runtimeData[name] = {}
@@ -343,31 +396,45 @@ class experiment:
         for sensors in self.met4fofdatafile.sensordatasets:
             datasetspersensor.append(len(self.met4fofdatafile.sensordatasets[sensors]))
         rows = np.max(datasetspersensor)
-        fig, axs = plt.subplots(cols, rows, sharex='all')
+        fig, axs = plt.subplots(cols, rows, sharex="all")
         icol = 0
         for sensor in self.met4fofdatafile.sensordatasets:
             irow = 0
             idxs = self.idxs[sensor]
-            axs[icol, 0].annotate(sensor.replace('_', ' '), xy=(0, 0.5), xytext=(-axs[icol, 0].yaxis.labelpad - 5, 0),
-                                  xycoords=axs[icol, 0].yaxis.label, textcoords='offset points',
-                                  size='large', ha='right', va='center', rotation=90)
+            axs[icol, 0].annotate(
+                sensor.replace("_", " "),
+                xy=(0, 0.5),
+                xytext=(-axs[icol, 0].yaxis.labelpad - 5, 0),
+                xycoords=axs[icol, 0].yaxis.label,
+                textcoords="offset points",
+                size="large",
+                ha="right",
+                va="center",
+                rotation=90,
+            )
 
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                dsetattrs = self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs
-                time = self.datafile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
+                dsetattrs = self.datafile["RAWDATA/" + sensor + "/" + dataset].attrs
+                time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+                    0, idxs[0] : idxs[1]
+                ]
                 if not absolutetime:
-                    time = time.astype('int64') - self.timepoints[0].astype('int64')
+                    time = time.astype("int64") - self.timepoints[0].astype("int64")
                 time = time / 1e9
                 # print(dsetattrs.keys())
-                axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs['Unit']))
+                axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs["Unit"]))
                 if not absolutetime:
                     axs[icol, irow].set_xlabel("Relative time in s")
                 else:
                     axs[icol, irow].set_xlabel("Unixtime in s")
-                axs[icol, irow].set_title(dataset.replace('_', ' '))
-                for i in np.arange(self.datafile['RAWDATA/' + sensor + '/' + dataset].shape[0]):
-                    label = dsetattrs['Physical_quantity'][i]
-                    data = self.datafile['RAWDATA/' + sensor + '/' + dataset][i, idxs[0]:idxs[1]]
+                axs[icol, irow].set_title(dataset.replace("_", " "))
+                for i in np.arange(
+                    self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[0]
+                ):
+                    label = dsetattrs["Physical_quantity"][i]
+                    data = self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                        i, idxs[0] : idxs[1]
+                    ]
                     axs[icol, irow].plot(time, data, label=label)
                     axs[icol, irow].legend()
                 irow = irow + 1
@@ -380,78 +447,112 @@ class experiment:
         except KeyError:
             EXPERIMENTS = self.datafile.create_group("EXPERIMENTS")
         try:
-            SINEEX = EXPERIMENTS[self.params['experemientTypeName']]
+            SINEEX = EXPERIMENTS[self.params["experemientTypeName"]]
         except KeyError:
-            SINEEX = EXPERIMENTS.create_group(self.params['experemientTypeName'])
+            SINEEX = EXPERIMENTS.create_group(self.params["experemientTypeName"])
         try:
             EXPGROUP = SINEEX[self.experiemntID]
-            print(str(EXPGROUP.name)+"existed allready returning groupname")
+            print(str(EXPGROUP.name) + "existed allready returning groupname")
         except KeyError:
             EXPGROUP = SINEEX.create_group(self.experiemntID)
         self.datafile.flush()
         return EXPGROUP
 
-class sineexcitation(experiment):
-    def __init__(self, hdfmet4fofdatafile, times,experiementID):
-        super().__init__(hdfmet4fofdatafile, times,'Sine excitation',experiementID)
 
+class sineexcitation(experiment):
+    def __init__(self, hdfmet4fofdatafile, times, experiementID):
+        super().__init__(hdfmet4fofdatafile, times, "Sine excitation", experiementID)
 
     def dofft(self):
         for sensor in self.met4fofdatafile.sensordatasets:
             idxs = self.idxs[sensor]
             points = idxs[1] - idxs[0]
-            time = self.datafile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
-            reltime = time.astype('int64') - self.timepoints[0].astype('int64')
-            self.runtimeData[sensor]['Mean Delta T'] = np.mean(np.diff(reltime / 1e9))
-            self.runtimeData[sensor]['RFFT Frequencys'] = np.fft.rfftfreq(points, self.runtimeData[sensor]['Mean Delta T'])
+            time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+                0, idxs[0] : idxs[1]
+            ]
+            reltime = time.astype("int64") - self.timepoints[0].astype("int64")
+            self.runtimeData[sensor]["Mean Delta T"] = np.mean(np.diff(reltime / 1e9))
+            self.runtimeData[sensor]["RFFT Frequencys"] = np.fft.rfftfreq(
+                points, self.runtimeData[sensor]["Mean Delta T"]
+            )
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                data = self.datafile['RAWDATA/' + sensor + '/' + dataset][:, idxs[0]:idxs[1]]
-                self.runtimeData[sensor][dataset]['RFFT'] = np.fft.rfft(data, axis=1)
-                self.runtimeData[sensor][dataset]['FFT_max_freq'] = self.runtimeData[sensor]['RFFT Frequencys'][
-                    np.argmax(abs(np.sum(self.runtimeData[sensor][dataset]['RFFT'][:, 1:], axis=0))) + 1]
+                data = self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                    :, idxs[0] : idxs[1]
+                ]
+                self.runtimeData[sensor][dataset]["RFFT"] = np.fft.rfft(data, axis=1)
+                self.runtimeData[sensor][dataset]["FFT_max_freq"] = self.runtimeData[
+                    sensor
+                ]["RFFT Frequencys"][
+                    np.argmax(
+                        abs(
+                            np.sum(
+                                self.runtimeData[sensor][dataset]["RFFT"][:, 1:], axis=0
+                            )
+                        )
+                    )
+                    + 1
+                ]
                 # print(self.Data[sensor][dataset]['FFT_max_freq'])
-        self.flags['FFT Calculated'] = True
+        self.flags["FFT Calculated"] = True
 
     def do3paramsinefits(self, freqs, periods=10):
-        if not self.flags['FFT Calculated']:
+        if not self.flags["FFT Calculated"]:
             self.dofft()
         for sensor in self.met4fofdatafile.sensordatasets:
             idxs = self.idxs[sensor]
             points = idxs[1] - idxs[0]
-            time = self.datafile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
-            reltime = time.astype('int64') - self.timepoints[0].astype('int64')
+            time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+                0, idxs[0] : idxs[1]
+            ]
+            reltime = time.astype("int64") - self.timepoints[0].astype("int64")
             reltime = reltime / 1e9
             excitationfreqs = freqs
             uniquexfreqs = np.sort(np.unique(excitationfreqs))
             idxs = self.idxs[sensor]
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 try:
-                    fftmaxfreq = self.runtimeData[sensor][dataset]['FFT_max_freq']
+                    fftmaxfreq = self.runtimeData[sensor][dataset]["FFT_max_freq"]
                 except NameError:
                     self.dofft()
                 freqidx = binarySearch(uniquexfreqs, fftmaxfreq)
-                datasetrows = self.datafile['RAWDATA/' + sensor + '/' + dataset].shape[0]
+                datasetrows = self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[
+                    0
+                ]
                 f0 = uniquexfreqs[freqidx]
-                self.data[sensor][dataset]['Sin_Fit_freq'] = f0*np.ones([datasetrows,1])# we doing an singe frequency fit
+                self.data[sensor][dataset]["Sin_Fit_freq"] = f0 * np.ones(
+                    [datasetrows, 1]
+                )  # we doing an singe frequency fit
                 # calc first row and create output array[:,idxs[0]:idxs[1]]
                 sineparams = st.seq_threeparsinefit(
-                    self.datafile['RAWDATA/' + sensor + '/' + dataset][0, idxs[0]:idxs[1]], reltime, f0,
-                    periods=10)
-                self.data[sensor][dataset]['SinPOpt'] = np.zeros([datasetrows, 4])
-                self.data[sensor][dataset]['SinPCov'] = np.zeros([datasetrows, 4, 4])
-                self.data[sensor][dataset]['SinParams'] = np.zeros([datasetrows, sineparams.shape[0], 3])
-                self.data[sensor][dataset]['SinParams'][0] = sineparams
+                    self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                        0, idxs[0] : idxs[1]
+                    ],
+                    reltime,
+                    f0,
+                    periods=10,
+                )
+                self.data[sensor][dataset]["SinPOpt"] = np.zeros([datasetrows, 4])
+                self.data[sensor][dataset]["SinPCov"] = np.zeros([datasetrows, 4, 4])
+                self.data[sensor][dataset]["SinParams"] = np.zeros(
+                    [datasetrows, sineparams.shape[0], 3]
+                )
+                self.data[sensor][dataset]["SinParams"][0] = sineparams
                 for i in np.arange(1, datasetrows):
                     sineparams = st.seq_threeparsinefit(
-                        self.datafile['RAWDATA/' + sensor + '/' + dataset][i, idxs[0]:idxs[1]], reltime,
-                        f0, periods=10)
-                    self.data[sensor][dataset]['SinParams'][i] = sineparams
+                        self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                            i, idxs[0] : idxs[1]
+                        ],
+                        reltime,
+                        f0,
+                        periods=10,
+                    )
+                    self.data[sensor][dataset]["SinParams"][i] = sineparams
                 for i in np.arange(datasetrows):
-                    sineparams = self.data[sensor][dataset]['SinParams'][i]
+                    sineparams = self.data[sensor][dataset]["SinParams"][i]
                     Complex = sineparams[:, 1] + 1j * sineparams[:, 0]
                     DC = sineparams[:, 2]
                     Freq = np.ones(sineparams.shape[0]) * f0
-                    self.data[sensor][dataset]['SinPOpt'][i, :] = [
+                    self.data[sensor][dataset]["SinPOpt"][i, :] = [
                         np.mean(abs(Complex)),
                         np.mean(DC),
                         np.mean(Freq),
@@ -460,55 +561,74 @@ class sineexcitation(experiment):
                     CoVarData = np.stack(
                         (abs(Complex), DC, Freq, np.unwrap(np.angle(Complex))), axis=0
                     )
-                    self.data[sensor][dataset]['SinPCov'][i, :] = np.cov(
+                    self.data[sensor][dataset]["SinPCov"][i, :] = np.cov(
                         CoVarData, bias=True
                     )  # bias=True Nomation With N like np.std
-        self.flags['Sine fit calculated'] = True
+        self.flags["Sine fit calculated"] = True
         return
 
-    def plotXYsine(self, sensor, dataset, axis, fig=None, ax=None, mode='XY', alpha=0.05):
-        dsetattrs = self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs
+    def plotXYsine(
+        self, sensor, dataset, axis, fig=None, ax=None, mode="XY", alpha=0.05
+    ):
+        dsetattrs = self.datafile["RAWDATA/" + sensor + "/" + dataset].attrs
         idxs = self.idxs[sensor]
-        time = self.datafile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
-        reltime = time.astype('int64') - self.timepoints[0].astype('int64')
+        time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+            0, idxs[0] : idxs[1]
+        ]
+        reltime = time.astype("int64") - self.timepoints[0].astype("int64")
         reltime = reltime / 1e9
-        sinparams = self.data[sensor][dataset]['SinPOpt']
+        sinparams = self.data[sensor][dataset]["SinPOpt"]
         f0 = sinparams[axis, 2]
         dc = sinparams[axis, 1]
         amp = sinparams[axis, 0]
         phi = sinparams[axis, 3]
         undisturbedsine = np.sin(2 * np.pi * f0 * reltime + phi) * amp + dc
-        sinedata = self.datafile['RAWDATA/' + sensor + '/' + dataset][axis, idxs[0]:idxs[1]]
+        sinedata = self.datafile["RAWDATA/" + sensor + "/" + dataset][
+            axis, idxs[0] : idxs[1]
+        ]
         if fig == None and ax == None:
             fig, ax = plt.subplots()
-            ax.set_xlabel('Nonminal ' + dsetattrs['Physical_quantity'][
-                axis] + ' calculated from sine in ' + getplotableunitstring(dsetattrs['Unit']))
-        if mode == 'XY':
+            ax.set_xlabel(
+                "Nonminal "
+                + dsetattrs["Physical_quantity"][axis]
+                + " calculated from sine in "
+                + getplotableunitstring(dsetattrs["Unit"])
+            )
+        if mode == "XY":
             data = sinedata
-            ax.set_ylabel(dsetattrs['Physical_quantity'][
-                              axis] + 'in ' + getplotableunitstring(dsetattrs['Unit']))
-        if mode == 'diff':
+            ax.set_ylabel(
+                dsetattrs["Physical_quantity"][axis]
+                + "in "
+                + getplotableunitstring(dsetattrs["Unit"])
+            )
+        if mode == "diff":
             data = sinedata - undisturbedsine
-            ax.set_ylabel(dsetattrs['Physical_quantity'][
-                              axis] + 'in ' + getplotableunitstring(dsetattrs['Unit']))
-        if mode == 'XY+fit':
-            ax.set_ylabel(dsetattrs['Physical_quantity'][
-                              axis] + 'in ' + getplotableunitstring(dsetattrs['Unit']))
+            ax.set_ylabel(
+                dsetattrs["Physical_quantity"][axis]
+                + "in "
+                + getplotableunitstring(dsetattrs["Unit"])
+            )
+        if mode == "XY+fit":
+            ax.set_ylabel(
+                dsetattrs["Physical_quantity"][axis]
+                + "in "
+                + getplotableunitstring(dsetattrs["Unit"])
+            )
             data = sinedata
             polycoevs = np.polyfit(undisturbedsine, data, 2)
             print(polycoevs)
 
         ax.scatter(undisturbedsine, data, alpha=alpha, s=1, label="Raw data")
-        if mode == 'XY+fit':
+        if mode == "XY+fit":
             max = np.max(undisturbedsine)
             min = np.min(undisturbedsine)
             delta = max - min
             polyx = np.arange(min, max, delta / 2e3)
             poly = np.poly1d(polycoevs)
-            ax.plot(polyx, poly(polyx), label='Fit')
+            ax.plot(polyx, poly(polyx), label="Fit")
             # ax.plot(polyx,polyx,label='Prefect signal')
             ax.legend()
-        if mode == 'XY+fit':
+        if mode == "XY+fit":
             return polycoevs
         else:
             return
@@ -519,151 +639,240 @@ class sineexcitation(experiment):
         for sensors in self.met4fofdatafile.sensordatasets:
             datasetspersensor.append(len(self.met4fofdatafile.sensordatasets[sensors]))
         rows = np.max(datasetspersensor)
-        fig, axs = plt.subplots(cols, rows, sharex='all')
+        fig, axs = plt.subplots(cols, rows, sharex="all")
         icol = 0
         for sensor in self.met4fofdatafile.sensordatasets:
             irow = 0
             idxs = self.idxs[sensor]
-            axs[icol, 0].annotate(sensor.replace('_', ' '), xy=(0, 0.5), xytext=(-axs[icol, 0].yaxis.labelpad - 5, 0),
-                                  xycoords=axs[icol, 0].yaxis.label, textcoords='offset points',
-                                  size='large', ha='right', va='center', rotation=90)
+            axs[icol, 0].annotate(
+                sensor.replace("_", " "),
+                xy=(0, 0.5),
+                xytext=(-axs[icol, 0].yaxis.labelpad - 5, 0),
+                xycoords=axs[icol, 0].yaxis.label,
+                textcoords="offset points",
+                size="large",
+                ha="right",
+                va="center",
+                rotation=90,
+            )
 
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                dsetattrs = self.datafile['RAWDATA/' + sensor + '/' + dataset].attrs
-                time = self.datafile['RAWDATA/' + sensor + '/' + 'Absolutetime'][0, idxs[0]:idxs[1]]
+                dsetattrs = self.datafile["RAWDATA/" + sensor + "/" + dataset].attrs
+                time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+                    0, idxs[0] : idxs[1]
+                ]
                 if not absolutetime:
-                    time = time.astype('int64') - self.timepoints[0].astype('int64')
+                    time = time.astype("int64") - self.timepoints[0].astype("int64")
                 time = time / 1e9
                 # print(dsetattrs.keys())
-                axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs['Unit']))
+                axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs["Unit"]))
                 if not absolutetime:
                     axs[icol, irow].set_xlabel("Relative time in s")
                 else:
                     axs[icol, irow].set_xlabel("Unixtime in s")
-                axs[icol, irow].set_title(dataset.replace('_', ' '))
-                for i in np.arange(self.datafile['RAWDATA/' + sensor + '/' + dataset].shape[0]):
-                    label = dsetattrs['Physical_quantity'][i]
-                    data = self.datafile['RAWDATA/' + sensor + '/' + dataset][i, idxs[0]:idxs[1]]
+                axs[icol, irow].set_title(dataset.replace("_", " "))
+                for i in np.arange(
+                    self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[0]
+                ):
+                    label = dsetattrs["Physical_quantity"][i]
+                    data = self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                        i, idxs[0] : idxs[1]
+                    ]
                     p = axs[icol, irow].plot(time, data, label=label)
-                    sinparams = self.data[sensor][dataset]['SinPOpt']
+                    sinparams = self.data[sensor][dataset]["SinPOpt"]
                     f0 = sinparams[i, 2]
                     dc = sinparams[i, 1]
                     amp = sinparams[i, 0]
                     phi = sinparams[i, 3]
                     sinelabel = label + " Sine Fit"
                     undisturbedsine = np.sin(2 * np.pi * f0 * time + phi) * amp + dc
-                    axs[icol, irow].plot(time, undisturbedsine, label=sinelabel, color=p[0].get_color(), ls='dotted')
+                    axs[icol, irow].plot(
+                        time,
+                        undisturbedsine,
+                        label=sinelabel,
+                        color=p[0].get_color(),
+                        ls="dotted",
+                    )
                     axs[icol, irow].legend()
                 irow = irow + 1
             icol = icol + 1
         fig.show()
 
-    def calculatetanloguephaseref1freq(self, refdatagroupname, refdataidx, analogrefchannelname, analogrefchannelidx,analogchannelquantity='Voltage'):
+    def calculatetanloguephaseref1freq(
+        self,
+        refdatagroupname,
+        refdataidx,
+        analogrefchannelname,
+        analogrefchannelidx,
+        analogchannelquantity="Voltage",
+    ):
         adcreftfname = analogrefchannelname
-        adcreftfname = adcreftfname.replace('RAWDATA', 'REFERENCEDATA')
-        ADCTF = transferfunktion(self.datafile[adcreftfname]['Transferfunction'])
+        adcreftfname = adcreftfname.replace("RAWDATA", "REFERENCEDATA")
+        ADCTF = transferfunktion(self.datafile[adcreftfname]["Transferfunction"])
         for sensor in self.met4fofdatafile.sensordatasets:
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                datasetrows = self.datafile['RAWDATA/' + sensor + '/' + dataset].shape[0]
-                self.data[sensor][dataset]['Transfer_coefficients'] = {}
-                TC=self.data[sensor][dataset]['Transfer_coefficients'][self.datafile[refdatagroupname].attrs['Refference Qauntitiy']]={}
-                TC['Magnitude'] = {}
-                TC['Magnitude']['value']=np.zeros([datasetrows,datasetrows])
-                TC['Magnitude']['value'][:]=np.NAN
-                TC['Magnitude']['uncertainty'] = np.zeros([datasetrows, datasetrows])
-                TC['Magnitude']['uncertainty'][:] = np.NAN
+                datasetrows = self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[
+                    0
+                ]
+                self.data[sensor][dataset]["Transfer_coefficients"] = {}
+                TC = self.data[sensor][dataset]["Transfer_coefficients"][
+                    self.datafile[refdatagroupname].attrs["Refference Qauntitiy"]
+                ] = {}
+                TC["Magnitude"] = {}
+                TC["Magnitude"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["Magnitude"]["value"][:] = np.NAN
+                TC["Magnitude"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["Magnitude"]["uncertainty"][:] = np.NAN
 
-                TC['Excitation_amplitude']={}
-                TC['Excitation_amplitude']['value'] = np.zeros([datasetrows,datasetrows])
-                TC['Excitation_amplitude']['value'][:] = np.NAN
-                TC['Excitation_amplitude']['uncertainty'] = np.zeros([datasetrows, datasetrows])
-                TC['Excitation_amplitude']['uncertainty'][:] = np.NAN
-                TC['Phase'] = {}
-                TC['Phase']['value'] = np.zeros([datasetrows,datasetrows])
-                TC['Phase']['value'][:] = np.NAN
-                TC['Phase']['uncertainty']  = np.zeros([datasetrows,datasetrows])
-                TC['Phase']['uncertainty'][:] = np.NAN
-                TC['Frequency'] = {}
-                TC['Frequency']['value'] = np.zeros([datasetrows])
-                TC['Frequency']['value'][:] = np.NAN
-                TC['Frequency']['uncertainty']  = np.zeros([datasetrows])
-                TC['Frequency']['uncertainty'][:] = np.NAN
-                TC['Excitation_frequency'] = {}
-                TC['Excitation_frequency']['value'] = np.zeros([datasetrows])
-                TC['Excitation_frequency']['value'][:] = np.NAN
-                TC['Excitation_frequency']['uncertainty']  = np.zeros([datasetrows])
-                TC['Excitation_frequency']['uncertainty'][:] = np.NAN
+                TC["Excitation_amplitude"] = {}
+                TC["Excitation_amplitude"]["value"] = np.zeros(
+                    [datasetrows, datasetrows]
+                )
+                TC["Excitation_amplitude"]["value"][:] = np.NAN
+                TC["Excitation_amplitude"]["uncertainty"] = np.zeros(
+                    [datasetrows, datasetrows]
+                )
+                TC["Excitation_amplitude"]["uncertainty"][:] = np.NAN
+                TC["Phase"] = {}
+                TC["Phase"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["Phase"]["value"][:] = np.NAN
+                TC["Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["Phase"]["uncertainty"][:] = np.NAN
+                TC["Frequency"] = {}
+                TC["Frequency"]["value"] = np.zeros([datasetrows])
+                TC["Frequency"]["value"][:] = np.NAN
+                TC["Frequency"]["uncertainty"] = np.zeros([datasetrows])
+                TC["Frequency"]["uncertainty"][:] = np.NAN
+                TC["Excitation_frequency"] = {}
+                TC["Excitation_frequency"]["value"] = np.zeros([datasetrows])
+                TC["Excitation_frequency"]["value"][:] = np.NAN
+                TC["Excitation_frequency"]["uncertainty"] = np.zeros([datasetrows])
+                TC["Excitation_frequency"]["uncertainty"][:] = np.NAN
                 for j in np.arange(0, datasetrows):
                     for i in np.arange(0, datasetrows):
-                        if j==0:
-                            TC['Frequency']['value'][i] = self.data[sensor][dataset]['Sin_Fit_freq'][i]
-                            TC['Excitation_frequency']['value'][i] = self.datafile[refdatagroupname]['Frequency'][i, 'value'][refdataidx]
-                        fitfreq = self.data[sensor][dataset]['Sin_Fit_freq'][j]
+                        if j == 0:
+                            TC["Frequency"]["value"][i] = self.data[sensor][dataset][
+                                "Sin_Fit_freq"
+                            ][i]
+                            TC["Excitation_frequency"]["value"][i] = self.datafile[
+                                refdatagroupname
+                            ]["Frequency"][i, "value"][refdataidx]
+                        fitfreq = self.data[sensor][dataset]["Sin_Fit_freq"][j]
                         print(refdataidx)
-                        reffreq = self.datafile[refdatagroupname]['Frequency'][i, 'value'][refdataidx]
+                        reffreq = self.datafile[refdatagroupname]["Frequency"][
+                            i, "value"
+                        ][refdataidx]
                         if fitfreq != reffreq:
-                            warinigstr = "Frequency mismatach in Sesnor" + sensor + ' ' + dataset + " fit[" + str(
-                                i) + "]= " + str(fitfreq) + " ref[" + str(refdataidx) + "]= " + str(
-                                reffreq) + " Transferfunction will be invaladie !!"
+                            warinigstr = (
+                                "Frequency mismatach in Sesnor"
+                                + sensor
+                                + " "
+                                + dataset
+                                + " fit["
+                                + str(i)
+                                + "]= "
+                                + str(fitfreq)
+                                + " ref["
+                                + str(refdataidx)
+                                + "]= "
+                                + str(reffreq)
+                                + " Transferfunction will be invaladie !!"
+                            )
                             warnings.warn(warinigstr, RuntimeWarning)
                         else:
 
                             # calculate magnitude response
-                            TC['Excitation_amplitude']['value'][j,i] = self.datafile[refdatagroupname]['Excitation_amplitude'][j][refdataidx]['value']
-                            TC['Excitation_amplitude']['uncertainty'][j, i] = self.datafile[refdatagroupname]['Excitation_amplitude'][j][refdataidx]['uncertainty']
+                            TC["Excitation_amplitude"]["value"][j, i] = self.datafile[
+                                refdatagroupname
+                            ]["Excitation_amplitude"][j][refdataidx]["value"]
+                            TC["Excitation_amplitude"]["uncertainty"][
+                                j, i
+                            ] = self.datafile[refdatagroupname]["Excitation_amplitude"][
+                                j
+                            ][
+                                refdataidx
+                            ][
+                                "uncertainty"
+                            ]
                             ufexamp = ufloatfromuncerval(
-                                self.datafile[refdatagroupname]['Excitation_amplitude'][j][refdataidx])
-                            if ufexamp==0:
-                                ufexamp=np.NaN
-                            ufmeasamp = ufloat(self.data[sensor][dataset]['SinPOpt'][i][0],
-                                               self.data[sensor][dataset]['SinPCov'][i][0, 0])
+                                self.datafile[refdatagroupname]["Excitation_amplitude"][
+                                    j
+                                ][refdataidx]
+                            )
+                            if ufexamp == 0:
+                                ufexamp = np.NaN
+                            ufmeasamp = ufloat(
+                                self.data[sensor][dataset]["SinPOpt"][i][0],
+                                self.data[sensor][dataset]["SinPCov"][i][0, 0],
+                            )
                             mag = ufmeasamp / ufexamp
-                            TC['Magnitude']['value'][j,i] = mag.n
-                            TC['Magnitude']['uncertainty'][j, i] = mag.s
-                            #calculate phase
-                            adcname=analogrefchannelname.replace('RAWDATA/','')
+                            TC["Magnitude"]["value"][j, i] = mag.n
+                            TC["Magnitude"]["uncertainty"][j, i] = mag.s
+                            # calculate phase
+                            adcname = analogrefchannelname.replace("RAWDATA/", "")
 
-                            ufdutphase = ufloat(self.data[sensor][dataset]['SinPOpt'][j][3],
-                                                self.data[sensor][dataset]['SinPCov'][j][3, 3])
+                            ufdutphase = ufloat(
+                                self.data[sensor][dataset]["SinPOpt"][j][3],
+                                self.data[sensor][dataset]["SinPCov"][j][3, 3],
+                            )
 
-                            ufanalogrefphase = ufloat(self.data[adcname][analogchannelquantity]['SinPOpt'][analogrefchannelidx][3],
-                                                self.data[adcname][analogchannelquantity]['SinPCov'][analogrefchannelidx][3, 3])
+                            ufanalogrefphase = ufloat(
+                                self.data[adcname][analogchannelquantity]["SinPOpt"][
+                                    analogrefchannelidx
+                                ][3],
+                                self.data[adcname][analogchannelquantity]["SinPCov"][
+                                    analogrefchannelidx
+                                ][3, 3],
+                            )
 
-                            ufADCTFphase = ufloatfromuncerval(ADCTF.getNearestTF(analogrefchannelidx, fitfreq)['Phase'])
-                            ufrefphase = ufloatfromuncerval(self.datafile[refdatagroupname]['Phase'][j][refdataidx])  # in rad
-                            phase = ufdutphase-(ufanalogrefphase+ufADCTFphase)+ufrefphase
-                            if phase.n<-np.pi:
-                                phase+=ufloat(2*np.pi,0)
-                            elif phase.n>np.pi:
-                                phase-=ufloat(2*np.pi,0)
-                            TC['Phase']['value'][j,i] = phase.n
-                            TC['Phase']['uncertainty'][j, i] = phase.s
+                            ufADCTFphase = ufloatfromuncerval(
+                                ADCTF.getNearestTF(analogrefchannelidx, fitfreq)[
+                                    "Phase"
+                                ]
+                            )
+                            ufrefphase = ufloatfromuncerval(
+                                self.datafile[refdatagroupname]["Phase"][j][refdataidx]
+                            )  # in rad
+                            phase = (
+                                ufdutphase
+                                - (ufanalogrefphase + ufADCTFphase)
+                                + ufrefphase
+                            )
+                            if phase.n < -np.pi:
+                                phase += ufloat(2 * np.pi, 0)
+                            elif phase.n > np.pi:
+                                phase -= ufloat(2 * np.pi, 0)
+                            TC["Phase"]["value"][j, i] = phase.n
+                            TC["Phase"]["uncertainty"][j, i] = phase.s
         pass
 
     def saveToHdf(self):
-        experimentGroup=self.createHDFGroup()
-        experimentGroup.attrs['Start Time']=self.timepoints[0]
-        experimentGroup.attrs['End Time'] = self.timepoints[1]
+        experimentGroup = self.createHDFGroup()
+        experimentGroup.attrs["Start Time"] = self.timepoints[0]
+        experimentGroup.attrs["End Time"] = self.timepoints[1]
         self.datafile.flush()
         Path("tmp").mkdir(parents=True, exist_ok=True)
-        dd.io.save('tmp/'+self.experiemntID+'.hdf5' ,self.data)
-        h5df=h5py_plain.File('tmp/'+self.experiemntID+'.hdf5', 'r')
+        dd.io.save("tmp/" + self.experiemntID + ".hdf5", self.data)
+        h5df = h5py_plain.File("tmp/" + self.experiemntID + ".hdf5", "r")
         for key in h5df.keys():
             self.datafile.copy(h5df[key], experimentGroup)
-            experimentGroup[key].attrs['Start Index']=self.idxs[key][0]
-            experimentGroup[key].attrs['Stop Index']=self.idxs[key][1]
+            experimentGroup[key].attrs["Start Index"] = self.idxs[key][0]
+            experimentGroup[key].attrs["Stop Index"] = self.idxs[key][1]
             self.datafile.flush()
+
 
 def processdata(i):
     sys.stdout.flush()
-    times = mpdata['movementtimes'][i]
-    refidx = int(mpdata['refidx'][i])
+    times = mpdata["movementtimes"][i]
+    refidx = int(mpdata["refidx"][i])
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
     times[0] += 10000000000
     times[1] -= 2000000000
     if times[1].astype(np.int64) - times[0].astype(np.int64) < 0:
         raise ValueError("time after cutting is <0")
-    experiment = sineexcitation(mpdata['hdfinstance'], times,"{:05d}".format(i)+'_Sine_Excitation')
+    experiment = sineexcitation(
+        mpdata["hdfinstance"], times, "{:05d}".format(i) + "_Sine_Excitation"
+    )
     sys.stdout.flush()
     # print(experiment)
     sys.stdout.flush()
@@ -673,84 +882,117 @@ def processdata(i):
     # print("FFT Time "+str(end - start))
     start = time.time()
 
-    #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency'][:, refidx]['value']
-    #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
-    axisfreqs=mpdata['uniquexfreqs']
+    # axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency'][:, refidx]['value']
+    # axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
+    axisfreqs = mpdata["uniquexfreqs"]
     experiment.do3paramsinefits(axisfreqs, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
-    experiment.calculatetanloguephaseref1freq('REFERENCEDATA/Acceleration_refference', refidx,
-                                          'RAWDATA/0x1fe40a00_STM32_Internal_ADC', 0)
+    experiment.calculatetanloguephaseref1freq(
+        "REFERENCEDATA/Acceleration_refference",
+        refidx,
+        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
+        0,
+    )
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
-def generateCEMrefIDXfromfreqs(freqs,removefreqs=np.array([2000.0])):
-    refidx=np.empty(0)
+
+def generateCEMrefIDXfromfreqs(freqs, removefreqs=np.array([2000.0])):
+    refidx = np.empty(0)
     for i in np.arange(freqs.size):
         if not freqs[i] in removefreqs:
-            refidx=np.append(refidx,i)
-            i=i+1
+            refidx = np.append(refidx, i)
+            i = i + 1
     return refidx
 
-def getRAWTFFromExperiemnts(group,sensor,numeratorQuantity='Acceleration',denominatorQuantity='Acceleration',type='1D_Z'):
-    keys=list(group.keys())
+
+def getRAWTFFromExperiemnts(
+    group,
+    sensor,
+    numeratorQuantity="Acceleration",
+    denominatorQuantity="Acceleration",
+    type="1D_Z",
+):
+    keys = list(group.keys())
     length = len(keys)
-    path=keys[0]+'/'+sensor+'/'+numeratorQuantity+'/Transfer_coefficients/'+denominatorQuantity
-    originalshape=group[path]['Magnitude']['value'].shape
-    TC_components=list(group[path].keys())
-    Data={}
-    if type=='1D_X' or type=='1D_Y' or type=='1D_Z':
+    path = (
+        keys[0]
+        + "/"
+        + sensor
+        + "/"
+        + numeratorQuantity
+        + "/Transfer_coefficients/"
+        + denominatorQuantity
+    )
+    originalshape = group[path]["Magnitude"]["value"].shape
+    TC_components = list(group[path].keys())
+    Data = {}
+    if type == "1D_X" or type == "1D_Y" or type == "1D_Z":
         for component in TC_components:
-           Data[component]={}
-           Data[component]['value']=np.zeros(length)
-           Data[component]['uncertainty'] = np.zeros(length)
+            Data[component] = {}
+            Data[component]["value"] = np.zeros(length)
+            Data[component]["uncertainty"] = np.zeros(length)
 
-    if type=='nD':
+    if type == "nD":
         for component in TC_components:
-           Data[component]={}
-           if (len(group[path][component]['value'].shape) == 2):
-                Data[component]['value']=np.zeros([length,originalshape[0],originalshape[1]])
-                Data[component]['uncertainty'] = np.zeros([length,originalshape[0],originalshape[1]])
-           if (len(group[path][component]['value'].shape) == 1):
-               Data[component]['value'] = np.zeros([length, originalshape[0]])
-               Data[component]['uncertainty'] = np.zeros([length, originalshape[0]])
-    if type=='1D_X':
-        TCIdxData=(0,0)
-        TCIdxFreq = (0)
-    if type=='1D_Y':
-        TCIdxData=(1,1)
-        TCIdxFreq = (1)
-    if type == '1D_Z':
+            Data[component] = {}
+            if len(group[path][component]["value"].shape) == 2:
+                Data[component]["value"] = np.zeros(
+                    [length, originalshape[0], originalshape[1]]
+                )
+                Data[component]["uncertainty"] = np.zeros(
+                    [length, originalshape[0], originalshape[1]]
+                )
+            if len(group[path][component]["value"].shape) == 1:
+                Data[component]["value"] = np.zeros([length, originalshape[0]])
+                Data[component]["uncertainty"] = np.zeros([length, originalshape[0]])
+    if type == "1D_X":
+        TCIdxData = (0, 0)
+        TCIdxFreq = 0
+    if type == "1D_Y":
+        TCIdxData = (1, 1)
+        TCIdxFreq = 1
+    if type == "1D_Z":
         TCIdxData = (2, 2)
-        TCIdxFreq = (2)
-    if type == 'nD':
-        TCIdxData=(slice(None), slice(None))
-        TCIdxFreq = (slice(None))
-    i=0
+        TCIdxFreq = 2
+    if type == "nD":
+        TCIdxData = (slice(None), slice(None))
+        TCIdxFreq = slice(None)
+    i = 0
     for experiment in keys:
-        path = experiment  + '/' + sensor + '/' + numeratorQuantity + '/Transfer_coefficients/' + denominatorQuantity
+        path = (
+            experiment
+            + "/"
+            + sensor
+            + "/"
+            + numeratorQuantity
+            + "/Transfer_coefficients/"
+            + denominatorQuantity
+        )
         for component in TC_components:
-            if(len(group[path][component]['value'].shape)==2):
-                Data[component]['value'][i]=group[path][component]['value'][TCIdxData]
-                Data[component]['uncertainty'][i] = group[path][component]['uncertainty'][TCIdxData]
-            if(len(group[path][component]['value'].shape)==1):
-                Data[component]['value'][i]=group[path][component]['value'][TCIdxFreq]
-                Data[component]['uncertainty'][i] = group[path][component]['uncertainty'][TCIdxFreq]
-        i=i+1
+            if len(group[path][component]["value"].shape) == 2:
+                Data[component]["value"][i] = group[path][component]["value"][TCIdxData]
+                Data[component]["uncertainty"][i] = group[path][component][
+                    "uncertainty"
+                ][TCIdxData]
+            if len(group[path][component]["value"].shape) == 1:
+                Data[component]["value"][i] = group[path][component]["value"][TCIdxFreq]
+                Data[component]["uncertainty"][i] = group[path][component][
+                    "uncertainty"
+                ][TCIdxFreq]
+        i = i + 1
     print(Data)
-
-
 
 
 if __name__ == "__main__":
     start = time.time()
 
-
-    #hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
-    #hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
+    # hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
+    # hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
     ##revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
-    sensorname="0x1fe40000_MPU_9250"
+    sensorname = "0x1fe40000_MPU_9250"
     """
     try:
         os.remove(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
@@ -759,23 +1001,23 @@ if __name__ == "__main__":
     shutil.copyfile(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB (copy).hdf5", r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
     """
     hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
-    #revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
-    datafile = h5py.File(hdffilename, 'r+')
+    # revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
+    datafile = h5py.File(hdffilename, "r+")
 
     test = hdfmet4fofdatafile(datafile)
-    #getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
-    #add1dsinereferencedatatohdffile(revcsv, datafile)
-    #adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
-    #addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0x1fe40a00_STM32_Internal_ADC"], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
-    #datafile.flush()
+    # getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
+    # add1dsinereferencedatatohdffile(revcsv, datafile)
+    # adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
+    # addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0x1fe40a00_STM32_Internal_ADC"], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
+    # datafile.flush()
 
-    #add1dsinereferencedatatohdffile(revcsv, datafile)
-    #adc_tf_goup=datafile.create_group("REFENCEDATA/0xbccb0a00_STM32_Internal_ADC")
-    #addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0xbccb0a00_STM32_Internal_ADC"], [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
-    #datafile.flush()
+    # add1dsinereferencedatatohdffile(revcsv, datafile)
+    # adc_tf_goup=datafile.create_group("REFENCEDATA/0xbccb0a00_STM32_Internal_ADC")
+    # addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0xbccb0a00_STM32_Internal_ADC"], [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
+    # datafile.flush()
 
     # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    #REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
+    # REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
     #                                                blocksinrow=100, blocksize=10000, plot=True)
     """
     movementidx, movementtimes = test.detectmovment('RAWDATA/0x1fe40000_MPU_9250/Acceleration', 'RAWDATA/0x1fe40000_MPU_9250/Absolutetime', treshold=0.2,
@@ -876,4 +1118,6 @@ if __name__ == "__main__":
     # for ex in results:
     #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
 
-    getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
+    getRAWTFFromExperiemnts(
+        datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250"
+    )

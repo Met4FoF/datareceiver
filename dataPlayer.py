@@ -9,6 +9,7 @@ import csv
 import json
 import MET4FOFDataReceiver as DR
 
+
 class SensorDataPlayer:
     strFieldNames = [
         "str_Data_01",
@@ -77,7 +78,7 @@ class SensorDataPlayer:
         paramupdateratehz=0.5,
     ):
         """
-        
+
 
         Parameters
         ----------
@@ -105,26 +106,26 @@ class SensorDataPlayer:
             "Port": port,
             "ParamUpdateRateHz": paramupdateratehz,
             "idOverride": idOverride,
-            "fileName":filename
+            "fileName": filename,
         }
         self.reader = csv.reader(open(filename), delimiter=";")
-        fristrow=next(self.reader)
-        paramsdictjson=json.loads(fristrow[0])
-        self.line = next(self.reader)# discard second line with headers
+        fristrow = next(self.reader)
+        paramsdictjson = json.loads(fristrow[0])
+        self.line = next(self.reader)  # discard second line with headers
         self.line = next(self.reader)
-        if idOverride !=0:
-            self.params["ID"]=idOverride
+        if idOverride != 0:
+            self.params["ID"] = idOverride
         else:
-            self.params["ID"]=int(self.line[0])
-        print("Sensor ID is: "+hex(self.params["ID"]))
-        self.firstpacket_time=float(self.line[2]) + (float(self.line[3]) * 1e-9)
-        self.Description=DR.SensorDescription(fromDict=paramsdictjson)
-        self.Description.ID=self.params["ID"]
+            self.params["ID"] = int(self.line[0])
+        print("Sensor ID is: " + hex(self.params["ID"]))
+        self.firstpacket_time = float(self.line[2]) + (float(self.line[3]) * 1e-9)
+        self.Description = DR.SensorDescription(fromDict=paramsdictjson)
+        self.Description.ID = self.params["ID"]
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.flags["Networtinited"] = True
         self.msgcount = 0
         self.lastTimestamp = 0
-        self.DataRate=0
+        self.DataRate = 0
         self._stop_event = threading.Event()
         self.thread = threading.Thread(
             target=self.run, name="Sensor Simulator", args=()
@@ -144,21 +145,29 @@ class SensorDataPlayer:
         firsttime = time.time()
         delta_t_dscp = 1 / self.params["ParamUpdateRateHz"]
         next_time_dscp = firsttime + delta_t_dscp
-        first_time_data=time.time()
+        first_time_data = time.time()
         next_time_data = time.time()
-        lastTousandPacktesTimeStamp=time.time()
+        lastTousandPacktesTimeStamp = time.time()
         while not self._stop_event.is_set():
             # TODO improve time scheduling
             if next_time_data - time.time() < 0:
                 self.__sendDataMsg(self.line)
-                delta=float(self.line[2]) + (float(self.line[3]) * 1e-9)-self.firstpacket_time
+                delta = (
+                    float(self.line[2])
+                    + (float(self.line[3]) * 1e-9)
+                    - self.firstpacket_time
+                )
                 next_time_data = first_time_data + delta
-                self.line=next(self.reader)
+                self.line = next(self.reader)
                 if self.packetssend % 1000 == 0:
-                    sendTime=time.time()
-                    self.DataRate=1000/(sendTime-lastTousandPacktesTimeStamp)
-                    print(str(self.packetssend) + " Packets sent Updaterate is "+str(self.DataRate))
-                    lastTousandPacktesTimeStamp=sendTime
+                    sendTime = time.time()
+                    self.DataRate = 1000 / (sendTime - lastTousandPacktesTimeStamp)
+                    print(
+                        str(self.packetssend)
+                        + " Packets sent Updaterate is "
+                        + str(self.DataRate)
+                    )
+                    lastTousandPacktesTimeStamp = sendTime
                 self.packetssend = self.packetssend + 1
             if next_time_dscp - time.time() < 0:
                 self.__sendDescription()
@@ -176,7 +185,8 @@ class SensorDataPlayer:
         """
         print("Stopping SensorSimulator")
         self._stop_event.set()
-    def __sendDataMsg(self,line):
+
+    def __sendDataMsg(self, line):
         """
         Sends out data.
 
@@ -193,7 +203,7 @@ class SensorDataPlayer:
         protodata.unix_time_nsecs = int(line[3])
         protodata.time_uncertainty = int(line[4])
         for i in range(16):
-            protodata.__setattr__(self.dataFieldNames[i],float(line[5+i]))
+            protodata.__setattr__(self.dataFieldNames[i], float(line[5 + i]))
         binproto = protodata.SerializeToString()
         # add DATA peramble for data Pacet
         binarymessage = b"DATA"
@@ -213,17 +223,23 @@ class SensorDataPlayer:
         """
         # 0: "PHYSICAL_QUANTITY",1: "UNIT",3: "RESOLUTION",4: "MIN_SCALE",5: "MAX_SCALE",
         DescriptonType = {0: "str", 1: "str", 3: "float", 4: "float", 5: "float"}
-        DescriptonKeys = {0: "PHYSICAL_QUANTITY", 1: "UNIT", 3: "RESOLUTION", 4: "MIN_SCALE", 5: "MAX_SCALE"}
-        for desckeys in DescriptonKeys :
+        DescriptonKeys = {
+            0: "PHYSICAL_QUANTITY",
+            1: "UNIT",
+            3: "RESOLUTION",
+            4: "MIN_SCALE",
+            5: "MAX_SCALE",
+        }
+        for desckeys in DescriptonKeys:
             proto_description = messages_pb2.DescriptionMessage()
             proto_description.Sensor_name = self.Description.SensorName
             proto_description.id = self.Description.ID
             proto_description.Description_Type = desckeys
             for i in range(16):
                 try:
-                    descVal=self.Description[i+1][DescriptonKeys[desckeys]]
+                    descVal = self.Description[i + 1][DescriptonKeys[desckeys]]
                     if DescriptonType[desckeys] == "str":
-                        proto_description.__setattr__(self.strFieldNames[i],descVal)
+                        proto_description.__setattr__(self.strFieldNames[i], descVal)
                     if DescriptonType[desckeys] == "float":
                         proto_description.__setattr__(self.fFieldNames[i], descVal)
                 except KeyError:
@@ -237,9 +253,10 @@ class SensorDataPlayer:
         return
 
     def __repr__(self):
-        return "Dataplayer: playing "+str(self.params["fileName"])
-
+        return "Dataplayer: playing " + str(self.params["fileName"])
 
 
 if __name__ == "__main__":
-    Player=SensorDataPlayer('../data/2020-03-03_Messungen_MPU9250_SN12 Frequenzgang_Firmware_0.3.0/mpu9250_12_10_hz_250_Hz_6wdh.dump')
+    Player = SensorDataPlayer(
+        "../data/2020-03-03_Messungen_MPU9250_SN12 Frequenzgang_Firmware_0.3.0/mpu9250_12_10_hz_250_Hz_6wdh.dump"
+    )
