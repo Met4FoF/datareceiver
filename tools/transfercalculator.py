@@ -32,7 +32,7 @@ from met4fofhdftools import add1dsinereferencedatatohdffile
 
 # from met4fofhdftools import addadctransferfunctiontodset
 from met4fofhdftools import (
-    uncerval,
+    uncerval,getRAWTFFromExperiemnts
 )  # uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
 
@@ -233,6 +233,80 @@ class hdfmet4fofdatafile:
             for x in it:
                 x[...] = binarySearch(absolutetimes, x)
         return idxs
+
+    # TODO move to hdf datafile class
+    def addrawtftohdffromexpreiments(self, experimentgroup,
+                                     sensor,
+                                     numeratorQuantity="Acceleration",
+                                     denominatorQuantity="Acceleration",
+                                     type="1D_Z",
+                                     miscdict={'scale':'Excitation_frequency'},
+                                     attrsdict={
+            'Phase': {'Unit': '\\degree',
+                      'Physical_quantity': ['Phase response'],
+                      'Uncertainty_type': "95% coverage gausian"},
+            'Magnitude': {'Unit': '\\one',
+                          'Unit_numerator': '\\metre\\second\\tothe{-2}',
+                          'Unit_denominator': '\\metre\\second\\tothe{-2}',
+                          'Physical_quantity': ['Magnitude response'],
+                          'Uncertainty_type': "95% coverage gausian"},
+            'Frequency': {'Unit': '\\hertz',
+                          'Physical_quantity': ['Frequency used by sine aproximation'],
+                          'Uncertainty_type': "95% coverage gausian"},
+            'Excitation_frequency': {'Unit': '\\hertz',
+                                     'Physical_quantity': ['Nominal frequency'],
+                                     'Uncertainty_type': "95% coverage gausian"},
+            'Excitation_amplitude': {'Unit': '\\metre\\second\\tothe{-2}',
+                                     'Physical_quantity': ['Excitation Amplitude'],
+                                     'Uncertainty_type': "95% coverage gausian"}}):
+        rawtf = getRAWTFFromExperiemnts(experimentgroup,
+                                        sensor,
+                                        numeratorQuantity,
+                                        denominatorQuantity,
+                                        type)
+        try:
+            RAWTRANSFERFUNCTIONGROUP = self.hdffile["RAWTRANSFERFUNCTION"]
+        except KeyError:
+            RAWTRANSFERFUNCTIONGROUP = self.hdffile.create_group("RAWTRANSFERFUNCTION")
+        try:
+            SensorRAWTFGROUP = RAWTRANSFERFUNCTIONGROUP[sensor]#->RAWTRANSFERFUNCTION/0x1FE40000_MPU9250
+        except KeyError:
+            SensorRAWTFGROUP = RAWTRANSFERFUNCTIONGROUP.create_group(sensor)
+        try:
+            SensorRAWTFGROUPNUM = SensorRAWTFGROUP[numeratorQuantity]#->RAWTRANSFERFUNCTION/0x1FE40000_MPU9250/Acceleration
+        except KeyError:
+            SensorRAWTFGROUPNUM = SensorRAWTFGROUP.create_group(numeratorQuantity)
+        try:
+            SensorRAWTFGROUPNUM = SensorRAWTFGROUP[numeratorQuantity]#->RAWTRANSFERFUNCTION/0x1FE40000_MPU9250/Acceleration
+        except KeyError:
+            SensorRAWTFGROUPNUM = SensorRAWTFGROUP.create_group(numeratorQuantity)
+        try:
+            RAWTFGROUP = SensorRAWTFGROUPNUM[denominatorQuantity]#->RAWTRANSFERFUNCTION/0x1FE40000_MPU9250/Acceleration/Acceleration
+        except KeyError:
+            RAWTFGROUP = SensorRAWTFGROUPNUM.create_group(denominatorQuantity)
+        print(attrsdict)
+        for tfcomponentkey in rawtf.keys():
+            group=RAWTFGROUP.create_group(tfcomponentkey)
+            try:
+                attrs=attrsdict[tfcomponentkey]
+                for attrkeys in attrs.keys():
+                    group.attrs[attrkeys]=attrs[attrkeys]
+            except KeyError:
+                warnings.warn("for Dataset "+str(tfcomponentkey)+" no attrs are given in attrsdict")
+            for vukey in rawtf[tfcomponentkey].keys():# loop over value and uncertanies
+                dset=group.create_dataset(vukey,rawtf[tfcomponentkey][vukey].shape, dtype="float64")
+                dset[:]=rawtf[tfcomponentkey][vukey]
+        scaledataset=RAWTFGROUP[miscdict['scale']]['value']#the values are the scale
+        scaledataset.make_scale("Frequency")
+        for tfcomponentkey in rawtf.keys():
+            if tfcomponentkey!=miscdict['scale']:
+                group=RAWTFGROUP[tfcomponentkey]
+                group['value'].dims[0].label = "Frequency"
+                group['value'].dims[0].attach_scale(scaledataset)
+                group['uncertainty'].dims[0].label = "Frequency"
+                group['uncertainty'].dims[0].attach_scale(scaledataset)
+        print("Done")
+
 
 
 class transferfunktion:
@@ -907,85 +981,6 @@ def generateCEMrefIDXfromfreqs(freqs, removefreqs=np.array([2000.0])):
             i = i + 1
     return refidx
 
-
-def getRAWTFFromExperiemnts(
-    group,
-    sensor,
-    numeratorQuantity="Acceleration",
-    denominatorQuantity="Acceleration",
-    type="1D_Z",
-):
-    keys = list(group.keys())
-    length = len(keys)
-    path = (
-        keys[0]
-        + "/"
-        + sensor
-        + "/"
-        + numeratorQuantity
-        + "/Transfer_coefficients/"
-        + denominatorQuantity
-    )
-    originalshape = group[path]["Magnitude"]["value"].shape
-    TC_components = list(group[path].keys())
-    Data = {}
-    if type == "1D_X" or type == "1D_Y" or type == "1D_Z":
-        for component in TC_components:
-            Data[component] = {}
-            Data[component]["value"] = np.zeros(length)
-            Data[component]["uncertainty"] = np.zeros(length)
-
-    if type == "nD":
-        for component in TC_components:
-            Data[component] = {}
-            if len(group[path][component]["value"].shape) == 2:
-                Data[component]["value"] = np.zeros(
-                    [length, originalshape[0], originalshape[1]]
-                )
-                Data[component]["uncertainty"] = np.zeros(
-                    [length, originalshape[0], originalshape[1]]
-                )
-            if len(group[path][component]["value"].shape) == 1:
-                Data[component]["value"] = np.zeros([length, originalshape[0]])
-                Data[component]["uncertainty"] = np.zeros([length, originalshape[0]])
-    if type == "1D_X":
-        TCIdxData = (0, 0)
-        TCIdxFreq = 0
-    if type == "1D_Y":
-        TCIdxData = (1, 1)
-        TCIdxFreq = 1
-    if type == "1D_Z":
-        TCIdxData = (2, 2)
-        TCIdxFreq = 2
-    if type == "nD":
-        TCIdxData = (slice(None), slice(None))
-        TCIdxFreq = slice(None)
-    i = 0
-    for experiment in keys:
-        path = (
-            experiment
-            + "/"
-            + sensor
-            + "/"
-            + numeratorQuantity
-            + "/Transfer_coefficients/"
-            + denominatorQuantity
-        )
-        for component in TC_components:
-            if len(group[path][component]["value"].shape) == 2:
-                Data[component]["value"][i] = group[path][component]["value"][TCIdxData]
-                Data[component]["uncertainty"][i] = group[path][component][
-                    "uncertainty"
-                ][TCIdxData]
-            if len(group[path][component]["value"].shape) == 1:
-                Data[component]["value"][i] = group[path][component]["value"][TCIdxFreq]
-                Data[component]["uncertainty"][i] = group[path][component][
-                    "uncertainty"
-                ][TCIdxFreq]
-        i = i + 1
-    print(Data)
-
-
 if __name__ == "__main__":
     start = time.time()
 
@@ -993,13 +988,13 @@ if __name__ == "__main__":
     # hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
     ##revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     sensorname = "0x1fe40000_MPU_9250"
-    """
+
     try:
         os.remove(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
     except FileNotFoundError:
         pass
     shutil.copyfile(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB (copy).hdf5", r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
-    """
+
     hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     # revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, "r+")
@@ -1118,6 +1113,8 @@ if __name__ == "__main__":
     # for ex in results:
     #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
 
-    getRAWTFFromExperiemnts(
+    TF=getRAWTFFromExperiemnts(
         datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250"
     )
+
+    test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250")

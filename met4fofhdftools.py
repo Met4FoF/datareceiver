@@ -327,7 +327,7 @@ def add1dsinereferencedatatohdffile(
             "Y Inertial phase",
             "Z Inertial phase",
         ]
-        Datasets["Phase"].attrs["UNCERTAINTY_TYPE"] = "95% coverage gausian"
+        Datasets["Phase"].attrs['Uncertainty_type'] = "95% coverage gausian"
         Datasets["Phase"]["value"][axis, :] = refcsv["phase"].to_numpy()
         Datasets["Phase"]["uncertainty"][axis, :] = refcsv["phase_std"].to_numpy()
         if isdeg:
@@ -391,7 +391,7 @@ def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
         "Magnitude response Voltage Ch 2",
         "Magnitude response Voltage Ch 3",
     ]
-    Datasets["Magnitude"].attrs["UNCERTAINTY_TYPE"] = "95% coverage gausian"
+    Datasets["Magnitude"].attrs['Uncertainty_type'] = "95% coverage gausian"
     i = 0
     for channel in channeloder:
         Datasets["Magnitude"][i, :, "value"] = TFs[channel]["AmplitudeCoefficent"]
@@ -411,7 +411,7 @@ def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
         "Phase response Voltage Ch 2",
         "Phase response  Voltage Ch 3",
     ]
-    Datasets["Phase"].attrs["UNCERTAINTY_TYPE"] = "95% coverage gausian"
+    Datasets["Phase"].attrs['Uncertainty_type'] = "95% coverage gausian"
     i = 0
     for channel in channeloder:
         Datasets["Phase"][i, :, "value"] = TFs[channel]["Phase"]
@@ -554,6 +554,84 @@ def add3compTDMSData(
 
     hdffile.flush()
     hdffile.close()
+
+def getRAWTFFromExperiemnts(
+    group,
+    sensor,
+    numeratorQuantity="Acceleration",
+    denominatorQuantity="Acceleration",
+    type="1D_Z",
+):
+    keys = list(group.keys())
+    length = len(keys)
+    path = (
+        keys[0]
+        + "/"
+        + sensor
+        + "/"
+        + numeratorQuantity
+        + "/Transfer_coefficients/"
+        + denominatorQuantity
+    )
+    originalshape = group[path]["Magnitude"]["value"].shape
+    TC_components = list(group[path].keys())
+    Data = {}
+    if type == "1D_X" or type == "1D_Y" or type == "1D_Z":
+        for component in TC_components:
+            Data[component] = {}
+            Data[component]["value"] = np.zeros(length)
+            Data[component]["uncertainty"] = np.zeros(length)
+
+    if type == "nD":
+        for component in TC_components:
+            Data[component] = {}
+            if len(group[path][component]["value"].shape) == 2:
+                Data[component]["value"] = np.zeros(
+                    [length, originalshape[0], originalshape[1]]
+                )
+                Data[component]["uncertainty"] = np.zeros(
+                    [length, originalshape[0], originalshape[1]]
+                )
+            if len(group[path][component]["value"].shape) == 1:
+                Data[component]["value"] = np.zeros([length, originalshape[0]])
+                Data[component]["uncertainty"] = np.zeros([length, originalshape[0]])
+    if type == "1D_X":
+        TCIdxData = (0, 0)
+        TCIdxFreq = 0
+    if type == "1D_Y":
+        TCIdxData = (1, 1)
+        TCIdxFreq = 1
+    if type == "1D_Z":
+        TCIdxData = (2, 2)
+        TCIdxFreq = 2
+    if type == "nD":
+        TCIdxData = (slice(None), slice(None))
+        TCIdxFreq = slice(None)
+    i = 0
+    for experiment in keys:
+        path = (
+            experiment
+            + "/"
+            + sensor
+            + "/"
+            + numeratorQuantity
+            + "/Transfer_coefficients/"
+            + denominatorQuantity
+        )
+        for component in TC_components:
+            if len(group[path][component]["value"].shape) == 2:
+                Data[component]["value"][i] = group[path][component]["value"][TCIdxData]
+                Data[component]["uncertainty"][i] = group[path][component][
+                    "uncertainty"
+                ][TCIdxData]
+            if len(group[path][component]["value"].shape) == 1:
+                Data[component]["value"][i] = group[path][component]["value"][TCIdxFreq]
+                Data[component]["uncertainty"][i] = group[path][component][
+                    "uncertainty"
+                ][TCIdxFreq]
+        i = i + 1
+    print(Data)
+    return Data
 
 
 if __name__ == "__main__":
