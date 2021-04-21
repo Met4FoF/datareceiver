@@ -282,22 +282,22 @@ def add1dsinereferencedatatohdffile(
         DSGroups["Frequency"]['value'][axis, :] = refcsv["frequency"].to_numpy()
         DSGroups["Frequency"]['uncertainty'][axis, :] = refcsv["frequency"].to_numpy()*np.NaN
 
-        DSGroups["Repetition_count"] = group.create_group(
-            "Repetition_count")
-        NVal = DSGroups["Repetition_count"].create_dataset(
+        DSGroups["Cycle_count"] = group.create_group(
+            "Cycle_count")
+        NVal = DSGroups["Cycle_count"].create_dataset(
             "value", ([refcsv.shape[0]]), dtype="int32"
         )
-        NUncer = DSGroups["Repetition_count"].create_dataset(
+        NUncer = DSGroups["Cycle_count"].create_dataset(
             "uncertainty", ([refcsv.shape[0]]), dtype="int32"
         )
 
-        DSGroups["Repetition_count"].attrs["Unit"] = "\\one"
-        DSGroups["Repetition_count"].attrs["Physical_quantity"] = "Repetition_count"
-        DSGroups["Repetition_count"].attrs['Uncertainty_type'] = "Errorless integer number"
-        DSGroups["Repetition_count"]['value'][:] = refcsv["loop"].to_numpy()
-        DSGroups["Repetition_count"]["uncertainty"][:] = refcsv["loop"].to_numpy()*0
-        DSGroups["Repetition_count"]['value'].dims[0].label = "Frequency"
-        DSGroups["Repetition_count"]['value'].dims[0].attach_scale(DSGroups["Frequency"]['value'])
+        DSGroups["Cycle_count"].attrs["Unit"] = "\\one"
+        DSGroups["Cycle_count"].attrs["Physical_quantity"] = "Cycle_count"
+        DSGroups["Cycle_count"].attrs['Uncertainty_type'] = "Errorless integer number"
+        DSGroups["Cycle_count"]['value'][:] = refcsv["loop"].to_numpy()
+        DSGroups["Cycle_count"]["uncertainty"][:] = refcsv["loop"].to_numpy()*0
+        DSGroups["Cycle_count"]['value'].dims[0].label = "Frequency"
+        DSGroups["Cycle_count"]['value'].dims[0].attach_scale(DSGroups["Frequency"]['value'])
 
         DSGroups["Excitation_amplitude"] = group.create_group("Excitation_amplitude")
         ExAmpval = DSGroups["Excitation_amplitude"].create_dataset("value", ([3, refcsv.shape[0]]), dtype=float)
@@ -389,21 +389,21 @@ def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
         "Frequency"
     )
     freqval= DSGroups["Frequency"].create_dataset(
-        "values", ([freqpoints[0]]), dtype="float64"
+        "value", ([freqpoints[0]]), dtype="float64"
     )
     frequncer= DSGroups["Frequency"].create_dataset(
         "uncertainty", ([freqpoints[0]]), dtype="float64"
     )
-    DSGroups["Frequency"]['values'].make_scale("Frequency")
+    DSGroups["Frequency"]['value'].make_scale("Frequency")
     DSGroups["Frequency"].attrs["Unit"] = "/hertz"
     DSGroups["Frequency"].attrs["Physical_quantity"] = "Excitation frequency"
-    DSGroups["Frequency"]['values'][0:] = TFs[channeloder[0]]["Frequencys"]
-    DSGroups["Frequency"]['uncertainty'][:] = DSGroups["Frequency"]['values'][0:]*np.NaN
+    DSGroups["Frequency"]['value'][0:] = TFs[channeloder[0]]["Frequencys"]
+    DSGroups["Frequency"]['uncertainty'][:] = DSGroups["Frequency"]['value'][0:]*np.NaN
 
     DSGroups["Magnitude"] = adctftopgroup.create_group(
         "Magnitude")
     magval = DSGroups["Magnitude"].create_dataset(
-        "values", ([channelcount, freqpoints[0]]), dtype="float64"
+        "value", ([channelcount, freqpoints[0]]), dtype="float64"
     )
     maguncer = DSGroups["Magnitude"].create_dataset(
         "uncertainty", ([channelcount, freqpoints[0]]), dtype="float64"
@@ -419,13 +419,13 @@ def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
     DSGroups["Magnitude"].attrs['Uncertainty_type'] = "95% coverage gausian"
     i = 0
     for channel in channeloder:
-        DSGroups["Magnitude"]['values'][i, :] = TFs[channel]["AmplitudeCoefficent"]
+        DSGroups["Magnitude"]['value'][i, :] = TFs[channel]["AmplitudeCoefficent"]
         DSGroups["Magnitude"]['uncertainty'][i, :] = TFs[channel][
             "AmplitudeCoefficentUncer"
         ]
         i = i + 1
-    DSGroups["Magnitude"]['values'].dims[0].label = "Frequency"
-    DSGroups["Magnitude"]['values'].dims[0].attach_scale(DSGroups["Frequency"]['values'])
+    DSGroups["Magnitude"]['value'].dims[0].label = "Frequency"
+    DSGroups["Magnitude"]['value'].dims[0].attach_scale(DSGroups["Frequency"]['value'])
 
 
     DSGroups["Phase"] = adctftopgroup.create_group(
@@ -456,7 +456,7 @@ def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
             )
         i = i + 1
     DSGroups["Phase"]["value"].dims[0].label = "Frequency"
-    DSGroups["Phase"]["value"].dims[0].attach_scale(DSGroups["Frequency"]['values'])
+    DSGroups["Phase"]["value"].dims[0].attach_scale(DSGroups["Frequency"]['value'])
 
     DSGroups["Repetition_count"] = adctftopgroup.create_group(
         "Repetition_count")
@@ -479,7 +479,7 @@ def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
         DSGroups["Repetition_count"]["uncertainty"][i, :] = TFs[channel]["N"]*0# zero uncertanity since its intergervalue
         i = i + 1
     DSGroups["Repetition_count"]['value'].dims[0].label = "Frequency"
-    DSGroups["Repetition_count"]['value'].dims[0].attach_scale(DSGroups["Frequency"]['values'])
+    DSGroups["Repetition_count"]['value'].dims[0].attach_scale(DSGroups["Frequency"]['value'])
     hdffile.flush()
 
 

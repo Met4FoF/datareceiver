@@ -36,10 +36,6 @@ from met4fofhdftools import (
 )  # uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
 
-def ufloatfromuncerval(uncerval):
-    return ufloat(uncerval["value"], uncerval["uncertainty"])
-
-
 def ufloattouncerval(ufloat):
     result = np.empty([1], dtype=uncerval)
     result["value"] = ufloat.n
@@ -314,22 +310,24 @@ class transferfunktion:
         self.group = tfgroup
 
     def getNearestTF(self, channel, freq):
-        Freqs = self.group["Frequency"]
+        Freqs = self.group["Frequency"]['value']
+        FreqsUncer = self.group["Frequency"]['uncertainty']
         testFreqIDX = np.argmin(abs(Freqs - freq))
         if (
             Freqs[testFreqIDX] - freq == 0
         ):  # ok we hit an calibrated point no need to interpolate
             return {
-                "frequency": Freqs[testFreqIDX],
-                "Magnitude": self.group["Magnitude"][channel][testFreqIDX],
-                "Phase": self.group["Phase"][channel][testFreqIDX],
-                "N": self.group["N"][channel][testFreqIDX],
+                "frequency": ufloat(Freqs[testFreqIDX],FreqsUncer[testFreqIDX]),
+                "Magnitude": ufloat(self.group["Magnitude"]['value'][channel][testFreqIDX],self.group["Magnitude"]['uncertainty'][channel][testFreqIDX]),
+                "Phase": ufloat(self.group["Phase"]['value'][channel][testFreqIDX],self.group["Phase"]['uncertainty'][channel][testFreqIDX]),
+                "N": ufloat(self.group["Phase"]['value'][channel][testFreqIDX],self.group["Phase"]['uncertainty'][channel][testFreqIDX])
             }
         else:
             # interpolate
-            A = self.getInterPolatedAmplitude(channel, freq)
-            P = self.getInterPolatedPhase(channel, freq)
-            return {"Frequency": freq, "Magnitude": A, "Phase": P, "N": np.NaN}
+            A = self.getInterPolated(channel, freq,'Magnitude')
+            P = self.getInterPolated(channel, freq,'Phase')
+            #TODO add interpolation with frequency 'uncertainty'
+            return {"Frequency": ufloat(freq,np.NaN), "Magnitude": A, "Phase": P, "N": ufloat(np.NaN,np.NaN)}
 
     def __getitem__(self, key):
         if len(key) == 4:
@@ -350,9 +348,11 @@ class transferfunktion:
     #    popt, pcov = curve_fit(PhaseFunc, freqs, phases, sigma=phaseUncer, absolute_sigma=True)
     #    return [popt, pcov]
 
-    def getInterPolatedAmplitude(self, channel, freq):
-        Freqs = self.group["Frequency"][:]
-        Ampls = self.group["Magnitude"][channel, :]
+    def getInterPolated(self, channel, freq,key):
+        Freqs = self.group["Frequency"]['value'][:]
+        FreqsUncer = self.group["Frequency"]['uncertainty'][:]
+        vals = self.group[key]['value'][channel, :]
+        valsUncer = self.group[key]['uncertainty'][channel, :]
         testFreqIDX = np.argmin(abs(Freqs - freq))
         DeltaInterpolIDX = 0
         if freq - Freqs[testFreqIDX] < 0:
@@ -365,7 +365,7 @@ class transferfunktion:
                 + " is to SMALL->Extrapolation is not recomended! minimal Frequency is "
                 + str(Freqs[0])
             )
-            return Ampls[0]
+            return vals[0]
         if testFreqIDX + DeltaInterpolIDX >= Freqs.size:
             raise ValueError(
                 str(freq)
@@ -373,14 +373,16 @@ class transferfunktion:
                 + str(Freqs[-1])
             )
         if DeltaInterpolIDX == 0:
-            return Ampls[testFreqIDX]
+            return vals[testFreqIDX]
         elif DeltaInterpolIDX == -1:
             IDX = [testFreqIDX - 1, testFreqIDX]
         elif DeltaInterpolIDX == 1:
             IDX = [testFreqIDX, testFreqIDX + 1]
         x = Freqs[IDX]
-        A = Ampls[IDX]["value"]
-        AErr = Ampls[IDX]["uncertainty"]
+        if not (np.isnan(FreqsUncer[IDX])).all():
+                warnings.warn(RuntimeWarning("Interpolation with frequency uncertantiy not supported by getInterPolatedAmplitude Fix this"))
+        A = vals[IDX]
+        AErr = valsUncer[IDX]
         fA = interpolate.interp1d(x, A)
         fAErr = interpolate.interp1d(x, AErr)
         print(
@@ -389,52 +391,7 @@ class transferfunktion:
             + "at Freq "
             + str(freq)
         )  # will not print anything
-        result = np.empty([1], dtype=uncerval)
-        result["value"] = fA(freq)
-        result["uncertainty"] = fAErr(freq)
-        return result
-
-    def getInterPolatedPhase(self, channel, freq):
-        Freqs = self.group["Frequency"][:]
-        Phases = self.group["Phase"][channel, :]
-        testFreqIDX = np.argmin(abs(Freqs - freq))
-        DeltaInterpolIDX = 0
-        if freq - Freqs[testFreqIDX] < 0:
-            DeltaInterpolIDX = -1
-        if freq - Freqs[testFreqIDX] > 0:
-            DeltaInterpolIDX = 1
-        if testFreqIDX + DeltaInterpolIDX < 0:
-            assert RuntimeWarning(
-                str(freq)
-                + " is to SMALL->Extrapolation is not recomended! minimal Frequency is "
-                + str(Freqs[0])
-            )
-            return Phases[0]
-        if testFreqIDX + DeltaInterpolIDX >= Freqs.size:
-            raise ValueError(
-                "Extrapolation not supported! maximal Frequency is" + Freqs[-1]
-            )
-        if DeltaInterpolIDX == 0:
-            return Phases[testFreqIDX]
-        elif DeltaInterpolIDX == -1:
-            IDX = [testFreqIDX - 1, testFreqIDX]
-        elif DeltaInterpolIDX == 1:
-            IDX = [testFreqIDX, testFreqIDX + 1]
-        x = Freqs[IDX]
-        P = Phases[IDX]["value"]
-        PErr = Phases[IDX]["uncertainty"]
-        fP = interpolate.interp1d(x, P)
-        fPErr = interpolate.interp1d(x, PErr)
-        print(
-            "Interpolateded transferfunction for Channel "
-            + str(channel)
-            + "at Freq "
-            + str(freq)
-        )  # will not print anything
-        result = np.empty([1], dtype=uncerval)
-        result["value"] = fP(freq)
-        result["uncertainty"] = fPErr(freq)
-        return result
+        return ufloat(fA(freq), fAErr(freq))
 
 
 class experiment:
@@ -790,7 +747,7 @@ class sineexcitation(experiment):
                 ]
                 self.data[sensor][dataset]["Transfer_coefficients"] = {}
                 TC = self.data[sensor][dataset]["Transfer_coefficients"][
-                    self.datafile[refdatagroupname].attrs["Refference Qauntitiy"]
+                    self.datafile[refdatagroupname].attrs["Refference_Qauntitiy"]
                 ] = {}
                 TC["Magnitude"] = {}
                 TC["Magnitude"]["value"] = np.zeros([datasetrows, datasetrows])
@@ -830,11 +787,11 @@ class sineexcitation(experiment):
                             ][i]
                             TC["Excitation_frequency"]["value"][i] = self.datafile[
                                 refdatagroupname
-                            ]["Frequency"][i, "value"][refdataidx]
+                            ]["Frequency"]["value"][i][refdataidx]
                         fitfreq = self.data[sensor][dataset]["Sin_Fit_freq"][j]
                         print(refdataidx)
-                        reffreq = self.datafile[refdatagroupname]["Frequency"][
-                            i, "value"
+                        reffreq = self.datafile[refdatagroupname]["Frequency"]['value'][
+                            i
                         ][refdataidx]
                         if fitfreq != reffreq:
                             warinigstr = (
@@ -856,23 +813,9 @@ class sineexcitation(experiment):
                         else:
 
                             # calculate magnitude response
-                            TC["Excitation_amplitude"]["value"][j, i] = self.datafile[
-                                refdatagroupname
-                            ]["Excitation_amplitude"][j][refdataidx]["value"]
-                            TC["Excitation_amplitude"]["uncertainty"][
-                                j, i
-                            ] = self.datafile[refdatagroupname]["Excitation_amplitude"][
-                                j
-                            ][
-                                refdataidx
-                            ][
-                                "uncertainty"
-                            ]
-                            ufexamp = ufloatfromuncerval(
-                                self.datafile[refdatagroupname]["Excitation_amplitude"][
-                                    j
-                                ][refdataidx]
-                            )
+                            TC["Excitation_amplitude"]["value"][j, i]       = self.datafile[refdatagroupname]["Excitation_amplitude"]["value"][j][refdataidx]
+                            TC["Excitation_amplitude"]["uncertainty"][j, i] = self.datafile[refdatagroupname]["Excitation_amplitude"][ "uncertainty"][j][refdataidx]
+                            ufexamp = ufloat(TC["Excitation_amplitude"]["value"][j, i],TC["Excitation_amplitude"]["uncertainty"][j, i])
                             if ufexamp == 0:
                                 ufexamp = np.NaN
                             ufmeasamp = ufloat(
@@ -899,13 +842,10 @@ class sineexcitation(experiment):
                                 ][3, 3],
                             )
 
-                            ufADCTFphase = ufloatfromuncerval(
-                                ADCTF.getNearestTF(analogrefchannelidx, fitfreq)[
-                                    "Phase"
-                                ]
-                            )
-                            ufrefphase = ufloatfromuncerval(
-                                self.datafile[refdatagroupname]["Phase"][j][refdataidx]
+                            ufADCTFphase = ADCTF.getNearestTF(analogrefchannelidx, fitfreq)['Phase']
+
+                            ufrefphase = ufloat(
+                                self.datafile[refdatagroupname]["Phase"]['value'][j][refdataidx],self.datafile[refdatagroupname]["Phase"]["uncertainty"][j][refdataidx]
                             )  # in rad
                             phase = (
                                 ufdutphase
@@ -1000,8 +940,8 @@ if __name__ == "__main__":
     datafile = h5py.File(hdffilename, "r+")
 
     test = hdfmet4fofdatafile(datafile)
-    # getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
-    # add1dsinereferencedatatohdffile(revcsv, datafile)
+    #getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
+    #add1dsinereferencedatatohdffile(revcsv, datafile)
     # adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
     # addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0x1fe40a00_STM32_Internal_ADC"], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
     # datafile.flush()
@@ -1014,7 +954,7 @@ if __name__ == "__main__":
     # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
     # REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
     #                                                blocksinrow=100, blocksize=10000, plot=True)
-    """
+
     movementidx, movementtimes = test.detectmovment('RAWDATA/0x1fe40000_MPU_9250/Acceleration', 'RAWDATA/0x1fe40000_MPU_9250/Absolutetime', treshold=0.2,
                                                     blocksinrow=100, blocksize=100, plot=True)
     manager = multiprocessing.Manager()
@@ -1030,7 +970,7 @@ if __name__ == "__main__":
     mpdata['refidx'] = refidx
     #refidx = np.array([0,0,1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33])
 
-    freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency'][2, :, 'value']
+    freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
     #refidx = generateCEMrefIDXfromfreqs(freqs)
     #mpdata['refidx'] = refidx
 
@@ -1044,8 +984,8 @@ if __name__ == "__main__":
         results = p.map(processdata, i)
     end = time.time()
     print(end - start)
-    i = 0
-
+    #i = 0
+    #processdata(1)
 
     freqs = np.zeros(movementtimes.shape[0])
     mag = np.zeros(movementtimes.shape[0])
@@ -1069,8 +1009,6 @@ if __name__ == "__main__":
     output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
              'phaseuncer': phaseuncer}
     df = pd.DataFrame(output)
-    datafile.close()
-    """
     # for ex in results:
     #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
     #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
