@@ -257,7 +257,7 @@ def add1dsinereferencedatatohdffile(
                         + third_line
                     )
     if isaccelerationreference1d:
-        Datasets = {}
+        DSGroups = {}
         try:
             REFDATA = hdffile["REFERENCEDATA"]
         except KeyError:
@@ -267,81 +267,88 @@ def add1dsinereferencedatatohdffile(
         group.attrs["Sensor_name"] = group.attrs["Refference_name"]
         group.attrs["Refference_type"] = "1D Acceleration"
         group.attrs["Refference_Qauntitiy"] = "Acceleration"
-        Datasets["Frequency"] = group.create_dataset(
-            "Frequency", ([3, refcsv.shape[0]]), dtype=uncerval
+        DSGroups["Frequency"] = group.create_group(
+            "Frequency"
         )
-        Datasets["Frequency"].make_scale("Frequency")
-        Datasets["Frequency"].attrs["Unit"] = "/hertz"
-        Datasets["Frequency"].attrs["Physical_quantity"] = "Excitation frequency"
-        Datasets["Frequency"][axis, :, "value"] = refcsv["frequency"].to_numpy()
-        Datasets["Repetition_count"] = group.create_dataset(
-            "Repetition_count", ([refcsv.shape[0]]), dtype="int32"
+        FreqVal= DSGroups["Frequency"].create_dataset(
+            "value", ([3, refcsv.shape[0]]), dtype="float64"
         )
-        Datasets["Repetition_count"].attrs["Unit"] = "/one"
-        Datasets["Repetition_count"].attrs["Physical_quantity"] = "Repetition_count"
-        Datasets["Repetition_count"][:] = refcsv["loop"].to_numpy()
-        Datasets["Repetition_count"].dims[0].label = "Frequency"
-        Datasets["Repetition_count"].dims[0].attach_scale(Datasets["Frequency"])
-        Datasets["Excitation_amplitude"] = group.create_group("Excitation_amplitude")
-        Datasets["Excitation_amplitude"]["value"] = Datasets[
-            "Excitation_amplitude"
-        ].create_dataset("Value", ([3, refcsv.shape[0]]), dtype=float)
-        Datasets["Excitation_amplitude"]["uncertainty"] = Datasets[
-            "Excitation_amplitude"
-        ].create_dataset("uncertainty", ([3, refcsv.shape[0]]), dtype=float)
-        Datasets["Excitation_amplitude"].attrs["Unit"] = "\\metre\\second\\tothe{-2}"
-        Datasets["Excitation_amplitude"].attrs["Physical_quantity"] = [
+        FreqUncer= DSGroups["Frequency"].create_dataset(
+            "uncertainty", ([3, refcsv.shape[0]]), dtype="float64"
+        )
+        DSGroups["Frequency"]['value'].make_scale("Frequency")
+        DSGroups["Frequency"].attrs["Unit"] = "\\hertz"
+        DSGroups["Frequency"].attrs["Physical_quantity"] = "Excitation frequency"
+        DSGroups["Frequency"]['value'][axis, :] = refcsv["frequency"].to_numpy()
+        DSGroups["Frequency"]['uncertainty'][axis, :] = refcsv["frequency"].to_numpy()*np.NaN
+
+        DSGroups["Repetition_count"] = group.create_group(
+            "Repetition_count")
+        NVal = DSGroups["Repetition_count"].create_dataset(
+            "value", ([refcsv.shape[0]]), dtype="int32"
+        )
+        NUncer = DSGroups["Repetition_count"].create_dataset(
+            "uncertainty", ([refcsv.shape[0]]), dtype="int32"
+        )
+
+        DSGroups["Repetition_count"].attrs["Unit"] = "\\one"
+        DSGroups["Repetition_count"].attrs["Physical_quantity"] = "Repetition_count"
+        DSGroups["Repetition_count"].attrs['Uncertainty_type'] = "Errorless integer number"
+        DSGroups["Repetition_count"]['value'][:] = refcsv["loop"].to_numpy()
+        DSGroups["Repetition_count"]["uncertainty"][:] = refcsv["loop"].to_numpy()*0
+        DSGroups["Repetition_count"]['value'].dims[0].label = "Frequency"
+        DSGroups["Repetition_count"]['value'].dims[0].attach_scale(DSGroups["Frequency"]['value'])
+
+        DSGroups["Excitation_amplitude"] = group.create_group("Excitation_amplitude")
+        ExAmpval = DSGroups["Excitation_amplitude"].create_dataset("value", ([3, refcsv.shape[0]]), dtype=float)
+
+        ExAmpuncer= DSGroups["Excitation_amplitude"].create_dataset("uncertainty", ([3, refcsv.shape[0]]), dtype=float)
+        DSGroups["Excitation_amplitude"].attrs["Unit"] = "\\metre\\second\\tothe{-2}"
+        DSGroups["Excitation_amplitude"].attrs["Physical_quantity"] = [
             "X Acceleration Excitation_amplitude",
             "Y Acceleration Excitation_amplitude",
             "Z Acceleration Excitation_amplitude",
         ]
-        Datasets["Excitation_amplitude"].attrs[
+        DSGroups["Excitation_amplitude"].attrs[
             "UNCERTAINTY_TYPE"
         ] = "95% coverage gausian"
-        Datasets["Excitation_amplitude"]["value"][:] = np.NaN
-        Datasets["Excitation_amplitude"]["value"][axis, :] = refcsv["ex_amp"].to_numpy()
-        Datasets["Excitation_amplitude"]["uncertainty"][:] = np.NaN
-        Datasets["Excitation_amplitude"]["uncertainty"][axis, :] = refcsv[
+        DSGroups["Excitation_amplitude"]["value"][:] = np.NaN
+        DSGroups["Excitation_amplitude"]["value"][axis, :] = refcsv["ex_amp"].to_numpy()
+        DSGroups["Excitation_amplitude"]["uncertainty"][:] = np.NaN
+        DSGroups["Excitation_amplitude"]["uncertainty"][axis, :] = refcsv[
             "ex_amp_std"
         ].to_numpy()
-        Datasets["Excitation_amplitude"]["value"].dims[0].label = "Frequency"
-        Datasets["Excitation_amplitude"]["uncertainty"].dims[0].attach_scale(
-            Datasets["Frequency"]
+        DSGroups["Excitation_amplitude"]["value"].dims[0].label = "Frequency"
+        DSGroups["Excitation_amplitude"]["value"].dims[0].attach_scale(
+            DSGroups["Frequency"]["value"]
         )
-        Datasets["Excitation_amplitude"]["value"].dims[0].label = "Frequency"
-        Datasets["Excitation_amplitude"]["uncertainty"].dims[0].attach_scale(
-            Datasets["Frequency"]
-        )
-        Datasets["Phase"] = group.create_group("Phase")
-        Datasets["Phase"]["value"] = Datasets["Phase"].create_dataset(
+        DSGroups["Phase"] = group.create_group("Phase")
+        PhaseVal=DSGroups["Phase"].create_dataset(
             "value", ([3, refcsv.shape[0]]), dtype=float
         )
-        Datasets["Phase"]["uncertainty"] = Datasets["Phase"].create_dataset(
+        PhaseUcer=DSGroups["Phase"].create_dataset(
             "uncertainty", ([3, refcsv.shape[0]]), dtype=float
         )
-        Datasets["Phase"]["value"][:] = np.NaN
-        Datasets["Phase"]["uncertainty"][:] = np.NaN
-        Datasets["Phase"].attrs["Unit"] = "\\radian"
-        Datasets["Phase"].attrs["Physical_quantity"] = [
+        DSGroups["Phase"]["value"][:] = np.NaN
+        DSGroups["Phase"]["uncertainty"][:] = np.NaN
+        DSGroups["Phase"].attrs["Unit"] = "\\radian"
+        DSGroups["Phase"].attrs["Physical_quantity"] = [
             "X Inertial phase",
             "Y Inertial phase",
             "Z Inertial phase",
         ]
-        Datasets["Phase"].attrs['Uncertainty_type'] = "95% coverage gausian"
-        Datasets["Phase"]["value"][axis, :] = refcsv["phase"].to_numpy()
-        Datasets["Phase"]["uncertainty"][axis, :] = refcsv["phase_std"].to_numpy()
+        DSGroups["Phase"].attrs['Uncertainty_type'] = "95% coverage gausian"
+        DSGroups["Phase"]["value"][axis, :] = refcsv["phase"].to_numpy()
+        DSGroups["Phase"]["uncertainty"][axis, :] = refcsv["phase_std"].to_numpy()
         if isdeg:
-            Datasets["Phase"]["value"][axis, :] = (
-                Datasets["Phase"]["value"][axis, :] / 180 * np.pi
+            DSGroups["Phase"]["value"][axis, :] = (
+                DSGroups["Phase"]["value"][axis, :] / 180 * np.pi
             )
-            Datasets["Phase"]["uncertainty"][axis, :] = (
-                Datasets["Phase"]["uncertainty"][axis, :] / 180 * np.pi
+            DSGroups["Phase"]["uncertainty"][axis, :] = (
+                DSGroups["Phase"]["uncertainty"][axis, :] / 180 * np.pi
             )
-            Datasets["Phase"].attrs["Unit"] = "\\degree"
-        Datasets["Phase"]["value"].dims[0].label = "Frequency"
-        Datasets["Phase"]["value"].dims[0].attach_scale(Datasets["Frequency"])
-        Datasets["Phase"]["uncertainty"].dims[0].label = "Frequency"
-        Datasets["Phase"]["uncertainty"].dims[0].attach_scale(Datasets["Frequency"])
+        DSGroups["Phase"]["value"].dims[0].label = "Frequency"
+        DSGroups["Phase"]["value"].dims[0].attach_scale(DSGroups["Frequency"]["value"])
         hdffile.flush()
 
 
@@ -363,7 +370,7 @@ def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
                 raise ValueError("All ADC Channels need to have the same frequencys")
         i = i + 1
     channeloder = ["ADC1", "ADC2", "ADC3"]
-    Datasets = {}
+    DSGroups = {}
     try:
         refgroup = hdffile["REFERENCEDATA"]
         try:
@@ -373,75 +380,106 @@ def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
     except KeyError:
         refgroup = hdffile.create_group("REFERENCEDATA")
         adcrefgroup = refgroup.create_group(adcname)
-    adctfgroup = adcrefgroup.create_group("Transferfunction")
-    hdffile["RAWDATA/" + adcname].attrs["Transferfunction"] = adctfgroup
-    Datasets["Frequency"] = adctfgroup.create_dataset(
-        "Frequency", ([freqpoints[0]]), dtype="float64"
+    adctftopgroup = adcrefgroup.create_group("Transferfunction")
+    try:
+        hdffile["RAWDATA/" + adcname].attrs["Transferfunction"] = adctftopgroup
+    except KeyError:
+        warnings.warn("Group RAWDATA/"+str(adcname)+" not found link was to this group was not added")
+    DSGroups["Frequency"]= adctftopgroup.create_group(
+        "Frequency"
     )
-    Datasets["Frequency"].make_scale("Frequency")
-    Datasets["Frequency"].attrs["Unit"] = "/hertz"
-    Datasets["Frequency"].attrs["Physical_quantity"] = "Excitation frequency"
-    Datasets["Frequency"][0:] = TFs[channeloder[0]]["Frequencys"]
-    Datasets["Magnitude"] = adctfgroup.create_dataset(
-        "Magnitude", ([channelcount, freqpoints[0]]), dtype=uncerval
+    freqval= DSGroups["Frequency"].create_dataset(
+        "values", ([freqpoints[0]]), dtype="float64"
     )
-    Datasets["Magnitude"].attrs["Unit"] = "\\one"
-    Datasets["Magnitude"].attrs["Physical_quantity"] = [
+    frequncer= DSGroups["Frequency"].create_dataset(
+        "uncertainty", ([freqpoints[0]]), dtype="float64"
+    )
+    DSGroups["Frequency"]['values'].make_scale("Frequency")
+    DSGroups["Frequency"].attrs["Unit"] = "/hertz"
+    DSGroups["Frequency"].attrs["Physical_quantity"] = "Excitation frequency"
+    DSGroups["Frequency"]['values'][0:] = TFs[channeloder[0]]["Frequencys"]
+    DSGroups["Frequency"]['uncertainty'][:] = DSGroups["Frequency"]['values'][0:]*np.NaN
+
+    DSGroups["Magnitude"] = adctftopgroup.create_group(
+        "Magnitude")
+    magval = DSGroups["Magnitude"].create_dataset(
+        "values", ([channelcount, freqpoints[0]]), dtype="float64"
+    )
+    maguncer = DSGroups["Magnitude"].create_dataset(
+        "uncertainty", ([channelcount, freqpoints[0]]), dtype="float64"
+    )
+    DSGroups["Magnitude"].attrs["Unit"] = "\\one"
+    DSGroups["Magnitude"].attrs['Unit_numerator']='\\volt'
+    DSGroups["Magnitude"].attrs['Unit_denominator']='\\volt'
+    DSGroups["Magnitude"].attrs["Physical_quantity"] = [
         "Magnitude response Voltage Ch 1",
         "Magnitude response Voltage Ch 2",
         "Magnitude response Voltage Ch 3",
     ]
-    Datasets["Magnitude"].attrs['Uncertainty_type'] = "95% coverage gausian"
+    DSGroups["Magnitude"].attrs['Uncertainty_type'] = "95% coverage gausian"
     i = 0
     for channel in channeloder:
-        Datasets["Magnitude"][i, :, "value"] = TFs[channel]["AmplitudeCoefficent"]
-        Datasets["Magnitude"][i, :, "uncertainty"] = TFs[channel][
+        DSGroups["Magnitude"]['values'][i, :] = TFs[channel]["AmplitudeCoefficent"]
+        DSGroups["Magnitude"]['uncertainty'][i, :] = TFs[channel][
             "AmplitudeCoefficentUncer"
         ]
         i = i + 1
-    Datasets["Magnitude"].dims[0].label = "Frequency"
-    Datasets["Magnitude"].dims[0].attach_scale(Datasets["Frequency"])
+    DSGroups["Magnitude"]['values'].dims[0].label = "Frequency"
+    DSGroups["Magnitude"]['values'].dims[0].attach_scale(DSGroups["Frequency"]['values'])
 
-    Datasets["Phase"] = adctfgroup.create_dataset(
-        "Phase", ([channelcount, freqpoints[0]]), dtype=uncerval
+
+    DSGroups["Phase"] = adctftopgroup.create_group(
+        "Phase")
+    phaseval = DSGroups["Phase"].create_dataset(
+        "value", ([channelcount, freqpoints[0]]), dtype="float64"
     )
-    Datasets["Phase"].attrs["Unit"] = "\\radian"
-    Datasets["Phase"].attrs["Physical_quantity"] = [
+    phaseuncer = DSGroups["Phase"].create_dataset(
+        "uncertainty", ([channelcount, freqpoints[0]]), dtype="float64"
+    )
+    DSGroups["Phase"].attrs["Unit"] = "\\radian"
+    DSGroups["Phase"].attrs["Physical_quantity"] = [
         "Phase response Voltage Ch 1",
         "Phase response Voltage Ch 2",
         "Phase response  Voltage Ch 3",
     ]
-    Datasets["Phase"].attrs['Uncertainty_type'] = "95% coverage gausian"
+    DSGroups["Phase"].attrs['Uncertainty_type'] = "95% coverage gausian"
     i = 0
     for channel in channeloder:
-        Datasets["Phase"][i, :, "value"] = TFs[channel]["Phase"]
-        Datasets["Phase"][i, :, "uncertainty"] = TFs[channel]["PhaseUncer"]
+        DSGroups["Phase"]["value"][i, :] = TFs[channel]["Phase"]
+        DSGroups["Phase"]["uncertainty"][i, :] = TFs[channel]["PhaseUncer"]
         if isdeg:
-            Datasets["Phase"][i, :, "value"] = (
-                Datasets["Phase"][i, :, "value"] / 180 * np.pi
+            DSGroups["Phase"]["value"][i, :] = (
+                    DSGroups["Phase"]["value"][i, :] / 180 * np.pi
             )
-            Datasets["Phase"][i, :, "uncertainty"] = (
-                Datasets["Phase"][i, :, "uncertainty"] / 180 * np.pi
+            DSGroups["Phase"]["uncertainty"][i, :] = (
+                    DSGroups["Phase"]["uncertainty"][i, :] / 180 * np.pi
             )
         i = i + 1
-    Datasets["Phase"].dims[0].label = "Frequency"
-    Datasets["Phase"].dims[0].attach_scale(Datasets["Frequency"])
+    DSGroups["Phase"]["value"].dims[0].label = "Frequency"
+    DSGroups["Phase"]["value"].dims[0].attach_scale(DSGroups["Frequency"]['values'])
 
-    Datasets["N"] = adctfgroup.create_dataset(
-        "N", ([channelcount, freqpoints[0]]), dtype=np.int32
+    DSGroups["Repetition_count"] = adctftopgroup.create_group(
+        "Repetition_count")
+    Nval = DSGroups["Repetition_count"].create_dataset(
+        "value", ([channelcount, freqpoints[0]]), dtype=np.int32
     )
-    Datasets["N"].attrs["Unit"] = "\\one"
-    Datasets["N"].attrs["Physical_quantity"] = [
+    Nuncer = DSGroups["Repetition_count"].create_dataset(
+        "uncertainty", ([channelcount, freqpoints[0]]), dtype=np.int32
+    )
+    DSGroups["Repetition_count"].attrs["Unit"] = "\\one"
+    DSGroups["Repetition_count"].attrs["Physical_quantity"] = [
         "Datapoints Voltage Ch 1",
         "Datapoints Voltage Ch 2",
         "Datapoints Voltage Ch 3",
     ]
+    DSGroups["Repetition_count"].attrs['Uncertainty_type'] = "Errorless integer number"
     i = 0
     for channel in channeloder:
-        Datasets["N"][i, :] = TFs[channel]["N"]
+        DSGroups["Repetition_count"]['value'][i, :] = TFs[channel]["N"]
+        DSGroups["Repetition_count"]["uncertainty"][i, :] = TFs[channel]["N"]*0# zero uncertanity since its intergervalue
         i = i + 1
-    Datasets["N"].dims[0].label = "Frequency"
-    Datasets["N"].dims[0].attach_scale(Datasets["Frequency"])
+    DSGroups["Repetition_count"]['value'].dims[0].label = "Frequency"
+    DSGroups["Repetition_count"]['value'].dims[0].attach_scale(DSGroups["Frequency"]['values'])
     hdffile.flush()
 
 
@@ -640,8 +678,14 @@ if __name__ == "__main__":
     reffile = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     # find all dumpfiles in folder matching str
     dumpfilenames = findfilesmatchingstr(folder, r".dump")  # input file name
+    hdffilename = r"/tmp/test.hdf5"
+    try:
+        os.remove(hdffilename)
+    except FileNotFoundError:
+        pass
 
     hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB2.hdf5"
+ 
     for dumpfilename in dumpfilenames:
         if dumpfilename.find("MPU_9250") != -1:
             adddumptohdf(dumpfilename, hdffilename, extractadcdata=True)
@@ -649,6 +693,7 @@ if __name__ == "__main__":
             print("skipping MS5837 data")
         else:
             adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
+
     # find al spektra reference files
     # reffilenames = findfilesmatchingstr(folder, 'prp.txt')
     # parse spektra reference files
