@@ -408,7 +408,7 @@ class experiment:
             {}
         )  # all elements in this dict are new an will be saved in the hdf file
         self.runtimeData = {}  # all data here will NOT saved into the hdf file
-        self.flags = {}
+        self.flags = {"saved_to_disk":False}
 
         for name in self.met4fofdatafile.senorsnames:
             self.idxs[name] = self.met4fofdatafile.getnearestidxs(name, self.timepoints)
@@ -493,6 +493,14 @@ class experiment:
 class sineexcitation(experiment):
     def __init__(self, hdfmet4fofdatafile, times, experiementID):
         super().__init__(hdfmet4fofdatafile, times, "Sine excitation", experiementID)
+
+    def __init__(self, file,experimentGroup):
+        hdfmet4fofdatafile=file
+        times=[experimentGroup.attrs["Start Time"],
+            experimentGroup.attrs["End Time"]]
+        experiementID=0000
+        super().__init__(hdfmet4fofdatafile, times, "Sine excitation", experiementID)
+        self.flags["saved_to_disk"] = True
 
     def dofft(self):
         for sensor in self.met4fofdatafile.sensordatasets:
@@ -861,18 +869,22 @@ class sineexcitation(experiment):
         pass
 
     def saveToHdf(self):
-        experimentGroup = self.createHDFGroup()
-        experimentGroup.attrs["Start Time"] = self.timepoints[0]
-        experimentGroup.attrs["End Time"] = self.timepoints[1]
-        self.datafile.flush()
-        Path("tmp").mkdir(parents=True, exist_ok=True)
-        dd.io.save("tmp/" + self.experiemntID + ".hdf5", self.data)
-        h5df = h5py_plain.File("tmp/" + self.experiemntID + ".hdf5", "r")
-        for key in h5df.keys():
-            self.datafile.copy(h5df[key], experimentGroup)
-            experimentGroup[key].attrs["Start Index"] = self.idxs[key][0]
-            experimentGroup[key].attrs["Stop Index"] = self.idxs[key][1]
+        if not self.flags["saved_to_disk"]:
+            experimentGroup = self.createHDFGroup()
+            experimentGroup.attrs["Start Time"] = self.timepoints[0]
+            experimentGroup.attrs["End Time"] = self.timepoints[1]
             self.datafile.flush()
+            Path("tmp").mkdir(parents=True, exist_ok=True)
+            dd.io.save("tmp/" + self.experiemntID + ".hdf5", self.data)
+            h5df = h5py_plain.File("tmp/" + self.experiemntID + ".hdf5", "r")
+            for key in h5df.keys():
+                self.datafile.copy(h5df[key], experimentGroup)
+                experimentGroup[key].attrs["Start Index"] = self.idxs[key][0]
+                experimentGroup[key].attrs["Stop Index"] = self.idxs[key][1]
+                self.datafile.flush()
+            self.flags["saved_to_disk"] = True
+        else:
+            raise RuntimeWarning("Data already written to hdf file. Skipping")
 
 
 def processdata(i):
@@ -880,8 +892,8 @@ def processdata(i):
     times = mpdata["movementtimes"][i]
     refidx = int(mpdata["refidx"][i])
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 10000000000
-    times[1] -= 2000000000
+    times[0] += 7e9
+    times[1] -= 1e9
     if times[1].astype(np.int64) - times[0].astype(np.int64) < 0:
         raise ValueError("time after cutting is <0")
     experiment = sineexcitation(
@@ -906,8 +918,8 @@ def processdata(i):
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
-        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-        0,
+        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
+        1,
     )
     print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
@@ -927,15 +939,15 @@ if __name__ == "__main__":
     # hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
     # hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
     ##revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
-    sensorname = "0x1fe40000_MPU_9250"
-
+    sensorname = "0xbccb0000_MPU_9250"
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     try:
-        os.remove(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
+        os.remove(hdffilename)
     except FileNotFoundError:
         pass
-    shutil.copyfile(r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB (copy).hdf5", r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5")
+    shutil.copyfile(hdffilename.replace(".hdf5","(copy).hdf5"), hdffilename)
 
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+
     # revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, "r+")
 
@@ -955,7 +967,7 @@ if __name__ == "__main__":
     # REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
     #                                                blocksinrow=100, blocksize=10000, plot=True)
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/0x1fe40000_MPU_9250/Acceleration', 'RAWDATA/0x1fe40000_MPU_9250/Absolutetime', treshold=0.2,
+    movementidx, movementtimes = test.detectmovment('RAWDATA/0xbccb0000_MPU_9250/Acceleration', 'RAWDATA/0xbccb0000_MPU_9250/Absolutetime', treshold=1.7,
                                                     blocksinrow=100, blocksize=100, plot=True)
     manager = multiprocessing.Manager()
     mpdata = manager.dict()
@@ -963,16 +975,16 @@ if __name__ == "__main__":
     mpdata['movementtimes'] = movementtimes
     mpdata['lock'] = manager.Lock()
     # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
-    mpdata['refidx'] = np.zeros([16 * 10])
-    refidx = np.zeros([17 * 10])
-    for i in np.arange(10):
-        refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-    mpdata['refidx'] = refidx
+    #mpdata['refidx'] = np.zeros([16 * 10])
+    #refidx = np.zeros([17 * 10])
+    #for i in np.arange(10):
+    #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+    #mpdata['refidx'] = refidx
     #refidx = np.array([0,0,1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33])
 
     freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
-    #refidx = generateCEMrefIDXfromfreqs(freqs)
-    #mpdata['refidx'] = refidx
+    refidx = generateCEMrefIDXfromfreqs(freqs)
+    mpdata['refidx'] = refidx
 
     unicefreqs = np.unique(freqs, axis=0)
     mpdata['uniquexfreqs'] = unicefreqs
@@ -1052,7 +1064,9 @@ if __name__ == "__main__":
     #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
 
     TF=getRAWTFFromExperiemnts(
-        datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250"
+        datafile["EXPERIMENTS/Sine excitation"], "0xbccb0000_MPU_9250"
     )
 
-    test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250")
+    test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0xbccb0000_MPU_9250")
+    test.hdffile.flush()
+    test.hdffile.close()
