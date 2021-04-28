@@ -1404,11 +1404,12 @@ class HDF5Dumper:
             if deltat<-2.5e8:
                 deltains=np.rint((deltat)/1e9)
                 self.timeoffset=self.timeoffset-deltains
-                warnings.warn("Time difference is negative at IDX"+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+"nanoseconds "+str(deltains)+" in seconds "+str(self.timeoffset)+'accumulated deltat in seconds')
+                warnings.warn("Time difference is negative at IDX"+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+"nanoseconds "+str(deltains)+" in seconds "+str(self.timeoffset)+'accumulated deltat in seconds',category=RuntimeWarning)
             if deltat > 2.5e8:
                 deltains=np.rint((deltat)/1e9)
                 self.timeoffset = self.timeoffset-deltains
-                warnings.warn("Time difference is positive at IDX"+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+"nanoseconds "+str(deltains)+" in seconds "+str(self.timeoffset)+'accumulated deltat in seconds')
+                warnings.warn("Time difference is large positive at IDX"+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+"nanoseconds "+str(deltains)+" in seconds "+str(self.timeoffset)+'accumulated deltat in seconds. Accumulated deltat will be set to 0')
+                self.timeoffset=0
             self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
             self.buffer[:, self.msgbufferd] = np.array(
                 [
