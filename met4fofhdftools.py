@@ -72,6 +72,7 @@ def adddumptohdf(
     hdfdumplock=threading.Lock(),
     adcbaseid=10,
     extractadcdata=False,
+    correcttimeglitches=True
 ):
     # lock use for multi threading lock in met4FOF hdf dumper implementation
     # adcbaseid=10
@@ -134,7 +135,7 @@ def adddumptohdf(
             exit()
         baseid = int(np.floor(paramsdictjson["ID"] / 65536))
         # descriptions are now ready start the hdf dumpers
-        sensordumper = HDF5Dumper(sensordscp, hdfdumpfile, hdfdumplock)
+        sensordumper = HDF5Dumper(sensordscp, hdfdumpfile, hdfdumplock,correcttimeglitches=correcttimeglitches)
         if extractadcdata:
             adcid = int(baseid * 65536 + 256 * adcbaseid)
             print("ADC ID " + hex(adcid))
@@ -674,22 +675,23 @@ def getRAWTFFromExperiemnts(
 
 if __name__ == "__main__":
 
-    folder = r"/home/benedikt/timejump"
+    folder = r"/home/benedikt/testdata/"
     #reffile = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     # find all dumpfiles in folder matching str
     dumpfilenames = findfilesmatchingstr(folder, r".dump")  # input file name
-    hdffilename = folder+r"timejump.hdf5"
+    hdffilename = folder+r"test.hdf5"
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
         pass
     for dumpfilename in dumpfilenames:
-        if dumpfilename.find("MPU_9250") != -1:
-            adddumptohdf(dumpfilename, hdffilename, extractadcdata=True)
-        elif dumpfilename.find("MS5837") != -1:
-            print("skipping MS5837 data")
-        else:
-            adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
+        #if dumpfilename.find("MPU_9250") != -1:
+        #    adddumptohdf(dumpfilename, hdffilename, extractadcdata=True)
+        if dumpfilename.find("MS5837") != -1:
+            adddumptohdf(dumpfilename, hdffilename, correcttimeglitches=False)
+        #    print("skipping MS5837 data")
+        #else:
+        adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
 
     # find al spektra reference files
     #reffilenames = findfilesmatchingstr(folder, 'prp.txt')
