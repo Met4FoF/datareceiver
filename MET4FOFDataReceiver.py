@@ -1197,6 +1197,7 @@ class Sensor:
 
 class HDF5Dumper:
     def __init__(self, dscp, file, hdfffilelock, chunksize=2048,correcttimeglitches=True):
+        self.dscp=dscp
         self.hdflock = hdfffilelock
         self.pushlock = threading.Lock()
         self.dataframindexoffset = 4
@@ -1395,6 +1396,8 @@ class HDF5Dumper:
                     ]["MIN_SCALE"]
                 self.f.flush()
 
+    def __str__(self):
+        return str(self.f)+" "+hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_")+' '+str(self.msgbufferd +self.chunksize * self.chunkswritten)+' msg received'
     def pushmsg(self, message, Description):
         with self.pushlock:
             time=message.unix_time*1e9+message.unix_time_nsecs
@@ -1439,7 +1442,9 @@ class HDF5Dumper:
 
             self.msgbufferd = self.msgbufferd + 1
             if self.msgbufferd == self.chunksize:
+                print(hex(self.dscp.ID)+"waiting for lock "+str(self.hdflock))
                 with self.hdflock:
+                    print(hex(self.dscp.ID)+"Aquired lock " + str(self.hdflock))
                     startIDX = self.chunksize * self.chunkswritten
                     #print("Start index is " + str(startIDX))
                     self.Datasets["Absolutetime"].resize([1, startIDX + self.chunksize])
@@ -1486,13 +1491,61 @@ class HDF5Dumper:
                     self.chunkswritten = self.chunkswritten + 1
 
 
+    def wirteRemainingToHDF(self):
+        warnings.warn('WARNING will generate zeros in the end of the data file if callback is active there will be an gap in the file ')
+        with self.hdflock:
+            startIDX = self.chunksize * self.chunkswritten
+            # print("Start index is " + str(startIDX))
+            self.Datasets["Absolutetime"].resize([1, startIDX + self.chunksize])
+            time = (
+                    self.buffer[1, :] * 1e9
+                    + self.buffer[2, : startIDX + self.chunksize]
+            ).astype(np.uint64)
+            self.Datasets["Absolutetime"][:, startIDX:] = time
+
+            self.Datasets["Absolutetime_uncertainty"].resize(
+                [1, startIDX + self.chunksize]
+            )
+            Absolutetime_uncertainty = self.buffer[3, :].astype(np.uint32)
+            self.Datasets["Absolutetime_uncertainty"][
+            :, startIDX:
+            ] = Absolutetime_uncertainty
+            if not self.startimewritten:
+                self.group.attrs["Start_time"] = time[0]
+                self.group.attrs[
+                    "Start_time_uncertainty"
+                ] = Absolutetime_uncertainty[0]
+                self.startimewritten = True
+            self.Datasets["Sample_number"].resize(
+                [1, startIDX + self.chunksize]
+            )
+            samplenumbers = self.buffer[0, :].astype(np.uint32)
+            self.Datasets["Sample_number"][:, startIDX:] = samplenumbers
+
+            for groupname in self.hieracy:
+                vectorlength = len(self.hieracy[groupname]["copymask"])
+                self.Datasets[groupname].resize(
+                    [vectorlength, startIDX + self.chunksize]
+                )
+                data = self.buffer[
+                       (
+                               self.hieracy[groupname]["copymask"]
+                               + self.dataframindexoffset
+                       ),
+                       :,
+                       ].astype("float32")
+                self.Datasets[groupname][:, startIDX:] = data
+            # self.f.flush()
+            self.msgbufferd = 0
+            self.chunkswritten = self.chunkswritten + 1
+
 def startdumpingallsensorshdf(filename):
     hdfdumplock = threading.Lock()
     hdfdumpfile = h5py.File(filename, "a")
     hdfdumper = []
     for SensorID in DR.AllSensors:
         hdfdumper.append(
-            HDF5Dumper(DR.AllSensors[SensorID].Description, hdfdumpfile, hdfdumplock)
+            HDF5Dumper(DR.AllSensors[SensorID].Description, hdfdumpfile, hdfdumplock,chunksize=32768,correcttimeglitches=False)
         )
         DR.AllSensors[SensorID].SetCallback(hdfdumper[-1].pushmsg)
     return hdfdumper, hdfdumpfile
@@ -1502,11 +1555,22 @@ def stopdumpingallsensorshdf(dumperlist, dumpfile):
     for SensorID in DR.AllSensors:
         DR.AllSensors[SensorID].UnSetCallback()
     for dumper in dumperlist:
+        print("closing"+str(dumper))
+        dumper.wirteRemainingToHDF()
         dumper.f.flush()
         del dumper
     dumpfile.close()
 
 
+    #for dumper in dumperlist:
+    #    print(str(dumper))
+
+
+
 if __name__ == "__main__":
     DR = DataReceiver("192.168.0.200", 7654)
     # hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
+    #time.sleep(10)
+    #dumperlist,file=startdumpingallsensorshdf("spange_timing_log_4.hfd5")
+    #time.sleep(100)
+    #stopdumpingallsensorshdf(dumperlist,file)
