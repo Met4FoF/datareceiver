@@ -118,9 +118,12 @@ def binarySearch(data, val):
 
 
 class hdfmet4fofdatafile:
-    def __init__(self, hdffile):
+    def __init__(self, hdffile,sensornames=None):
         self.hdffile = hdffile
-        self.senorsnames = list(self.hdffile["RAWDATA"].keys())
+        if sensornames==None:
+            self.senorsnames = list(self.hdffile["RAWDATA"].keys())
+        else:
+            self.senorsnames=sensornames
         self.sensordatasets = {}
         for name in self.senorsnames:
             datasets = list(self.hdffile["RAWDATA/" + name].keys())
@@ -883,10 +886,10 @@ class sineexcitation(experiment):
 def processdata(i):
     sys.stdout.flush()
     times = mpdata["movementtimes"][i]
-    refidx = int(mpdata["refidx"][i])
-    print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 1e9
-    times[1] -= 1e9
+    #refidx = int(mpdata["refidx"][i])
+    #print("DONE i=" + str(i) + "refidx=" + str(refidx))
+    times[0] += 0#1e9
+    times[1] -= 0#1e9
     if times[1].astype(np.int64) - times[0].astype(np.int64) < 0:
         raise ValueError("time after cutting is <0")
     experiment = sineexcitation(
@@ -895,6 +898,7 @@ def processdata(i):
     sys.stdout.flush()
     # print(experiment)
     sys.stdout.flush()
+    """
     start = time.time()
     experiment.dofft()
     end = time.time()
@@ -914,7 +918,8 @@ def processdata(i):
         "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
         0,
     )
-    print("DONE i=" + str(i) + "refidx=" + str(refidx))
+    """
+    #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
 
@@ -932,8 +937,8 @@ if __name__ == "__main__":
     # hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
     # hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
     ##revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
-    sensorname = "0x1fe40000_MPU_9250"
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    sensorname = '0xf1030002_MPU_9250'
+    hdffilename = r"/tmp/2_Z_250_110Hz_50ms2peak.hdf5"
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
@@ -944,7 +949,7 @@ if __name__ == "__main__":
     # revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, "r+")
 
-    test = hdfmet4fofdatafile(datafile)
+    test = hdfmet4fofdatafile(datafile,sensornames=['0xf1030002_MPU_9250', '0xf1030100_BMA_280', '0xf1030a00_STM32_Internal_ADC'])
     #getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     # adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
@@ -960,7 +965,7 @@ if __name__ == "__main__":
     # REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
     #                                                blocksinrow=100, blocksize=10000, plot=True)
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/0x1fe40000_MPU_9250/Acceleration', 'RAWDATA/0x1fe40000_MPU_9250/Absolutetime', treshold=0.6,
+    movementidx, movementtimes = test.detectmovment('RAWDATA/0xf1030002_MPU_9250/Acceleration', 'RAWDATA/0xf1030002_MPU_9250/Absolutetime', treshold=0.6,
                                                     blocksinrow=100, blocksize=100, plot=True)
     manager = multiprocessing.Manager()
     mpdata = manager.dict()
@@ -968,6 +973,7 @@ if __name__ == "__main__":
     mpdata['movementtimes'] = movementtimes
     mpdata['lock'] = manager.Lock()
     # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
+    """
     mpdata['refidx'] = np.zeros([16 * 10])
     refidx = np.zeros([17 * 10])
     for i in np.arange(10):
@@ -982,16 +988,17 @@ if __name__ == "__main__":
     unicefreqs = np.unique(freqs, axis=0)
     mpdata['uniquexfreqs'] = unicefreqs
     i = np.arange(refidx.size)
-    #i = np.arange(10)
+    """
+    i = np.arange(movementtimes.shape[0])
 
     #i=np.arange(4)
-    with multiprocessing.Pool(14) as p:
+    with multiprocessing.Pool(4) as p:
         results = p.map(processdata, i)
     end = time.time()
     print(end - start)
     #i = 0
     #processdata(1)
-
+    """
     freqs = np.zeros(movementtimes.shape[0])
     mag = np.zeros(movementtimes.shape[0])
     maguncer = np.zeros(movementtimes.shape[0])
@@ -999,10 +1006,12 @@ if __name__ == "__main__":
     rawamp = np.zeros(movementtimes.shape[0])
     phase = np.zeros(movementtimes.shape[0])
     phaseuncer = np.zeros(movementtimes.shape[0])
+    """
     for i in range(len(results)):
         ex=results[i]
     #    if(i==99):
     #        print("DEBUG")
+    """
         mag[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['value'][2,2]
         maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['uncertainty'][2,2]
         examp[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Excitation_amplitude']['value'][2,2]
@@ -1063,3 +1072,4 @@ if __name__ == "__main__":
     test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250")
     test.hdffile.flush()
     test.hdffile.close()
+    """

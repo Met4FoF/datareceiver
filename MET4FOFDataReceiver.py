@@ -1313,6 +1313,7 @@ class HDF5Dumper:
                 self.group.attrs["Sensor_name"] = dscp.SensorName
                 self.group.attrs["Sensor_ID"] = dscp.ID
                 self.group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
+                self.group.attrs["Data_point_number"]=0
                 self.Datasets["Absolutetime"] = self.group.create_dataset(
                     "Absolutetime",
                     ([1, chunksize]),
@@ -1489,6 +1490,9 @@ class HDF5Dumper:
                     # self.f.flush()
                     self.msgbufferd = 0
                     self.chunkswritten = self.chunkswritten + 1
+                    self.group.attrs["Data_point_number"] = self.chunkswritten*self.chunksize
+                    self.buffer.fill(np.NaN)
+                    self.buffer[0:4,:]=np.zeros([4,self.chunksize])
 
 
     def wirteRemainingToHDF(self):
@@ -1535,7 +1539,8 @@ class HDF5Dumper:
                        :,
                        ].astype("float32")
                 self.Datasets[groupname][:, startIDX:] = data
-            # self.f.flush()
+            self.f.flush()
+            self.group.attrs["Data_point_number"] = self.group.attrs["Data_point_number"] + self.msgbufferd
             self.msgbufferd = 0
             self.chunkswritten = self.chunkswritten + 1
 
@@ -1545,7 +1550,7 @@ def startdumpingallsensorshdf(filename):
     hdfdumper = []
     for SensorID in DR.AllSensors:
         hdfdumper.append(
-            HDF5Dumper(DR.AllSensors[SensorID].Description, hdfdumpfile, hdfdumplock,chunksize=32768,correcttimeglitches=False)
+            HDF5Dumper(DR.AllSensors[SensorID].Description, hdfdumpfile, hdfdumplock,chunksize=1024,correcttimeglitches=False)
         )
         DR.AllSensors[SensorID].SetCallback(hdfdumper[-1].pushmsg)
     return hdfdumper, hdfdumpfile
@@ -1569,8 +1574,7 @@ def stopdumpingallsensorshdf(dumperlist, dumpfile):
 
 if __name__ == "__main__":
     DR = DataReceiver("192.168.0.200", 7654)
-    # hdfdumpfile = h5py.File("multi_position_4.hdf5", 'w')
     #time.sleep(10)
-    #dumperlist,file=startdumpingallsensorshdf("spange_timing_log_4.hfd5")
-    #time.sleep(100)
+    #dumperlist,file=startdumpingallsensorshdf("tesatsdtsdfasdf.hfd5")
+    #time.sleep(15)
     #stopdumpingallsensorshdf(dumperlist,file)
