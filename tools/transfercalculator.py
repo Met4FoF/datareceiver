@@ -32,7 +32,7 @@ from met4fofhdftools import add1dsinereferencedatatohdffile
 
 # from met4fofhdftools import addadctransferfunctiontodset
 from met4fofhdftools import (
-    uncerval,getRAWTFFromExperiemnts
+    uncerval,getRAWTFFromExperiemnts,add3compZemaTDMSData
 )  # uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
 
@@ -45,7 +45,7 @@ def ufloattouncerval(ufloat):
 
 # plt.rc('font', family='serif')
 # plt.rc('text', usetex=True)
-PLTSCALFACTOR = 2
+PLTSCALFACTOR = 0.5
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 15 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
@@ -68,6 +68,7 @@ def getplotableunitstring(unitstr, Latex=False):
             "\\radian\\second\\tothe{-1}": "rad/s",
             "\\metre\\second\\tothe{-2}": "m/s^2",
             "\\metre\\second\\tothe{-1}": "m/s",
+            "\\metre": "m",
             "\\volt": "v",
             "\\hertz": "Hz",
         }
@@ -79,6 +80,7 @@ def getplotableunitstring(unitstr, Latex=False):
             "\\radian\\second\\tothe{-1}": "$\\frac{rad}{s}$",
             "\\metre\\second\\tothe{-2}": "$\\frac{m}{s^2}",
             "\\metre\\second\\tothe{-1}": "$\\frac{m}{s}",
+            "\\metre": "m",
             "\\volt": "v",
             "\\hertz": "Hz",
         }
@@ -471,6 +473,7 @@ class experiment:
                     ]
                     axs[icol, irow].plot(time, data, label=label)
                     axs[icol, irow].legend()
+                    axs[icol, irow].grid()
                 irow = irow + 1
             icol = icol + 1
         fig.show()
@@ -728,6 +731,7 @@ class sineexcitation(experiment):
                         ls="dotted",
                     )
                     axs[icol, irow].legend()
+                    axs[icol, irow].grid()
                 irow = irow + 1
             icol = icol + 1
         fig.show()
@@ -823,7 +827,7 @@ class sineexcitation(experiment):
                                 ufexamp = np.NaN
                             ufmeasamp = ufloat(
                                 self.data[sensor][dataset]["SinPOpt"][i][0],
-                                self.data[sensor][dataset]["SinPCov"][i][0, 0],
+                                2*np.sqrt(self.data[sensor][dataset]["SinPCov"][i][0, 0]),
                             )
                             mag = ufmeasamp / ufexamp
                             TC["Magnitude"]["value"][j, i] = mag.n
@@ -833,22 +837,22 @@ class sineexcitation(experiment):
 
                             ufdutphase = ufloat(
                                 self.data[sensor][dataset]["SinPOpt"][j][3],
-                                self.data[sensor][dataset]["SinPCov"][j][3, 3],
+                                2*np.sqrt(self.data[sensor][dataset]["SinPCov"][j][3, 3]),
                             )
 
                             ufanalogrefphase = ufloat(
                                 self.data[adcname][analogchannelquantity]["SinPOpt"][
                                     analogrefchannelidx
                                 ][3],
-                                self.data[adcname][analogchannelquantity]["SinPCov"][
+                                2*np.sqrt(self.data[adcname][analogchannelquantity]["SinPCov"][
                                     analogrefchannelidx
-                                ][3, 3],
+                                ][3, 3]),
                             )
 
                             ufADCTFphase = ADCTF.getNearestTF(analogrefchannelidx, fitfreq)['Phase']
 
                             ufrefphase = ufloat(
-                                self.datafile[refdatagroupname]["Phase"]['value'][j][refdataidx],self.datafile[refdatagroupname]["Phase"]["uncertainty"][j][refdataidx]
+                                self.datafile[refdatagroupname]["Phase"]['value'][j][refdataidx]+np.pi,self.datafile[refdatagroupname]["Phase"]["uncertainty"][j][refdataidx]#+np.pi beause original data are velocitiy so deviation from sine is cos --> 90deg phase shift
                             )  # in rad
                             phase = (
                                 ufdutphase
@@ -862,6 +866,112 @@ class sineexcitation(experiment):
                             TC["Phase"]["value"][j, i] = phase.n
                             TC["Phase"]["uncertainty"][j, i] = phase.s
         pass
+
+    def calculateGPSRef1freqFromVelocity(
+        self,
+        refdatagroupname='0x00000200_OptoMet_Velocity_from_counts',
+        refquantity='Velocity',
+    ):
+        if refquantity!='Velocity':
+            raise KeyError("only Velocity is supported right no as input")
+        for sensor in self.met4fofdatafile.sensordatasets:
+            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
+                datasetrows = self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[
+                    0
+                ]
+                self.data[sensor][dataset]["Transfer_coefficients"] = {}
+                TC = self.data[sensor][dataset]["Transfer_coefficients"]['Acceleration'] = {}
+                TC["Magnitude"] = {}
+                TC["Magnitude"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["Magnitude"]["value"][:] = np.NAN
+                TC["Magnitude"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["Magnitude"]["uncertainty"][:] = np.NAN
+
+                TC["Excitation_amplitude"] = {}
+                TC["Excitation_amplitude"]["value"] = np.zeros(
+                    [datasetrows, datasetrows]
+                )
+                TC["Excitation_amplitude"]["value"][:] = np.NAN
+                TC["Excitation_amplitude"]["uncertainty"] = np.zeros(
+                    [datasetrows, datasetrows]
+                )
+                TC["Excitation_amplitude"]["uncertainty"][:] = np.NAN
+                TC["Phase"] = {}
+                TC["Phase"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["Phase"]["value"][:] = np.NAN
+                TC["Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["Phase"]["uncertainty"][:] = np.NAN
+                TC["Frequency"] = {}
+                TC["Frequency"]["value"] = np.zeros([datasetrows])
+                TC["Frequency"]["value"][:] = np.NAN
+                TC["Frequency"]["uncertainty"] = np.zeros([datasetrows])
+                TC["Frequency"]["uncertainty"][:] = np.NAN
+                TC["Excitation_frequency"] = {}
+                TC["Excitation_frequency"]["value"] = np.zeros([datasetrows])
+                TC["Excitation_frequency"]["value"][:] = np.NAN
+                TC["Excitation_frequency"]["uncertainty"] = np.zeros([datasetrows])
+                TC["Excitation_frequency"]["uncertainty"][:] = np.NAN
+
+                for j in np.arange(0, datasetrows):
+                    for i in np.arange(0, datasetrows):
+                        if j == 0:
+                            TC["Frequency"]["value"][i] =self.data[sensor][dataset]["Sin_Fit_freq"][i]
+                            TC["Excitation_frequency"]["value"][i] = self.data[refdatagroupname][refquantity]["Sin_Fit_freq"][i]
+                        fitfreq = TC["Frequency"]["value"][i]
+                        reffreq = TC["Excitation_frequency"]["value"][i]
+                        if fitfreq != reffreq:
+                            warinigstr = (
+                                "Frequency mismatach in Sesnor"
+                                + sensor
+                                + " "
+                                + dataset
+                                + " fit["
+                                + str(i)
+                                + "]= "
+                                + str(fitfreq)
+                                + " ref["
+                                + str(i)
+                                + "]= "
+                                + str(reffreq)
+                                + " Transferfunction will be invaladie and is set to NaN!!"
+                            )
+                            warnings.warn(warinigstr, RuntimeWarning)
+                        else:
+
+                            # calculate magnitude response
+                            TC["Excitation_amplitude"]["value"][j, i]       = self.data[refdatagroupname][refquantity]["SinPOpt"][j][0]*np.pi*2*reffreq
+                            TC["Excitation_amplitude"]["uncertainty"][j, i] = 2*np.sqrt(self.data[refdatagroupname][refquantity]["SinPCov"][j][0, 0])
+                            ufexamp = ufloat(TC["Excitation_amplitude"]["value"][j, i],TC["Excitation_amplitude"]["uncertainty"][j, i]) #v*2pi*f=a
+                            if ufexamp == 0:
+                                ufexamp = np.NaN
+                            ufmeasamp = ufloat(
+                                self.data[sensor][dataset]["SinPOpt"][i][0],
+                                2*np.sqrt(self.data[sensor][dataset]["SinPCov"][i][0, 0])*2)
+                            mag = ufmeasamp / ufexamp
+                            TC["Magnitude"]["value"][j, i] = mag.n
+                            TC["Magnitude"]["uncertainty"][j, i] = mag.s
+
+                            ufdutphase = ufloat(
+                                self.data[sensor][dataset]["SinPOpt"][i][3],
+                                2*np.sqrt(self.data[sensor][dataset]["SinPCov"][i][3, 3])
+                            )
+
+                            ufrefphase = ufloat(
+                                self.data[refdatagroupname][refquantity]["SinPOpt"][j][3]+np.pi*0.5,#ad 90 deg due to velocity to acceleration conversion
+                                2*np.sqrt(self.data[refdatagroupname][refquantity]["SinPCov"][j][3, 3])
+                            )
+
+                            phase = (
+                                ufdutphase
+                                - ufrefphase# to check this
+                            )
+                            if phase.n < -np.pi:
+                                phase += ufloat(2 * np.pi, 0)
+                            elif phase.n > np.pi:
+                                phase -= ufloat(2 * np.pi, 0)
+                            TC["Phase"]["value"][j, i] = phase.n
+                            TC["Phase"]["uncertainty"][j, i] = phase.s
+                print(TC["Magnitude"])
 
     def saveToHdf(self):
         if not self.flags["saved_to_disk"]:
@@ -888,8 +998,8 @@ def processdata(i):
     times = mpdata["movementtimes"][i]
     #refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 0#1e9
-    times[1] -= 0#1e9
+    times[0] += 12e9
+    times[1] -= 2e9
     if times[1].astype(np.int64) - times[0].astype(np.int64) < 0:
         raise ValueError("time after cutting is <0")
     experiment = sineexcitation(
@@ -898,7 +1008,7 @@ def processdata(i):
     sys.stdout.flush()
     # print(experiment)
     sys.stdout.flush()
-    """
+
     start = time.time()
     experiment.dofft()
     end = time.time()
@@ -912,6 +1022,8 @@ def processdata(i):
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
+    experiment.calculateGPSRef1freqFromVelocity()
+    """
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
@@ -938,7 +1050,10 @@ if __name__ == "__main__":
     # hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
     ##revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     sensorname = '0xf1030002_MPU_9250'
-    hdffilename = r"/tmp/2_Z_250_110Hz_50ms2peak.hdf5"
+    #hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/X/x_250_10_delta_10Hz_50ms2max.hdf5"
+    #TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/X/X_250_10Hz.tdms"
+    hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/Z/z_250_10_delta_10Hz_50ms2max.hdf5"
+    TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/Z/Z_250_10Hz.tdms"
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
@@ -949,7 +1064,9 @@ if __name__ == "__main__":
     # revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, "r+")
 
-    test = hdfmet4fofdatafile(datafile,sensornames=['0xf1030002_MPU_9250', '0xf1030100_BMA_280', '0xf1030a00_STM32_Internal_ADC'])
+    add3compZemaTDMSData(TDMSDatafile, datafile)
+
+    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0x00000100_OptoMet_Vibrometer','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1','0xf1030a00_STM32_Internal_ADC','0x00000300_Cola_Reference'])#sensornames=['0xf1030002_MPU_9250', '0xf1030100_BMA_280', '0xf1030a00_STM32_Internal_ADC']
     #getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     # adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
@@ -966,7 +1083,8 @@ if __name__ == "__main__":
     #                                                blocksinrow=100, blocksize=10000, plot=True)
 
     movementidx, movementtimes = test.detectmovment('RAWDATA/0xf1030002_MPU_9250/Acceleration', 'RAWDATA/0xf1030002_MPU_9250/Absolutetime', treshold=0.6,
-                                                    blocksinrow=100, blocksize=100, plot=True)
+                                                    blocksinrow=80, blocksize=135, plot=True)
+    numofexperiemnts=movementtimes.shape[0]
     manager = multiprocessing.Manager()
     mpdata = manager.dict()
     mpdata['hdfinstance'] = test
@@ -989,29 +1107,31 @@ if __name__ == "__main__":
     mpdata['uniquexfreqs'] = unicefreqs
     i = np.arange(refidx.size)
     """
-    i = np.arange(movementtimes.shape[0])
+    unicefreqs = np.array([250,240,230,220,210,200,190,180,170,160,150,140,130,120,110,100,90,80,70,60,50,40,30,20,10])
+    mpdata['uniquexfreqs'] = unicefreqs
+    i = np.arange(numofexperiemnts)
 
-    #i=np.arange(4)
-    with multiprocessing.Pool(4) as p:
+    with multiprocessing.Pool(15) as p:
         results = p.map(processdata, i)
     end = time.time()
     print(end - start)
+
     #i = 0
-    #processdata(1)
-    """
-    freqs = np.zeros(movementtimes.shape[0])
-    mag = np.zeros(movementtimes.shape[0])
-    maguncer = np.zeros(movementtimes.shape[0])
-    examp = np.zeros(movementtimes.shape[0])
-    rawamp = np.zeros(movementtimes.shape[0])
-    phase = np.zeros(movementtimes.shape[0])
-    phaseuncer = np.zeros(movementtimes.shape[0])
-    """
+    #processdata(i)
+
+    freqs = np.zeros(numofexperiemnts)
+    mag = np.zeros(numofexperiemnts)
+    maguncer = np.zeros(numofexperiemnts)
+    examp = np.zeros(numofexperiemnts)
+    rawamp = np.zeros(numofexperiemnts)
+    phase = np.zeros(numofexperiemnts)
+    phaseuncer = np.zeros(numofexperiemnts)
+
     for i in range(len(results)):
         ex=results[i]
     #    if(i==99):
     #        print("DEBUG")
-    """
+
         mag[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['value'][2,2]
         maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['uncertainty'][2,2]
         examp[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Excitation_amplitude']['value'][2,2]
@@ -1066,10 +1186,10 @@ if __name__ == "__main__":
     #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
 
     TF=getRAWTFFromExperiemnts(
-        datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250"
+        datafile["EXPERIMENTS/Sine excitation"],'0xf1030002_MPU_9250'
     )
 
-    test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250")
-    test.hdffile.flush()
-    test.hdffile.close()
-    """
+
+    #test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250")
+    #test.hdffile.flush()
+    #test.hdffile.close()
