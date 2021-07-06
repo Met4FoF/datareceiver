@@ -8,6 +8,7 @@ from matplotlib.pyplot import cm
 import pandas as pd
 import time
 import multiprocessing
+from tqdm.contrib.concurrent import process_map
 import sys
 import time
 import sinetools.SineTools as st
@@ -424,7 +425,7 @@ class experiment:
             for dataset in self.met4fofdatafile.sensordatasets[name]:
                 self.data[name][dataset] = {}
                 self.runtimeData[name][dataset] = {}
-        print("EX base class Init done")
+        #print("EX base class Init done")
 
     def plotall(self, absolutetime=False):
         cols = len(self.met4fofdatafile.sensordatasets)  # one colum for every sensor
@@ -867,6 +868,7 @@ class sineexcitation(experiment):
                             TC["Phase"]["uncertainty"][j, i] = phase.s
         pass
 
+    #TODO change for useing all experiments from all axes
     def calculateGPSRef1freqFromVelocity(
         self,
         refdatagroupname='0x00000200_OptoMet_Velocity_from_counts',
@@ -1022,8 +1024,8 @@ def processdata(i):
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
-    experiment.calculateGPSRef1freqFromVelocity()
     """
+    experiment.calculateGPSRef1freqFromVelocity()
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
@@ -1052,8 +1054,11 @@ if __name__ == "__main__":
     sensorname = '0xf1030002_MPU_9250'
     #hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/X/x_250_10_delta_10Hz_50ms2max.hdf5"
     #TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/X/X_250_10Hz.tdms"
-    hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/Z/z_250_10_delta_10Hz_50ms2max.hdf5"
-    TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/Z/Z_250_10Hz.tdms"
+    #hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/Y/y_250_10_delta_10Hz_50ms2max.hdf5"
+    #TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/Y/Y_250_10Hz.tdms"
+    #hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/Z/z_250_10_delta_10Hz_50ms2max.hdf5"
+    #TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/Z/Z_250_10Hz.tdms"
+    hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max.hdf5"
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
@@ -1064,9 +1069,9 @@ if __name__ == "__main__":
     # revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, "r+")
 
-    add3compZemaTDMSData(TDMSDatafile, datafile)
-
+    #add3compZemaTDMSData(TDMSDatafile, datafile)
     test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0x00000100_OptoMet_Vibrometer','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1','0xf1030a00_STM32_Internal_ADC','0x00000300_Cola_Reference'])#sensornames=['0xf1030002_MPU_9250', '0xf1030100_BMA_280', '0xf1030a00_STM32_Internal_ADC']
+
     #getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     # adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
@@ -1082,8 +1087,8 @@ if __name__ == "__main__":
     # REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
     #                                                blocksinrow=100, blocksize=10000, plot=True)
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/0xf1030002_MPU_9250/Acceleration', 'RAWDATA/0xf1030002_MPU_9250/Absolutetime', treshold=0.6,
-                                                    blocksinrow=80, blocksize=135, plot=True)
+    movementidx, movementtimes = test.detectmovment('RAWDATA/0xf1030002_MPU_9250/Acceleration', 'RAWDATA/0xf1030002_MPU_9250/Absolutetime', treshold=0.7,
+                                                    blocksinrow=80, blocksize=150, plot=True)
     numofexperiemnts=movementtimes.shape[0]
     manager = multiprocessing.Manager()
     mpdata = manager.dict()
@@ -1110,9 +1115,9 @@ if __name__ == "__main__":
     unicefreqs = np.array([250,240,230,220,210,200,190,180,170,160,150,140,130,120,110,100,90,80,70,60,50,40,30,20,10])
     mpdata['uniquexfreqs'] = unicefreqs
     i = np.arange(numofexperiemnts)
-
-    with multiprocessing.Pool(15) as p:
-        results = p.map(processdata, i)
+    results=process_map(processdata, i, max_workers=15)
+    #with multiprocessing.Pool(15) as p:
+    #    results = p.map(processdata, i)
     end = time.time()
     print(end - start)
 
@@ -1129,9 +1134,12 @@ if __name__ == "__main__":
 
     for i in range(len(results)):
         ex=results[i]
-    #    if(i==99):
-    #        print("DEBUG")
+        ex.saveToHdf()
 
+    output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
+             'phaseuncer': phaseuncer}
+    df = pd.DataFrame(output)
+"""
         mag[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['value'][2,2]
         maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['uncertainty'][2,2]
         examp[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Excitation_amplitude']['value'][2,2]
@@ -1139,10 +1147,9 @@ if __name__ == "__main__":
         rawamp[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][0]
         phase[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['value'][2,2]
         phaseuncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['uncertainty'][2,2]
-        ex.saveToHdf()
-    output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
-             'phaseuncer': phaseuncer}
-    df = pd.DataFrame(output)
+"""
+
+
     # for ex in results:
     #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
     #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
@@ -1185,9 +1192,7 @@ if __name__ == "__main__":
     # for ex in results:
     #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
 
-    TF=getRAWTFFromExperiemnts(
-        datafile["EXPERIMENTS/Sine excitation"],'0xf1030002_MPU_9250'
-    )
+    #TF=getRAWTFFromExperiemnts(datafile["EXPERIMENTS/Sine excitation"],'0xf1030002_MPU_9250')
 
 
     #test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250")

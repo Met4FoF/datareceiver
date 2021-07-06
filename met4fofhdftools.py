@@ -594,6 +594,293 @@ def add3compTDMSData(
     hdffile.flush()
     hdffile.close()
 
+def initSensorGroup(group,sensorParams,chunksize,size,dsdict= {}):
+    maxshape=((size//chunksize)+1)*chunksize#maxsize musst fit all data but also be multiple of chunk size
+
+    dsdict["Absolutetime"] = group.create_dataset(
+        "Absolutetime",
+        (1, maxshape),
+        chunks=(1, chunksize),
+        dtype="uint64",
+        compression="gzip",
+        shuffle=True,
+    )
+    for key in sensorParams:
+        group.attrs[key]=sensorParams[key]
+    dsdict["Absolutetime"].make_scale("Absoluitetime")
+    dsdict["Absolutetime"].attrs["Unit"] = "\\nano\\seconds"
+    dsdict["Absolutetime"].attrs[
+        "Physical_quantity"
+    ] = "Uinix_time_in_nanoseconds"
+    dsdict["Absolutetime"].attrs["Resolution"] = np.exp2(64)
+    dsdict["Absolutetime"].attrs["Max_scale"] = np.exp2(64)
+    dsdict["Absolutetime"].attrs["Min_scale"] = 0
+    dsdict["Absolutetime_uncertainty"] = group.create_dataset(
+        "Absolutetime_uncertainty",
+        (1, maxshape),
+        chunks=(1, chunksize),
+        dtype="uint32",
+        compression="gzip",
+        shuffle=True,
+    )
+    dsdict["Absolutetime_uncertainty"].attrs[
+        "Unit"
+    ] = "\\nano\\seconds"
+    dsdict["Absolutetime_uncertainty"].attrs[
+        "Physical_quantity"
+    ] = "Uinix_time_uncertainty_in_nanosconds"
+    dsdict["Absolutetime_uncertainty"].attrs["Resolution"] = np.exp2(
+        32
+    )
+    dsdict["Absolutetime_uncertainty"].attrs["Max_scale"] = np.exp2(
+        32
+    )
+    dsdict["Absolutetime_uncertainty"].attrs["Min_scale"] = 0
+    dsdict["Sample_number"] = group.create_dataset(
+        "Sample_number",
+        (1, maxshape),
+        chunks=(1, chunksize),
+        dtype="uint32",
+        compression="gzip",
+        shuffle=True,
+    )
+    dsdict["Sample_number"].attrs["Unit"] = "\\one"
+    dsdict["Sample_number"].attrs[
+        "Physical_quantity"
+    ] = "Sample_number"
+    dsdict["Sample_number"].attrs["Resolution"] = np.exp2(32)
+    dsdict["Sample_number"].attrs["Max_scale"] = np.exp2(32)
+    dsdict["Sample_number"].attrs["Min_scale"] = 0
+    return dsdict
+
+def addDataGroup(group,dsdict,name,params,chunksize,shape):
+    maxshape=((shape[1]//chunksize)+1)*chunksize#maxsize musst fit all data but also be multiple of chunk size
+    ds=dsdict[name] = group.create_dataset(
+        name,
+        (shape[0], maxshape),
+        chunks=(shape[0], chunksize),
+        dtype="float32",
+        compression="gzip",
+        shuffle=True,
+    )
+    for key in params:
+        ds.attrs[key]=params[key]
+
+def velocityFromCounts(countsTdmsGroup, counterfreq=40e6, wavelength=1542.16e-9):
+    expectedCountsperSample= counterfreq/countsTdmsGroup.properties['wf_samples'] # calculate expected counts per sample from carrier freq/samplefreq eg 40e6/1e4=40e2
+    deltaCounts=np.diff(countsTdmsGroup[:].astype(np.uint32))# cast to unit32 so dviation (np.diff) don't needs to care about overflows
+    velocity=(deltaCounts-expectedCountsperSample)*wavelength*countsTdmsGroup.properties['wf_samples']*-1*0.5 #v=ds/dt
+    return velocity
+
+def add3compZemaTDMSData(
+    TDMSDatafile, hdffile, sensitivityLaser=np.array([0.6125*2, 0.6125*2, 0.6125*2]),sensitivitySensor=1.0, chunksize=None):
+    import nptdms as tdms
+
+    tdms_file = tdms.TdmsFile.read(TDMSDatafile)
+    #ts = int((tdms_file.groups()[1]['Sensor '].properties['wf_start_time']- np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 'ns'))
+    ts = int((tdms_file.groups()[0]['Untitled'].properties['wf_start_time'] - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 'ns'))#time stamp for hdf5 file is nanosseconds since 1970.01.01 00:00 in nanoSeconds
+    if ts<1622470688*1e9:
+        ts=ts-int(37*1e9) #backwards correct time to tai to aling mit gps time missing offset
+    print("Groups-->" + str(tdms_file.groups()))
+    print("Channels-->" + str(tdms_file.groups()[1].channels()))
+    zemaKistlerSensor=tdms_file.groups()[1]['Sensor ']
+    countX=tdms_file.groups()[1]['counter x']
+    countY = tdms_file.groups()[1]['counter y']
+    countZ = tdms_file.groups()[1]['counter z']
+    vibroVeloAnalogX = tdms_file.groups()[1]["analog x"]
+    vibroVeloAnalogY = tdms_file.groups()[1]["analog y"]
+    vibroVeloAnalogZ = tdms_file.groups()[1]["analog z"]
+    cola = tdms_file.groups()[1]['COLA ']
+    print("Assuming simultanious äquidistant sampling")
+    if chunksize == None:
+        zemaKistlerChunksize = int(zemaKistlerSensor.properties['wf_samples'])
+    else:
+        zemaKistlerChunksize=chunksize
+    try:
+        rawdatagroup = hdffile["RAWDATA"]
+    except KeyError:
+        rawdatagroup = hdffile.create_group("RAWDATA")
+
+    try:
+        zemaKistlerGpr = rawdatagroup["0x00000000_Kistler_8712A5M1"]
+    except KeyError:
+        zemaKistlerGpr = rawdatagroup.create_group("0x00000000_Kistler_8712A5M1")
+    length = zemaKistlerSensor[:].shape[0]-64
+    zemaKistlerSensorParams={
+                    "Data_point_number": length,
+                    "Sensor_ID": 0x00000000,
+                    "Sensor_name": "Kistler_8712A5M1",
+                    "Start_time": ts,
+                    "Start_time_uncertainty": 100}
+    zemaKistlerDataParams={
+                    "Physical_quantity": ["Acceleration"],
+                    "Unit": "\\metre\\second\\tothe{-2}",
+                    "Resolution": [65536.0],
+                    "Min_scale": [-10.0],
+                    "Max_scale": [10.0]}
+    zemaKistlerGprDict=initSensorGroup(zemaKistlerGpr,zemaKistlerSensorParams,zemaKistlerChunksize,length)
+
+    addDataGroup(zemaKistlerGpr, zemaKistlerGprDict, 'Acceleration', zemaKistlerDataParams, zemaKistlerChunksize, [1,length])
+    zemaKistlerGprDict["Absolutetime"][0,:length]= ts+zemaKistlerSensor.time_track()[64:]*1e9
+    zemaKistlerGprDict["Acceleration"][0,:length]= zemaKistlerSensor[64:]/sensitivitySensor
+
+    if chunksize == None:
+        vibroVeloAnalogChunksize = int(vibroVeloAnalogX.properties['wf_samples'])
+    else:
+        vibroVeloAnalogChunksize=chunksize
+    try:
+        vibroGpr = rawdatagroup["0x00000100_OptoMet_Vibrometer"]
+    except KeyError:
+        vibroGpr = rawdatagroup.create_group("0x00000100_OptoMet_Vibrometer")
+    length = vibroVeloAnalogX[:].shape[0]-64
+    vibroSensorParams={
+                    "Data_point_number": length,
+                    "Sensor_ID": 0x00000100,
+                    "Sensor_name": "OptoMet_Vibrometer",
+                    "Start_time": ts,
+                    "Start_time_uncertainty": 100}
+    vibroDataParams={
+                    "Physical_quantity": ["Velocity X","Velocity Y","Velocity Z"],
+                    "Unit": "\\metre\\second\\tothe{-1}",
+                    "Resolution": [65536.0,65536.0,65536.0],
+                    "Min_scale": [-2.0,-2.0,-2.0],
+                    "Max_scale": [2.0,2.0,2.0]}
+    vibroGprDict=initSensorGroup(vibroGpr,vibroSensorParams,vibroVeloAnalogChunksize ,length-64)
+
+    addDataGroup(vibroGpr, vibroGprDict, 'Velocity', vibroDataParams, vibroVeloAnalogChunksize , [3,length-64])
+    vibroGprDict["Absolutetime"][0,:length]= ts+vibroVeloAnalogX.time_track()[64:]*1e9
+    vibroGprDict['Velocity'][0,:length]= vibroVeloAnalogX[64:]/sensitivityLaser[0]
+    vibroGprDict['Velocity'][1, :length] = vibroVeloAnalogY[64:] / sensitivityLaser[1]
+    vibroGprDict['Velocity'][2, :length] = vibroVeloAnalogZ[64:] / sensitivityLaser[2]
+
+
+
+    if chunksize == None:
+        dispChunksize = int(countX.properties['wf_samples'])
+    else:
+        dispChunksize=chunksize
+    try:
+        vibroCntGpr = rawdatagroup["0x00000200_OptoMet_Velocity_from_counts"]
+    except KeyError:
+        vibroCntGpr = rawdatagroup.create_group("0x00000200_OptoMet_Velocity_from_counts")
+    length = countX[:].shape[0]
+    vibroCntSensorParams={
+                    "Data_point_number": length-64,
+                    "Sensor_ID": 0x00000200,
+                    "Sensor_name": "OptoMet_Vibrometer",
+                    "Start_time": ts,
+                    "Start_time_uncertainty": 10}
+    vibroCntDataParams={
+                    "Physical_quantity": ["Velocity X","Velocity Y","Velocity Z"],
+                    "Unit": "\\metre\\second\\tothe{-1}",
+                    "Resolution": [np.NaN,np.NaN,np.NaN],
+                    "Min_scale": [np.NaN,np.NaN,np.NaN],
+                    "Max_scale": [np.NaN,np.NaN,np.NaN]}
+    vibroCntGprDict=initSensorGroup(vibroCntGpr,vibroCntSensorParams,dispChunksize,length-64)
+
+    addDataGroup(vibroCntGpr, vibroCntGprDict, 'Velocity', vibroCntDataParams, dispChunksize, [3,length-64])
+    vibroGprDict["Absolutetime"][0,:length]= ts+countX.time_track()*1e9
+    vibroGprDict['Velocity'][0,1:length]= velocityFromCounts(countX)
+    vibroGprDict['Velocity'][1, 1:length] = velocityFromCounts(countY)
+    vibroGprDict['Velocity'][2, 1:length] = velocityFromCounts(countZ)
+
+    if chunksize == None:
+        colaChunksize = int(zemaKistlerSensor.properties['wf_samples'])
+    else:
+        colaChunksize=chunksize
+    try:
+        colaGpr = rawdatagroup["0x00000300_Cola_Reference"]
+    except KeyError:
+        colaGpr = rawdatagroup.create_group("0x00000300_Cola_Reference")
+    length = cola[:].shape[0]-64
+    colaSensorParams={
+                    "Data_point_number": length,
+                    "Sensor_ID": 0x00000300,
+                    "Sensor_name": "Cola_Reference",
+                    "Start_time": ts,
+                    "Start_time_uncertainty": 10}
+    colaDataParams={
+                    "Physical_quantity": ["Voltage"],
+                    "Unit": "\\volt",
+                    "Resolution": [65536.0],
+                    "Min_scale": [-1.0],
+                    "Max_scale": [1.0]}
+    colaGprDict=initSensorGroup(colaGpr,colaSensorParams,colaChunksize ,length)
+
+    addDataGroup(colaGpr, colaGprDict, 'Voltage', colaDataParams, colaChunksize , [1,length])
+    zemaKistlerGprDict["Absolutetime"][0,:length]= ts+cola.time_track()[64:]*1e9
+    zemaKistlerGprDict["Voltage"][0,:length]= cola[64:]
+
+    """    
+    dsvelodata = velodatagpr.create_dataset(
+        "Velocity",
+        ([3, chunksize]),
+        maxshape=(3, reltime.size),
+        dtype="float32",
+        compression="gzip",
+        shuffle=True,
+    )
+    dsvelodata.resize([3, reltime.size])
+    dsvelodata.attrs["Unit"] = "\\metre\\second\\tothe{-1}"
+    dsvelodata.attrs["Physical_quantity"] = ["Velocity X", "Velocity Y", "Velocity Z"]
+    dsvelodata.attrs["Resolution"] = int(16777216 / 10 * 4)  # TODO check this
+    dsvelodata.attrs["Max_scale"] = 2.0 / np.mean(sensitivity)  # TODO check this
+    dsvelodata.attrs["Min_scale"] = -2.0 / np.mean(sensitivity)  # TODO check this
+    dsvelodata.dims[0].label = "Relative Time"
+    dsvelodata.dims[0].attach_scale(dsreltime)
+
+    dsrefdata = velodatagpr.create_dataset(
+        "Reference voltage",
+        ([1, chunksize]),
+        maxshape=(1, reltime.size),
+        dtype="float32",
+        compression="gzip",
+        shuffle=True,
+    )
+    dsrefdata.resize([1, reltime.size])
+    dsrefdata.attrs["Unit"] = "\\volt"
+    dsrefdata.attrs["Physical_quantity"] = ["Reference Signal"]
+    dsrefdata.attrs["Resolution"] = int(16777216)
+    dsrefdata.attrs["Max_scale"] = 5.0
+    dsrefdata.attrs["Min_scale"] = -5.0
+    dsrefdata.dims[0].label = "Relative Time"
+    dsrefdata.dims[0].attach_scale(dsreltime)
+
+    dsSN = velodatagpr.create_dataset(
+        "Sample_number",
+        ([1, chunksize]),
+        maxshape=(1, reltime.size),
+        dtype="uint32",
+        compression="gzip",
+        shuffle=True,
+    )
+
+    dsSN.attrs["Unit"] = "/one"
+    dsSN.attrs["Physical_quantity"] = "Sample_number"
+    dsSN.attrs["Resolution"] = np.exp2(32)
+    dsSN.attrs["Max_scale"] = np.exp2(32)
+    dsSN.attrs["Min_scale"] = 0
+    dsSN.dims[0].label = "Relative Time"
+    dsSN.dims[0].attach_scale(dsreltime)
+    dsSN.resize([1, reltime.size])
+    dsSN[:] = np.arange(reltime.size)
+
+    dsreltime.resize([1, reltime.size])
+
+    dsvelodata[0, :] = X[:] / sensitivity[0]
+    dsvelodata[1, :] = Y[:] / sensitivity[1]
+    dsvelodata[2, :] = Z[:] / sensitivity[2]
+    # as it it is since its voltage
+    dsreltime[:] = Ref[:]
+
+    # convert to nanosecond uint64
+    nstime = reltime * 1e9
+    dsreltime[:] = nstime.astype(np.uint64)
+    """
+    hdffile.flush()
+    #hdffile.close()
+
+
 def getRAWTFFromExperiemnts(
     group,
     sensor,
@@ -672,14 +959,73 @@ def getRAWTFFromExperiemnts(
     print(Data)
     return Data
 
+def combineHDFRawdata(outputfilename,listfiles):
+    outfile=h5py.File(outputfilename, 'w')
+    inputfiles=[None]*len(listfiles)
+    outputGroups={}
+    for i in range(len(listfiles)):
+        inputfiles[i]=h5py.File(listfiles[i], 'r')
+        Rawdatagroupnames=list(inputfiles[i]['RAWDATA'].keys())
+        for rawdataName in Rawdatagroupnames:
+            try:
+                group=outputGroups[rawdataName]
+                group['overalllength']+=inputfiles[i]['RAWDATA/'+rawdataName].attrs['Data_point_number']
+                group['sublength'].append(inputfiles[i]['RAWDATA/'+rawdataName].attrs['Data_point_number'])
+            except KeyError:
+                group = outputGroups[rawdataName]={'overalllength':inputfiles[i]['RAWDATA/'+rawdataName].attrs['Data_point_number'],
+                                                   'sublength':[inputfiles[i]['RAWDATA/'+rawdataName].attrs['Data_point_number']],
+                                                   'attrs':dict(inputfiles[i]['RAWDATA/'+rawdataName].attrs),
+                                                   'dsets':{}}
+                dsetnames=list(inputfiles[i]['RAWDATA/'+rawdataName].keys())
+                for dset in dsetnames:
+                    group['dsets'][dset]={'dimension':inputfiles[i]['RAWDATA/'+rawdataName+'/'+dset].shape[:-1],
+                                          'attrs':dict(inputfiles[i]['RAWDATA/'+rawdataName+'/'+dset].attrs),
+                                          'chunks':inputfiles[i]['RAWDATA/'+rawdataName+'/'+dset].chunks,
+                                          'dtype':inputfiles[i]['RAWDATA/'+rawdataName+'/'+dset].dtype}
 
+    print(outputGroups)
+    RD=outfile.create_group("RAWDATA")
+    for rawdataName in Rawdatagroupnames:
+        SensorGpr=RD.create_group(rawdataName)
+        for key in outputGroups[rawdataName]['attrs'].keys():
+            SensorGpr.attrs[key]=outputGroups[rawdataName]['attrs'][key]
+        SensorGpr.attrs['Data_point_number']=length=outputGroups[rawdataName]['overalllength']
+        for dsetname in outputGroups[rawdataName]['dsets'].keys():
+            dimension=list(outputGroups[rawdataName]['dsets'][dsetname]['dimension'])
+            dimension.append(length)
+            chunks = outputGroups[rawdataName]['dsets'][dsetname]['chunks']
+            for i in range(len(dimension)):
+                if dimension[i]<chunks[i]:
+                    print("dimension to smal seting to chunksize")
+                    dimension[i]=chunks[i]
+                    i=i+1
+            dtype= outputGroups[rawdataName]['dsets'][dsetname]['dtype']
+            dset=SensorGpr.create_dataset(dsetname,dimension,chunks=chunks,compression="gzip",shuffle=True,dtype=dtype)
+            for key in outputGroups[rawdataName]['dsets'][dsetname]['attrs'].keys():
+                dset.attrs[key] = outputGroups[rawdataName]['dsets'][dsetname]['attrs'][key]
+            i=0
+            startidx=0
+            stopidx=0
+            for infile in inputfiles:
+                sublength=outputGroups[rawdataName]['sublength'][i]
+                stopidx+=sublength
+                print("start copy block "+str(infile)+rawdataName+'/'+dsetname)
+                dset[:,startidx:stopidx]=infile['RAWDATA/'+rawdataName+'/'+dsetname][:,:sublength]
+                startidx=stopidx
+                i=i+1
+                print("Block done ")
+
+    print("Done")
 if __name__ == "__main__":
-
-    folder = r"/home/benedikt/testdata/"
+    combineHDFRawdata('/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max.hdf5',['/media/benedikt/nvme/data/zema_dynamic_cal/tmp/z_250_10_delta_10Hz_50ms2max.hdf5',
+                                 '/media/benedikt/nvme/data/zema_dynamic_cal/tmp/y_250_10_delta_10Hz_50ms2max.hdf5',
+                                 '/media/benedikt/nvme/data/zema_dynamic_cal/tmp/x_250_10_delta_10Hz_50ms2max.hdf5'])
+def tmp():
+    folder = r"/media/benedikt/nvme/data/strath/DOE2"
     #reffile = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     # find all dumpfiles in folder matching str
     dumpfilenames = findfilesmatchingstr(folder, r".dump")  # input file name
-    hdffilename = folder+r"test.hdf5"
+    hdffilename = folder+r"Radial-Forge-Data-DOE2-SensorData.hdf5"
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
