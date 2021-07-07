@@ -1045,6 +1045,25 @@ def generateCEMrefIDXfromfreqs(freqs, removefreqs=np.array([2000.0])):
             i = i + 1
     return refidx
 
+def collectAndSortAccelerationVeloAsRef(hdffile,RefPathName='0x00000200_OptoMet_Velocity_from_counts/Velocity',DUTPathName='0xf1030002_MPU_9250/Acceleration'):
+    data={}
+    for key in hdffile['EXPERIMENTS/Sine excitation'].keys():
+        if 0==np.std(hdffile['EXPERIMENTS/Sine excitation'][key][RefPathName]['Sin_Fit_freq'][:]):
+            freq=np.mean(hdffile['EXPERIMENTS/Sine excitation'][key][RefPathName]['Sin_Fit_freq'][:])
+            exdata={'REF':{
+                'SinPOpt':hdffile['EXPERIMENTS/Sine excitation'][key][RefPathName]['SinPOpt'][:],
+                'SinPCov': hdffile['EXPERIMENTS/Sine excitation'][key][RefPathName]['SinPCov'][:]},
+            'DUT': {
+            'SinPOpt': hdffile['EXPERIMENTS/Sine excitation'][key][DUTPathName]['SinPOpt'][:],
+            'SinPCov': hdffile['EXPERIMENTS/Sine excitation'][key][DUTPathName]['SinPCov'][:]}}
+            if freq in data.keys():
+               data[freq].append(exdata)
+            else:
+                data[freq]=[exdata]
+    print(data)
+    return data
+
+
 if __name__ == "__main__":
     start = time.time()
 
@@ -1071,7 +1090,9 @@ if __name__ == "__main__":
 
     #add3compZemaTDMSData(TDMSDatafile, datafile)
     test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0x00000100_OptoMet_Vibrometer','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1','0xf1030a00_STM32_Internal_ADC','0x00000300_Cola_Reference'])#sensornames=['0xf1030002_MPU_9250', '0xf1030100_BMA_280', '0xf1030a00_STM32_Internal_ADC']
+    data=collectAndSortAccelerationVeloAsRef(datafile,RefPathName='0x00000200_OptoMet_Velocity_from_counts/Velocity',DUTPathName='0xf1030002_MPU_9250/Acceleration')
 
+else:
     #getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
     #add1dsinereferencedatatohdffile(revcsv, datafile)
     # adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
