@@ -450,6 +450,7 @@ class SensorDescription:
         """
         self.ID = ID
         self.SensorName = SensorName
+        self.has_time_ticks = False  # do the data contain a 64 bit raw timestamp
         self._complete = False
         self.Channels = AliasDict([])
         self.ChannelCount = 0
@@ -926,6 +927,11 @@ class Sensor:
                                 + str(self.params["ID"])
                             )
                             # print(str(Description.Description_Type))
+                            if(Description.has_time_ticks==True):
+                                print("Raw tick detected for " +Description.Sensor_name
+                                + " sensor with ID:"
+                                + str(self.params["ID"]))
+                                self.Description.has_time_ticks =True
                         if (
                             self.DescriptionsProcessed[Description.Description_Type]
                             == False
@@ -1174,6 +1180,8 @@ class Sensor:
             + ";"
             + str(message.Data_16)
             + "\n"
+            + str(message.time_ticks)
+            + "\n"
         )
 
     def __dumpMsgToFileProto(self, message):
@@ -1203,6 +1211,7 @@ class HDF5Dumper:
         self.dataframindexoffset = 4
         self.chunksize = chunksize
         self.buffer = np.zeros([20, self.chunksize])
+        self.ticks_buffer = np.zeros( self.chunksize,dtype=np.uint64)
         self.chunkswritten = 0
         self.msgbufferd = 0
         self.lastdatatime=0
@@ -1234,10 +1243,13 @@ class HDF5Dumper:
                     + dscp.SensorName.replace(" ", "_")
                     + " existed allready !"
                 )
+
                 self.Datasets["Absolutetime"] = self.group["Absolutetime"]
                 self.Datasets["Absolutetime_uncertainty"] = self.group[
                     "Absolutetime_uncertainty"
                 ]
+                if(self.dscp.has_time_ticks):
+                    self.Datasets["Time_ticks"] = self.group["Time_ticks"]
                 self.Datasets["Sample_number"] = self.group["Sample_number"]
                 if (self.Datasets["Absolutetime"].shape[1] / self.chunksize) / int(
                     self.Datasets["Absolutetime"].shape[1] / self.chunksize
@@ -1314,6 +1326,24 @@ class HDF5Dumper:
                 self.group.attrs["Sensor_ID"] = dscp.ID
                 self.group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
                 self.group.attrs["Data_point_number"]=0
+                if (self.dscp.has_time_ticks):
+                    self.Datasets["Time_Ticks"] = self.group.create_dataset(
+                        "Time_Ticks",
+                        ([1, chunksize]),
+                        maxshape=(1, None),
+                        dtype="uint64",
+                        compression="gzip",
+                        shuffle=True,
+                    )
+                    self.Datasets["Time_Ticks"]
+                    self.Datasets["Time_Ticks"].attrs["Unit"] = "\\one"
+                    self.Datasets["Time_Ticks"].attrs[
+                        "Physical_quantity"
+                    ] = "CPU Ticks since System Start"
+                    self.Datasets["Time_Ticks"].attrs["Resolution"] = np.exp2(64)
+                    self.Datasets["Time_Ticks"].attrs["Max_scale"] = np.exp2(64)
+                    self.Datasets["Time_Ticks"].attrs["Min_scale"] = 0
+
                 self.Datasets["Absolutetime"] = self.group.create_dataset(
                     "Absolutetime",
                     ([1, chunksize]),
@@ -1351,6 +1381,7 @@ class HDF5Dumper:
                     32
                 )
                 self.Datasets["Absolutetime_uncertainty"].attrs["Min_scale"] = 0
+
                 self.Datasets["Sample_number"] = self.group.create_dataset(
                     "Sample_number",
                     ([1, chunksize]),
@@ -1440,7 +1471,7 @@ class HDF5Dumper:
                     message.Data_16,
                 ]
             )
-
+            self.ticks_buffer[self.msgbufferd] = message.time_ticks
             self.msgbufferd = self.msgbufferd + 1
             if self.msgbufferd == self.chunksize:
                 print(hex(self.dscp.ID)+"waiting for lock "+str(self.hdflock))
@@ -1454,6 +1485,9 @@ class HDF5Dumper:
                         + self.buffer[2, : startIDX + self.chunksize]
                     ).astype(np.uint64)
                     self.Datasets["Absolutetime"][:, startIDX:] = time
+
+                    self.Datasets["Time_Ticks"].resize([1, startIDX + self.chunksize])
+                    self.Datasets["Time_Ticks"][:, startIDX:] = self.ticks_buffer
 
                     self.Datasets["Absolutetime_uncertainty"].resize(
                         [1, startIDX + self.chunksize]
