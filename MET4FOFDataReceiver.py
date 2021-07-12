@@ -1485,9 +1485,9 @@ class HDF5Dumper:
                         + self.buffer[2, : startIDX + self.chunksize]
                     ).astype(np.uint64)
                     self.Datasets["Absolutetime"][:, startIDX:] = time
-
-                    self.Datasets["Time_Ticks"].resize([1, startIDX + self.chunksize])
-                    self.Datasets["Time_Ticks"][:, startIDX:] = self.ticks_buffer
+                    if (self.dscp.has_time_ticks):
+                        self.Datasets["Time_Ticks"].resize([1, startIDX + self.chunksize])
+                        self.Datasets["Time_Ticks"][:, startIDX:] = self.ticks_buffer
 
                     self.Datasets["Absolutetime_uncertainty"].resize(
                         [1, startIDX + self.chunksize]
@@ -1526,6 +1526,7 @@ class HDF5Dumper:
                     self.chunkswritten = self.chunkswritten + 1
                     self.group.attrs["Data_point_number"] = self.chunkswritten*self.chunksize
                     self.buffer.fill(np.NaN)
+                    self.ticks_buffer.fill(np.NaN)
                     self.buffer[0:4,:]=np.zeros([4,self.chunksize])
 
 
@@ -1540,6 +1541,9 @@ class HDF5Dumper:
                     + self.buffer[2, : startIDX + self.chunksize]
             ).astype(np.uint64)
             self.Datasets["Absolutetime"][:, startIDX:] = time
+            if (self.dscp.has_time_ticks):
+                self.Datasets["Time_Ticks"].resize([1, startIDX + self.chunksize])
+                self.Datasets["Time_Ticks"][:, startIDX:] = self.ticks_buffer
 
             self.Datasets["Absolutetime_uncertainty"].resize(
                 [1, startIDX + self.chunksize]
