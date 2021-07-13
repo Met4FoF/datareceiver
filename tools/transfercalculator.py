@@ -1082,8 +1082,8 @@ def processdata(i):
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
-        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
-        1,
+        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
+        0,
     )
 
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
@@ -1120,9 +1120,12 @@ def collectAndSortAccelerationVeloAsRef(hdffile,RefPathName='0x00000200_OptoMet_
 if __name__ == "__main__":
     start = time.time()
     #CEM Filename and sensor Name
-    sensorname = '0xbccb0000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
+    #sensorname = '0xbccb0000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
 
+    #PTB Filename and sensor Name
+    sensorname = '0x1fe40000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
 
     try:
         os.remove(hdffilename)
@@ -1144,17 +1147,17 @@ if __name__ == "__main__":
     mpdata['lock'] = manager.Lock()
 
     # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
-    """
+
     mpdata['refidx'] = np.zeros([16 * 10])
     refidx = np.zeros([17 * 10])
     for i in np.arange(10):
         refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
     mpdata['refidx'] = refidx
-    #refidx = np.array([0,0,1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33])
-    """
+
 
     freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
-    refidx = generateCEMrefIDXfromfreqs(freqs)
+    # CEM Data
+    #refidx = generateCEMrefIDXfromfreqs(freqs)
     mpdata['refidx'] = refidx
 
     unicefreqs = np.unique(freqs, axis=0)
@@ -1184,7 +1187,7 @@ if __name__ == "__main__":
         phase[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['value'][2,2]
         phaseuncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['uncertainty'][2,2]
 
-    TF=getRAWTFFromExperiemnts(datafile["EXPERIMENTS/Sine excitation"],'0xbccb0000_MPU_9250')
-    test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0xbccb0000_MPU_9250")
+    TF=getRAWTFFromExperiemnts(datafile["EXPERIMENTS/Sine excitation"],sensorname)
+    test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], sensorname)
     test.hdffile.flush()
     test.hdffile.close()
