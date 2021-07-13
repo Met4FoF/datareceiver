@@ -247,6 +247,18 @@ class hdfmet4fofdatafile:
             'Phase': {'Unit': '\\radian',
                       'Physical_quantity': ['Phase response'],
                       'Uncertainty_type': "95% coverage gausian"},
+            "DUT_Phase": {'Unit': '\\radian',
+                          'Physical_quantity': ['Phase of DUT in SSU Time Frame'],
+                          'Uncertainty_type': "95% coverage gausian"},
+            "REF_Phase": {'Unit': '\\radian',
+                        'Physical_quantity': ['Phase betwenn REFerence and Sync'],
+                        'Uncertainty_type': "95% coverage gausian"},
+            "SSU_ADC_Phase": {'Unit': '\\radian',
+                        'Physical_quantity': ['Phase response of the SSU ADC'],
+                        'Uncertainty_type': "95% coverage gausian"},
+            "DUT_SNYNC_Phase": {'Unit': '\\radian',
+                           'Physical_quantity': ['Phase of Reference in SSU Time Frame'],
+                           'Uncertainty_type': "95% coverage gausian"},
             'Magnitude': {'Unit': '\\one',
                           'Unit_numerator': '\\metre\\second\\tothe{-2}',
                           'Unit_denominator': '\\metre\\second\\tothe{-2}',
@@ -260,7 +272,16 @@ class hdfmet4fofdatafile:
                                      'Uncertainty_type': "95% coverage gausian"},
             'Excitation_amplitude': {'Unit': '\\metre\\second\\tothe{-2}',
                                      'Physical_quantity': ['Excitation Amplitude'],
-                                     'Uncertainty_type': "95% coverage gausian"}}):
+                                     'Uncertainty_type': "95% coverage gausian"},
+            'DUT_amplitude': {'Unit': '\\metre\\second\\tothe{-2}',
+                              'Physical_quantity': ['Measured DUT Amplitude'],
+                              'Uncertainty_type': "95% coverage gausian"}
+                                     }):
+
+
+
+
+
         rawtf = getRAWTFFromExperiemnts(experimentgroup,
                                         sensor,
                                         numeratorQuantity,
@@ -826,7 +847,7 @@ class sineexcitation(experiment):
                                 refdatagroupname
                             ]["Frequency"]["value"][i][refdataidx]
                         fitfreq = self.data[sensor][dataset]["Sin_Fit_freq"][j]
-                        print(refdataidx)
+                        #print(refdataidx)
                         reffreq = self.datafile[refdatagroupname]["Frequency"]['value'][
                             i
                         ][refdataidx]
@@ -862,6 +883,8 @@ class sineexcitation(experiment):
                             mag = ufmeasamp / ufexamp
                             TC["Magnitude"]["value"][j, i] = mag.n
                             TC["Magnitude"]["uncertainty"][j, i] = mag.s
+                            TC["DUT_amplitude"]["value"][j, i] = ufmeasamp.n
+                            TC["DUT_amplitude"]["uncertainty"][j, i] = ufmeasamp.s
                             # calculate phase
                             adcname = analogrefchannelname.replace("RAWDATA/", "")
 
@@ -1035,12 +1058,10 @@ class sineexcitation(experiment):
 def processdata(i):
     sys.stdout.flush()
     times = mpdata["movementtimes"][i]
-    #refidx = int(mpdata["refidx"][i])
+    refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 12e9
-    times[1] -= 2e9
-    if times[1].astype(np.int64) - times[0].astype(np.int64) < 0:
-        raise ValueError("time after cutting is <0")
+    times[0] += 7e9
+    times[1] -= 1e9
     experiment = sineexcitation(
         mpdata["hdfinstance"], times, "{:05d}".format(i) + "_Sine_Excitation"
     )
@@ -1050,26 +1071,21 @@ def processdata(i):
 
     start = time.time()
     experiment.dofft()
-    end = time.time()
-    # print("FFT Time "+str(end - start))
-    start = time.time()
-
-    # axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency'][:, refidx]['value']
-    # axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
-    axisfreqs = mpdata["uniquexfreqs"]
+    axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
+    axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
+    #axisfreqs = mpdata["uniquexfreqs"]
     experiment.do3paramsinefits(axisfreqs, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
-    """
-    experiment.calculateGPSRef1freqFromVelocity()
+    #experiment.calculateGPSRef1freqFromVelocity()
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
-        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-        0,
+        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
+        1,
     )
-    """
+
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -1103,18 +1119,11 @@ def collectAndSortAccelerationVeloAsRef(hdffile,RefPathName='0x00000200_OptoMet_
 
 if __name__ == "__main__":
     start = time.time()
+    #CEM Filename and sensor Name
+    sensorname = '0xbccb0000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
 
-    # hdffilename = r"D:\data\IMUPTBCEM\Messungen_CEM\MPU9250CEM.hdf5"
-    # hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
-    ##revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
-    sensorname = '0xf1030002_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/X/x_250_10_delta_10Hz_50ms2max.hdf5"
-    #TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/X/X_250_10Hz.tdms"
-    #hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/Y/y_250_10_delta_10Hz_50ms2max.hdf5"
-    #TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/Y/Y_250_10Hz.tdms"
-    #hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/Z/z_250_10_delta_10Hz_50ms2max.hdf5"
-    #TDMSDatafile = r"/media/benedikt/nvme/data/zema_dynamic_cal/Z/Z_250_10Hz.tdms"
-    hdffilename = r"/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max.hdf5"
+
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
@@ -1122,37 +1131,18 @@ if __name__ == "__main__":
     shutil.copyfile(hdffilename.replace(".hdf5","(copy).hdf5"), hdffilename)
 
 
-    # revcsv = r"/media/benedikt/nvme/data/2020-09-07_Messungen_MPU9250_SN31_Zweikanalig/Messungen_CEM/m1/20201023130103_MPU_9250_0xbccb0000_00000_Ref_TF.csv"
     datafile = h5py.File(hdffilename, "r+")
+    test = hdfmet4fofdatafile(datafile)
 
-    #add3compZemaTDMSData(TDMSDatafile, datafile)
-    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0x00000100_OptoMet_Vibrometer','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1','0xf1030a00_STM32_Internal_ADC','0x00000300_Cola_Reference'])#sensornames=['0xf1030002_MPU_9250', '0xf1030100_BMA_280', '0xf1030a00_STM32_Internal_ADC']
-    data=collectAndSortAccelerationVeloAsRef(datafile,RefPathName='0x00000200_OptoMet_Velocity_from_counts/Velocity',DUTPathName='0xf1030002_MPU_9250/Acceleration')
-
-else:
-    #getRAWTFFromExperiemnts(datafile['EXPERIMENTS/Sine excitation'], '0x1fe40000_MPU_9250')
-    #add1dsinereferencedatatohdffile(revcsv, datafile)
-    # adc_tf_goup=datafile.create_group("REFENCEDATA/0x1fe40a00_STM32_Internal_ADC")
-    # addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0x1fe40a00_STM32_Internal_ADC"], [r"/media/benedikt/nvme/data/201118_BMA280_amplitude_frequency/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json"])
-    # datafile.flush()
-
-    # add1dsinereferencedatatohdffile(revcsv, datafile)
-    # adc_tf_goup=datafile.create_group("REFENCEDATA/0xbccb0a00_STM32_Internal_ADC")
-    # addadctransferfunctiontodset(adc_tf_goup,datafile["RAWDATA/0xbccb0a00_STM32_Internal_ADC"], [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
-    # datafile.flush()
-
-    # nomovementidx,nomovementtimes=test.detectnomovment('0x1fe40000_MPU_9250', 'Acceleration')
-    # REFmovementidx, REFmovementtimes = test.detectmovment('RAWREFERENCEDATA/0x00000000_PTB_3_Component/Velocity', 'RAWREFERENCEDATA/0x00000000_PTB_3_Component/Releativetime', treshold=0.004,
-    #                                                blocksinrow=100, blocksize=10000, plot=True)
-
-    movementidx, movementtimes = test.detectmovment('RAWDATA/0xf1030002_MPU_9250/Acceleration', 'RAWDATA/0xf1030002_MPU_9250/Absolutetime', treshold=0.7,
-                                                    blocksinrow=80, blocksize=150, plot=True)
+    movementidx, movementtimes = test.detectmovment('RAWDATA/'+sensorname+'/Acceleration', 'RAWDATA/'+sensorname+'/Absolutetime', treshold=1.7,
+                                                    blocksinrow=100, blocksize=100, plot=True)
     numofexperiemnts=movementtimes.shape[0]
     manager = multiprocessing.Manager()
     mpdata = manager.dict()
     mpdata['hdfinstance'] = test
     mpdata['movementtimes'] = movementtimes
     mpdata['lock'] = manager.Lock()
+
     # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
     """
     mpdata['refidx'] = np.zeros([16 * 10])
@@ -1161,26 +1151,17 @@ else:
         refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
     mpdata['refidx'] = refidx
     #refidx = np.array([0,0,1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33])
+    """
 
     freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
-    #refidx = generateCEMrefIDXfromfreqs(freqs)
+    refidx = generateCEMrefIDXfromfreqs(freqs)
     mpdata['refidx'] = refidx
 
     unicefreqs = np.unique(freqs, axis=0)
     mpdata['uniquexfreqs'] = unicefreqs
-    i = np.arange(refidx.size)
-    """
-    unicefreqs = np.array([250,240,230,220,210,200,190,180,170,160,150,140,130,120,110,100,90,80,70,60,50,40,30,20,10])
-    mpdata['uniquexfreqs'] = unicefreqs
+
     i = np.arange(numofexperiemnts)
     results=process_map(processdata, i, max_workers=15)
-    #with multiprocessing.Pool(15) as p:
-    #    results = p.map(processdata, i)
-    end = time.time()
-    print(end - start)
-
-    #i = 0
-    #processdata(i)
 
     freqs = np.zeros(numofexperiemnts)
     mag = np.zeros(numofexperiemnts)
@@ -1189,15 +1170,12 @@ else:
     rawamp = np.zeros(numofexperiemnts)
     phase = np.zeros(numofexperiemnts)
     phaseuncer = np.zeros(numofexperiemnts)
-
-    for i in range(len(results)):
-        ex=results[i]
-        ex.saveToHdf()
-
     output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
              'phaseuncer': phaseuncer}
     df = pd.DataFrame(output)
-"""
+    for i in range(len(results)):
+        ex=results[i]
+        ex.saveToHdf()
         mag[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['value'][2,2]
         maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['uncertainty'][2,2]
         examp[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Excitation_amplitude']['value'][2,2]
@@ -1205,54 +1183,8 @@ else:
         rawamp[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][0]
         phase[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['value'][2,2]
         phaseuncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['uncertainty'][2,2]
-"""
 
-
-    # for ex in results:
-    #      mag[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Magnitude'][2]['value']
-    #      examp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['ExAmp'][2]['value']
-    #      freqs[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
-    #      rawamp[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
-    #      phase[i] = ex.Data['0xbccb0000_MPU_9250']['Acceleration']['TF']['Phase'][2]['value']
-    #      i = i + 1
-    # DC = np.zeros(movementtimes.shape[0])
-    # AC = np.zeros(movementtimes.shape[0])
-    # ACNominal = test.hdffile['REFENCEDATA/Acceleration_refference/Excitation amplitude'][2,:,'value']
-    # F = np.zeros(movementtimes.shape[0])
-    # for ex in results:
-    #      DC[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][1]
-    #      AC[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][0]
-    #      F[i] = ex.Data['0x1fe40000_MPU_9250']['Acceleration']['SinPOpt'][2][2]
-    #      i = i+1
-    # color = iter(cm.rainbow(np.linspace(0, 1, np.unique(F).size)))
-    # colordict={}
-    # for i in range(np.unique(F).size):
-    #     colordict[np.unique(F)[i]]=next(color)
-    # freqcolors=[]
-    # for i in range(F.size):
-    #     freqcolors.append(colordict[F[i]])
-    # fig,ax=plt.subplots()
-    # labelplotet=[]
-    # for i in range(len(AC)):
-    #     if F[i] not in labelplotet:
-    #         ax.scatter(ACNominal[i], DC[i], color=freqcolors[i],Label="{:.1f}".format(F[i]))
-    #         labelplotet.append(F[i])
-    #     else:
-    #          ax.scatter(ACNominal[i], DC[i], color=freqcolors[i])
-    # ax.set_xlabel('Nominal amplitude in m/s^2')
-    # ax.set_ylabel('DC in m/s^2')
-    # ax.legend()
-    # fig.show()
-    #
-    # results[0].plotXYsine('0x1fe40000_MPU_9250', 'Acceleration', 2)
-    # fig,ax=plt.subplots()
-    # coefs = np.empty([len(results), 3])
-    # for ex in results:
-    #     coefs[i]=ex.plotXYsine('0x1fe40000_MPU_9250', 'Acceleration',2,fig=fig,ax=ax,mode='XY+fit')
-
-    #TF=getRAWTFFromExperiemnts(datafile["EXPERIMENTS/Sine excitation"],'0xf1030002_MPU_9250')
-
-
-    #test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0x1fe40000_MPU_9250")
-    #test.hdffile.flush()
-    #test.hdffile.close()
+    TF=getRAWTFFromExperiemnts(datafile["EXPERIMENTS/Sine excitation"],'0xbccb0000_MPU_9250')
+    test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], "0xbccb0000_MPU_9250")
+    test.hdffile.flush()
+    test.hdffile.close()
