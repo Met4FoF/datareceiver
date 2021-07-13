@@ -764,19 +764,48 @@ class sineexcitation(experiment):
                 TC["Magnitude"]["uncertainty"][:] = np.NAN
 
                 TC["Excitation_amplitude"] = {}
-                TC["Excitation_amplitude"]["value"] = np.zeros(
-                    [datasetrows, datasetrows]
-                )
+                TC["Excitation_amplitude"]["value"] = np.zeros([datasetrows, datasetrows])
                 TC["Excitation_amplitude"]["value"][:] = np.NAN
-                TC["Excitation_amplitude"]["uncertainty"] = np.zeros(
-                    [datasetrows, datasetrows]
-                )
+                TC["Excitation_amplitude"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
                 TC["Excitation_amplitude"]["uncertainty"][:] = np.NAN
+
+                TC["DUT_amplitude"] = {}
+                TC["DUT_amplitude"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["DUT_amplitude"]["value"][:] = np.NAN
+                TC["DUT_amplitude"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["DUT_amplitude"]["uncertainty"][:] = np.NAN
+
+
                 TC["Phase"] = {}
                 TC["Phase"]["value"] = np.zeros([datasetrows, datasetrows])
                 TC["Phase"]["value"][:] = np.NAN
                 TC["Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
                 TC["Phase"]["uncertainty"][:] = np.NAN
+
+                TC["DUT_Phase"] = {}
+                TC["DUT_Phase"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["DUT_Phase"]["value"][:] = np.NAN
+                TC["DUT_Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["DUT_Phase"]["uncertainty"][:] = np.NAN
+
+                TC["DUT_SNYNC_Phase"] = {}
+                TC["DUT_SNYNC_Phase"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["DUT_SNYNC_Phase"]["value"][:] = np.NAN
+                TC["DUT_SNYNC_Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["DUT_SNYNC_Phase"]["uncertainty"][:] = np.NAN
+
+                TC["SSU_ADC_Phase"] = {}
+                TC["SSU_ADC_Phase"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["SSU_ADC_Phase"]["value"][:] = np.NAN
+                TC["SSU_ADC_Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["SSU_ADC_Phase"]["uncertainty"][:] = np.NAN
+
+                TC["REF_Phase"] = {}
+                TC["REF_Phase"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["REF_Phase"]["value"][:] = np.NAN
+                TC["REF_Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["REF_Phase"]["uncertainty"][:] = np.NAN
+
                 TC["Frequency"] = {}
                 TC["Frequency"]["value"] = np.zeros([datasetrows])
                 TC["Frequency"]["value"][:] = np.NAN
@@ -860,6 +889,14 @@ class sineexcitation(experiment):
                                 - (ufanalogrefphase + ufADCTFphase)
                                 + ufrefphase
                             )
+                            TC["DUT_Phase"]['value'][j, i] =ufdutphase.n
+                            TC["DUT_Phase"]["uncertainty"][j, i] = ufdutphase.s
+                            TC["REF_Phase"]['value'][j, i] =ufrefphase.n
+                            TC["REF_Phase"]["uncertainty"][j, i] = ufrefphase.s
+                            TC["SSU_ADC_Phase"]['value'][j, i]=ufADCTFphase.n
+                            TC["SSU_ADC_Phase"]["uncertainty"][j, i]= ufADCTFphase.s
+                            TC["DUT_SNYNC_Phase"]['value'][j, i]=ufanalogrefphase.n
+                            TC["DUT_SNYNC_Phase"]["uncertainty"][j, i]= ufanalogrefphase.s
                             if phase.n < -np.pi:
                                 phase += ufloat(2 * np.pi, 0)
                             elif phase.n > np.pi:
