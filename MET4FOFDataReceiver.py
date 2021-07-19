@@ -1210,7 +1210,8 @@ class HDF5Dumper:
         self.pushlock = threading.Lock()
         self.dataframindexoffset = 4
         self.chunksize = chunksize
-        self.buffer = np.zeros([20, self.chunksize])
+        self.buffer = np.zeros([16, self.chunksize])
+        self.time_buffer = np.zeros([4,self.chunksize], dtype=np.uint64)
         self.ticks_buffer = np.zeros( self.chunksize,dtype=np.uint64)
         self.chunkswritten = 0
         self.msgbufferd = 0
@@ -1449,10 +1450,6 @@ class HDF5Dumper:
             self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
             self.buffer[:, self.msgbufferd] = np.array(
                 [
-                    message.sample_number,
-                    message.unix_time+self.timeoffset,
-                    message.unix_time_nsecs,
-                    message.time_uncertainty+self.uncerpenaltyfortimeerrorns*self.timeoffset,
                     message.Data_01,
                     message.Data_02,
                     message.Data_03,
@@ -1471,6 +1468,11 @@ class HDF5Dumper:
                     message.Data_16,
                 ]
             )
+            self.time_buffer[:, self.msgbufferd] = np.array([
+                message.sample_number,
+                message.unix_time + self.timeoffset,
+                message.unix_time_nsecs,
+                message.time_uncertainty + self.uncerpenaltyfortimeerrorns * self.timeoffset])
             self.ticks_buffer[self.msgbufferd] = message.time_ticks
             self.msgbufferd = self.msgbufferd + 1
             if self.msgbufferd == self.chunksize:
@@ -1481,9 +1483,9 @@ class HDF5Dumper:
                     #print("Start index is " + str(startIDX))
                     self.Datasets["Absolutetime"].resize([1, startIDX + self.chunksize])
                     time = (
-                        self.buffer[1, :] * 1e9
-                        + self.buffer[2, : startIDX + self.chunksize]
-                    ).astype(np.uint64)
+                        self.time_buffer[1, :] * 1000000000
+                        + self.time_buffer[2, : startIDX + self.chunksize]
+                    )
                     self.Datasets["Absolutetime"][:, startIDX:] = time
                     if (self.dscp.has_time_ticks):
                         self.Datasets["Time_Ticks"].resize([1, startIDX + self.chunksize])
@@ -1492,7 +1494,7 @@ class HDF5Dumper:
                     self.Datasets["Absolutetime_uncertainty"].resize(
                         [1, startIDX + self.chunksize]
                     )
-                    Absolutetime_uncertainty = self.buffer[3, :].astype(np.uint32)
+                    Absolutetime_uncertainty = self.time_buffer[3, :].astype(np.uint32)
                     self.Datasets["Absolutetime_uncertainty"][
                         :, startIDX:
                     ] = Absolutetime_uncertainty
@@ -1505,7 +1507,7 @@ class HDF5Dumper:
                     self.Datasets["Sample_number"].resize(
                         [1, startIDX + self.chunksize]
                     )
-                    samplenumbers = self.buffer[0, :].astype(np.uint32)
+                    samplenumbers = self.time_buffer[0, :].astype(np.uint32)
                     self.Datasets["Sample_number"][:, startIDX:] = samplenumbers
 
                     for groupname in self.hieracy:
@@ -1537,8 +1539,8 @@ class HDF5Dumper:
             # print("Start index is " + str(startIDX))
             self.Datasets["Absolutetime"].resize([1, startIDX + self.chunksize])
             time = (
-                    self.buffer[1, :] * 1e9
-                    + self.buffer[2, : startIDX + self.chunksize]
+                    self.time_buffer[1, :] * 1000000000
+                    + self.time_buffer[2, : startIDX + self.chunksize]
             ).astype(np.uint64)
             self.Datasets["Absolutetime"][:, startIDX:] = time
             if (self.dscp.has_time_ticks):
@@ -1548,7 +1550,7 @@ class HDF5Dumper:
             self.Datasets["Absolutetime_uncertainty"].resize(
                 [1, startIDX + self.chunksize]
             )
-            Absolutetime_uncertainty = self.buffer[3, :].astype(np.uint32)
+            Absolutetime_uncertainty = self.time_buffer[3, :].astype(np.uint32)
             self.Datasets["Absolutetime_uncertainty"][
             :, startIDX:
             ] = Absolutetime_uncertainty
