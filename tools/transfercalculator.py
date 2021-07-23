@@ -36,12 +36,22 @@ from met4fofhdftools import (
     uncerval,getRAWTFFromExperiemnts,add3compZemaTDMSData
 )  # uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
+import scipy
+
 
 def ufloattouncerval(ufloat):
     result = np.empty([1], dtype=uncerval)
     result["value"] = ufloat.n
     result["uncertainty"] = ufloat.s
     return result
+
+
+def angVar(data,mean):
+    angData=np.angle(data)
+    angMean=np.angle(mean)
+    deltaAng=angData-angMean
+    mappedDeltaAngle=np.arctan2(np.sin(deltaAng), np.cos(deltaAng))# map angle differences to +- 180°
+    return np.var(mappedDeltaAngle)# the mean was substraced before but this dosn't make any influnce on the variance
 
 
 # plt.rc('font', family='serif')
@@ -440,7 +450,7 @@ class experiment:
         for name in self.met4fofdatafile.senorsnames:
             self.idxs[name] = self.met4fofdatafile.getnearestidxs(name, self.timepoints)
             if self.idxs[name][1] - self.idxs[name][0] == 0:
-                raise ValueError("EMPTY DATA SET")
+                raise ValueError("EMPTY DATA SET  in "+ experiementID+'\n'+str(name)+' IDXs'+str(self.idxs[name][1])+' '+str(self.idxs[name][0]))
             self.data[name] = {}
             self.runtimeData[name] = {}
             for dataset in self.met4fofdatafile.sensordatasets[name]:
@@ -608,21 +618,24 @@ class sineexcitation(experiment):
                     self.data[sensor][dataset]["SinParams"][i] = sineparams
                 for i in np.arange(datasetrows):
                     sineparams = self.data[sensor][dataset]["SinParams"][i]
-                    Complex = sineparams[:, 1] + 1j * sineparams[:, 0]
                     DC = sineparams[:, 2]
+                    Complex = sineparams[:, 1] + 1j * sineparams[:, 0]
                     Freq = np.ones(sineparams.shape[0]) * f0
+                    lengthMean = np.mean(abs(Complex))
+                    nomalized = Complex / abs(Complex)#all vectors ar normalized
+                    radialCord = np.sum(nomalized)/nomalized.size #all vectors are added to ahve one vector pointing in the direction of the mean value
                     self.data[sensor][dataset]["SinPOpt"][i, :] = [
-                        np.mean(abs(Complex)),
+                        lengthMean,
                         np.mean(DC),
                         np.mean(Freq),
-                        np.mean(np.unwrap(np.angle(Complex))),
+                        np.angle(radialCord),
                     ]
-                    CoVarData = np.stack(
-                        (abs(Complex), DC, Freq, np.unwrap(np.angle(Complex))), axis=0
-                    )
-                    self.data[sensor][dataset]["SinPCov"][i, :] = np.cov(
-                        CoVarData, bias=True
-                    )  # bias=True Nomation With N like np.std
+                    self.data[sensor][dataset]["SinPCov"][i, :] = np.zeros([4,4])
+                    self.data[sensor][dataset]["SinPCov"][i, :][:] = np.NaN# covariance array is kept du to compatibility but non diagonal elemnts are no longer calculated
+                    self.data[sensor][dataset]["SinPCov"][i, :][0,0] = np.var(abs(Complex))
+                    self.data[sensor][dataset]["SinPCov"][i, :][1, 1] = np.var(DC)
+                    self.data[sensor][dataset]["SinPCov"][i, :][2, 2] = np.var(Freq)#--> allways zero since freq is nomina value from fit input but can be different for 4 paramfit
+                    self.data[sensor][dataset]["SinPCov"][i, :][3, 3] = angVar(nomalized,radialCord)
         self.flags["Sine fit calculated"] = True
         return
 
@@ -1058,10 +1071,10 @@ class sineexcitation(experiment):
 def processdata(i):
     sys.stdout.flush()
     times = mpdata["movementtimes"][i]
-    refidx = int(mpdata["refidx"][i])
+    #refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 7e9
-    times[1] -= 1e9
+    times[0] += 11e9
+    times[1] -= 2e9
     experiment = sineexcitation(
         mpdata["hdfinstance"], times, "{:05d}".format(i) + "_Sine_Excitation"
     )
@@ -1071,21 +1084,20 @@ def processdata(i):
 
     start = time.time()
     experiment.dofft()
-    axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
-    axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
-    #axisfreqs = mpdata["uniquexfreqs"]
+    #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
+    #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
+    axisfreqs = mpdata["uniquexfreqs"]
     experiment.do3paramsinefits(axisfreqs, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
     #experiment.calculateGPSRef1freqFromVelocity()
-    experiment.calculatetanloguephaseref1freq(
-        "REFERENCEDATA/Acceleration_refference",
-        refidx,
-        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-        0,
-    )
-
+    #experiment.calculatetanloguephaseref1freq(
+    #    "REFERENCEDATA/Acceleration_refference",
+    #    refidx,
+    #    "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
+    #    0,
+    #)
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -1116,16 +1128,50 @@ def collectAndSortAccelerationVeloAsRef(hdffile,RefPathName='0x00000200_OptoMet_
     print(data)
     return data
 
+def getAmplitudevectors(data):
+    freqs=np.zeros(len(data.keys()))
+    i=0
+    magvectors={}
+    phasevectors={}
+    rots={}
+    for freq in data.keys():
+        freqs[i]=float(freq)
+        numex=len(data[freq])
+        magvectors[freq]={'DUT':np.zeros([numex,3]),'REF':np.zeros([numex,3])}
+        phasevectors[freq] = {'DUT': np.zeros([numex, 3]),
+                              'REF': np.zeros([numex, 3]),
+                              'DELTA': np.zeros([numex, 3])}
+        for exIdx in range(numex):
+            magvectors[freq]['DUT'][exIdx,:]  = data[freq][exIdx]['DUT']['SinPOpt'][:,0]
+            magvectors[freq]['REF'][exIdx, :] = data[freq][exIdx]['REF']['SinPOpt'][:, 0]*2*np.pi*float(freq)
+            phasevectors[freq]['DUT'][exIdx,:]  =PhiDUT= data[freq][exIdx]['DUT']['SinPOpt'][:,3]
+            phasevectors[freq]['REF'][exIdx, :] =PhiREF= data[freq][exIdx]['REF']['SinPOpt'][:,3]+(0.5*np.pi)
+            phasevectors[freq]['DELTA'][exIdx, :] = PhiREF-PhiDUT
+        magDUT = np.linalg.norm(magvectors[freq]['DUT'], axis=1)
+        magREF = np.linalg.norm(magvectors[freq]['REF'], axis=1)
+        aplitudeScaleFactor=np.mean(magREF/magDUT)
+        rots[freq],rmsd=scipy.spatial.transform.Rotation.align_vectors(magvectors[freq]['DUT']*aplitudeScaleFactor,magvectors[freq]['REF'])
+        print(str(freq)+' '+str(aplitudeScaleFactor)+' '+str(rots[freq].as_euler('zyx', degrees=True))+' '+str(rmsd))
+        i = i + 1
+    return magvectors
 
 if __name__ == "__main__":
+    is1DPrcoessing = False
+    is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
     #sensorname = '0xbccb0000_MPU_9250'
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
-
+    #1dPrcoessing=True
     #PTB Filename and sensor Name
-    sensorname = '0x1fe40000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    #sensorname = '0x1fe40000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    # is1DPrcoessing=True
+    #ZEMA 3 Komponent
+    hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max.hdf5'
+    leadSensorname='0xf1030002_MPU_9250'
+    is3DPrcoessing=True
+
 
     try:
         os.remove(hdffilename)
@@ -1135,59 +1181,78 @@ if __name__ == "__main__":
 
 
     datafile = h5py.File(hdffilename, "r+")
-    test = hdfmet4fofdatafile(datafile)
+    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0x00000100_OptoMet_Vibrometer','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1','0xf1030a00_STM32_Internal_ADC','0x00000300_Cola_Reference'])
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/'+sensorname+'/Acceleration', 'RAWDATA/'+sensorname+'/Absolutetime', treshold=1.7,
-                                                    blocksinrow=100, blocksize=100, plot=True)
+    movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=0.7,blocksinrow=10, blocksize=1000, plot=True)
     numofexperiemnts=movementtimes.shape[0]
-    manager = multiprocessing.Manager()
-    mpdata = manager.dict()
-    mpdata['hdfinstance'] = test
-    mpdata['movementtimes'] = movementtimes
-    mpdata['lock'] = manager.Lock()
 
-    # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
+    if is1DPrcoessing:
+        manager = multiprocessing.Manager()
+        mpdata = manager.dict()
+        mpdata['hdfinstance'] = test
+        mpdata['movementtimes'] = movementtimes
+        mpdata['lock'] = manager.Lock()
 
-    mpdata['refidx'] = np.zeros([16 * 10])
-    refidx = np.zeros([17 * 10])
-    for i in np.arange(10):
-        refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-    mpdata['refidx'] = refidx
+        # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
+
+        mpdata['refidx'] = np.zeros([16 * 10])
+        refidx = np.zeros([17 * 10])
+        for i in np.arange(10):
+            refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+        mpdata['refidx'] = refidx
 
 
-    freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
-    # CEM Data
-    #refidx = generateCEMrefIDXfromfreqs(freqs)
-    mpdata['refidx'] = refidx
+        freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
+        # CEM Data
+        #refidx = generateCEMrefIDXfromfreqs(freqs)
+        mpdata['refidx'] = refidx
 
-    unicefreqs = np.unique(freqs, axis=0)
-    mpdata['uniquexfreqs'] = unicefreqs
+        unicefreqs = np.unique(freqs, axis=0)
+        mpdata['uniquexfreqs'] = unicefreqs
 
-    i = np.arange(numofexperiemnts)
-    results=process_map(processdata, i, max_workers=15)
+        i = np.arange(numofexperiemnts)
+        results=process_map(processdata, i, max_workers=15)
 
-    freqs = np.zeros(numofexperiemnts)
-    mag = np.zeros(numofexperiemnts)
-    maguncer = np.zeros(numofexperiemnts)
-    examp = np.zeros(numofexperiemnts)
-    rawamp = np.zeros(numofexperiemnts)
-    phase = np.zeros(numofexperiemnts)
-    phaseuncer = np.zeros(numofexperiemnts)
-    output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
-             'phaseuncer': phaseuncer}
-    df = pd.DataFrame(output)
-    for i in range(len(results)):
-        ex=results[i]
-        ex.saveToHdf()
-        mag[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['value'][2,2]
-        maguncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['uncertainty'][2,2]
-        examp[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Excitation_amplitude']['value'][2,2]
-        freqs[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][2]
-        rawamp[i] = ex.data[sensorname]['Acceleration']['SinPOpt'][2][0]
-        phase[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['value'][2,2]
-        phaseuncer[i] = ex.data[sensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['uncertainty'][2,2]
+        freqs = np.zeros(numofexperiemnts)
+        mag = np.zeros(numofexperiemnts)
+        maguncer = np.zeros(numofexperiemnts)
+        examp = np.zeros(numofexperiemnts)
+        rawamp = np.zeros(numofexperiemnts)
+        phase = np.zeros(numofexperiemnts)
+        phaseuncer = np.zeros(numofexperiemnts)
+        output = {'freqs': freqs,'mag': mag, 'maguncer': maguncer, 'examp': examp,  'phase': phase,
+                 'phaseuncer': phaseuncer}
+        df = pd.DataFrame(output)
+        for i in range(len(results)):
+            ex=results[i]
+            ex.saveToHdf()
+            mag[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['value'][2,2]
+            maguncer[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['uncertainty'][2,2]
+            examp[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Excitation_amplitude']['value'][2,2]
+            freqs[i] = ex.data[leadSensorname]['Acceleration']['SinPOpt'][2][2]
+            rawamp[i] = ex.data[leadSensorname]['Acceleration']['SinPOpt'][2][0]
+            phase[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['value'][2,2]
+            phaseuncer[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['uncertainty'][2,2]
 
-    TF=getRAWTFFromExperiemnts(datafile["EXPERIMENTS/Sine excitation"],sensorname)
-    test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], sensorname)
-    test.hdffile.flush()
-    test.hdffile.close()
+        TF=getRAWTFFromExperiemnts(leadSensorname+["EXPERIMENTS/Sine excitation"],leadSensorname)
+        test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
+        test.hdffile.flush()
+        test.hdffile.close()
+    if is3DPrcoessing:
+        manager = multiprocessing.Manager()
+        mpdata = manager.dict()
+        mpdata['hdfinstance'] = test
+        mpdata['movementtimes'] = movementtimes
+        mpdata['lock'] = manager.Lock()
+
+        unicefreqs = np.array(
+            [250, 240, 230, 220, 210, 200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30,
+             20, 10])
+        mpdata['uniquexfreqs'] = unicefreqs
+        i = np.arange(numofexperiemnts)
+        results = process_map(processdata, i, max_workers=15)
+        for i in range(len(results)):
+            ex = results[i]
+            ex.saveToHdf()
+        #AccelvectorDict=collectAndSortAccelerationVeloAsRef(datafile)
+        #rotations = getAmplitudevectors(AccelvectorDict)
