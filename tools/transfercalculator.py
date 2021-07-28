@@ -1178,6 +1178,29 @@ def getSensorRotationFromAcellVectors(data,DUTGroupDelay,freqsToUse=[10.0,20.0,3
     print('Average from Freqs'+str(freqsToUse) +' ' +str(averageRrots.as_euler('zyx', degrees=True)) + ' ' + str(Averagermsd))
     return averageRrots,magvectors,phasevectors
 
+
+def plotRotations(Rotations,Names,linestyles):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    numRotatiosn=len(Rotations)
+    for i in range(numRotatiosn):
+        ax.quiver(0, 0, 0,1,0,0,color='red')
+        xrot=Rotations[i].apply([1,0,0])
+        ax.quiver(0, 0, 0, xrot[0],xrot[1],xrot[2], color='red',linestyle=linestyles[i])
+
+        ax.quiver(0, 0, 0, 0, 1, 0, color='green')
+        yrot=Rotations[i].apply([0,1,0])
+        ax.quiver(0, 0, 0, yrot[0],yrot[1],yrot[2], color='green',linestyle=linestyles[i])
+
+        ax.quiver(0, 0, 0, 0, 0, 1, color='blue')
+        zrot=Rotations[i].apply([0,0,1])
+        ax.quiver(0, 0, 0, zrot[0],zrot[1],zrot[2], color='blue',linestyle=linestyles[i])
+    ax.set_xlim([-1.1, 1.1])
+    ax.set_ylim([-1.1, 1.1])
+    ax.set_zlim([-1.1, 1.1])
+    plt.show()
+
+
 """
 BMAxphase = []
 BMAyphase = []
