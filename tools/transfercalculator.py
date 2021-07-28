@@ -46,14 +46,6 @@ def ufloattouncerval(ufloat):
     return result
 
 
-def angVar(data,mean):
-    angData=np.angle(data)
-    angMean=np.angle(mean)
-    deltaAng=angData-angMean
-    mappedDeltaAngle=np.arctan2(np.sin(deltaAng), np.cos(deltaAng))# map angle differences to +- 180°
-    return np.var(mappedDeltaAngle)# the mean was substraced before but this dosn't make any influnce on the variance
-
-
 # plt.rc('font', family='serif')
 # plt.rc('text', usetex=True)
 PLTSCALFACTOR = 0.5
@@ -592,28 +584,32 @@ class sineexcitation(experiment):
                     [datasetrows, 1]
                 )  # we doing an singe frequency fit
                 # calc first row and create output array[:,idxs[0]:idxs[1]]
-                sineparams = st.seq_threeparsinefit(
+                sineparams, sectionStartTimes = st.seq_threeparsinefit(
                     self.datafile["RAWDATA/" + sensor + "/" + dataset][
                         0, idxs[0] : idxs[1]
                     ],
                     reltime,
                     f0,
-                    periods=10,
+                    periods=periods,
+                    multiTasiking=False,
+                    returnSectionStartTimes=True
                 )
                 self.data[sensor][dataset]["SinPOpt"] = np.zeros([datasetrows, 4])
-                self.data[sensor][dataset]["SinPCov"] = np.zeros([datasetrows, 4, 4])
+                self.data[sensor][dataset]["SinPCov"] = np.zeros([datasetrows, 5, 5])
                 self.data[sensor][dataset]["SinParams"] = np.zeros(
                     [datasetrows, sineparams.shape[0], 3]
                 )
                 self.data[sensor][dataset]["SinParams"][0] = sineparams
                 for i in np.arange(1, datasetrows):
-                    sineparams = st.seq_threeparsinefit(
+                    sineparams,sectionStartTimes = st.seq_threeparsinefit(
                         self.datafile["RAWDATA/" + sensor + "/" + dataset][
                             i, idxs[0] : idxs[1]
                         ],
                         reltime,
                         f0,
-                        periods=10,
+                        periods=periods,
+                        multiTasiking=False,
+                        returnSectionStartTimes=True
                     )
                     self.data[sensor][dataset]["SinParams"][i] = sineparams
                 for i in np.arange(datasetrows):
@@ -623,19 +619,27 @@ class sineexcitation(experiment):
                     Freq = np.ones(sineparams.shape[0]) * f0
                     lengthMean = np.mean(abs(Complex))
                     nomalized = Complex / abs(Complex)#all vectors ar normalized
-                    radialCord = np.sum(nomalized)/nomalized.size #all vectors are added to ahve one vector pointing in the direction of the mean value
+                    radialCord = np.sum(nomalized)/nomalized.size #all vectors are added to have one vector pointing in the direction of the mean value
+                    deltaAng=np.angle(nomalized)-np.angle(radialCord)#differences of the angles this value can be bigger than -180 -- 180 deg
+                    mappedDeltaAngle = np.arctan2(np.sin(deltaAng),
+                                                  np.cos(deltaAng))  # map angle differences to +- 180°
                     self.data[sensor][dataset]["SinPOpt"][i, :] = [
                         lengthMean,
                         np.mean(DC),
                         np.mean(Freq),
                         np.angle(radialCord),
                     ]
-                    self.data[sensor][dataset]["SinPCov"][i, :] = np.zeros([4,4])
-                    self.data[sensor][dataset]["SinPCov"][i, :][:] = np.NaN# covariance array is kept du to compatibility but non diagonal elemnts are no longer calculated
-                    self.data[sensor][dataset]["SinPCov"][i, :][0,0] = np.var(abs(Complex))
-                    self.data[sensor][dataset]["SinPCov"][i, :][1, 1] = np.var(DC)
-                    self.data[sensor][dataset]["SinPCov"][i, :][2, 2] = np.var(Freq)#--> allways zero since freq is nomina value from fit input but can be different for 4 paramfit
-                    self.data[sensor][dataset]["SinPCov"][i, :][3, 3] = angVar(nomalized,radialCord)
+                    CoVarData = np.stack((
+                        abs(Complex)-lengthMean,# subtracting mean, just for safty this should change anything here
+                        DC,
+                        Freq,
+                        deltaAng,# Important Phase mean needs to be substraced and data needs to be maped into -180 -- 180 deg
+                        sectionStartTimes),# variance against time is intresting to se reidual phase du to frequency mismatch
+                        axis=0
+                    )
+                    self.data[sensor][dataset]["SinPCov"][i, :] = np.cov(
+                        CoVarData, bias=True
+                    )  # bias=True Nomation With N like np.std
         self.flags["Sine fit calculated"] = True
         return
 
@@ -1125,36 +1129,68 @@ def collectAndSortAccelerationVeloAsRef(hdffile,RefPathName='0x00000200_OptoMet_
                data[freq].append(exdata)
             else:
                 data[freq]=[exdata]
-    print(data)
+    #print(data)
     return data
 
-def getAmplitudevectors(data):
+def getSensorRotationFromAcellVectors(data,DUTGroupDelay,freqsToUse=[10.0,20.0,30.0,40.0]):            #
     freqs=np.zeros(len(data.keys()))
     i=0
     magvectors={}
     phasevectors={}
     rots={}
+    scaledREF=np.zeros([0, 3])
+    scaledDUT = np.zeros([0, 3])
     for freq in data.keys():
         freqs[i]=float(freq)
         numex=len(data[freq])
         magvectors[freq]={'DUT':np.zeros([numex,3]),'REF':np.zeros([numex,3])}
         phasevectors[freq] = {'DUT': np.zeros([numex, 3]),
                               'REF': np.zeros([numex, 3]),
-                              'DELTA': np.zeros([numex, 3])}
+                              'DELTA': np.zeros([numex, 3]),
+                              'SIGN': np.zeros([numex, 3])}
         for exIdx in range(numex):
-            magvectors[freq]['DUT'][exIdx,:]  = data[freq][exIdx]['DUT']['SinPOpt'][:,0]
-            magvectors[freq]['REF'][exIdx, :] = data[freq][exIdx]['REF']['SinPOpt'][:, 0]*2*np.pi*float(freq)
+
             phasevectors[freq]['DUT'][exIdx,:]  =PhiDUT= data[freq][exIdx]['DUT']['SinPOpt'][:,3]
             phasevectors[freq]['REF'][exIdx, :] =PhiREF= data[freq][exIdx]['REF']['SinPOpt'][:,3]+(0.5*np.pi)
-            phasevectors[freq]['DELTA'][exIdx, :] = PhiREF-PhiDUT
+            phaseDelay = (2*np.pi*freq*DUTGroupDelay)
+            DELTA=PhiDUT-PhiREF-phaseDelay
+            phasevectors[freq]['DELTA'][exIdx, :]=DELTA
+            phasevectors[freq]['DELTA'][exIdx, :]=np.arctan2(np.sin(DELTA),
+                                                  np.cos(DELTA))
+            rawSIGN =abs(np.arctan2(np.sin(DELTA),np.cos(DELTA)))>np.pi/2#0=+ 1=-
+            rawSIGN=np.where(rawSIGN == 1, -1, rawSIGN)
+            rawSIGN = np.where(rawSIGN == 0, 1, rawSIGN)
+            phasevectors[freq]['SIGN'][exIdx, :] =rawSIGN
+
+            magvectors[freq]['DUT'][exIdx,:]  = data[freq][exIdx]['DUT']['SinPOpt'][:,0]*rawSIGN
+            magvectors[freq]['REF'][exIdx, :] = data[freq][exIdx]['REF']['SinPOpt'][:, 0]*2*np.pi*float(freq)
+
         magDUT = np.linalg.norm(magvectors[freq]['DUT'], axis=1)
         magREF = np.linalg.norm(magvectors[freq]['REF'], axis=1)
         aplitudeScaleFactor=np.mean(magREF/magDUT)
         rots[freq],rmsd=scipy.spatial.transform.Rotation.align_vectors(magvectors[freq]['DUT']*aplitudeScaleFactor,magvectors[freq]['REF'])
-        print(str(freq)+' '+str(aplitudeScaleFactor)+' '+str(rots[freq].as_euler('zyx', degrees=True))+' '+str(rmsd))
+        if freq in freqsToUse:
+            scaledREF = np.concatenate((scaledREF, magvectors[freq]['REF']))
+            scaledDUT = np.concatenate((scaledDUT, magvectors[freq]['DUT']*aplitudeScaleFactor))
+        #print(str(freq)+' '+str(aplitudeScaleFactor)+' '+str(rots[freq].as_euler('zyx', degrees=True))+' '+str(rmsd))
         i = i + 1
-    return magvectors
+    averageRrots, Averagermsd = scipy.spatial.transform.Rotation.align_vectors(scaledDUT,scaledREF)
+    print('Average from Freqs'+str(freqsToUse) +' ' +str(averageRrots.as_euler('zyx', degrees=True)) + ' ' + str(Averagermsd))
+    return averageRrots,magvectors,phasevectors
 
+"""
+BMAxphase = []
+BMAyphase = []
+BMAzphase = []
+BMAfreq = []
+for freq in BMAPhaseVecs.keys():
+    for experiment in BMAPhaseVecs[freq]['DELTA']:
+        BMAxphase.append(experiment[0])
+        BMAyphase.append(experiment[1])
+        BMAzphase.append(experiment[2])
+        BMAfreq.append(float(freq))
+plt.plot(BMAfreq, BMAzphase, 'x')
+"""
 if __name__ == "__main__":
     is1DPrcoessing = False
     is3DPrcoessing = False
@@ -1181,11 +1217,12 @@ if __name__ == "__main__":
 
 
     datafile = h5py.File(hdffilename, "r+")
-    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0x00000100_OptoMet_Vibrometer','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1','0xf1030a00_STM32_Internal_ADC','0x00000300_Cola_Reference'])
 
+    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0x00000100_OptoMet_Vibrometer','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1','0xf1030a00_STM32_Internal_ADC','0x00000300_Cola_Reference'])
+    """
     movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=0.7,blocksinrow=10, blocksize=1000, plot=True)
     numofexperiemnts=movementtimes.shape[0]
-
+    """
     if is1DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
@@ -1239,6 +1276,7 @@ if __name__ == "__main__":
         test.hdffile.flush()
         test.hdffile.close()
     if is3DPrcoessing:
+        """
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
         mpdata['hdfinstance'] = test
@@ -1250,9 +1288,13 @@ if __name__ == "__main__":
              20, 10])
         mpdata['uniquexfreqs'] = unicefreqs
         i = np.arange(numofexperiemnts)
+        processdata(0)
         results = process_map(processdata, i, max_workers=15)
         for i in range(len(results)):
             ex = results[i]
             ex.saveToHdf()
-        #AccelvectorDict=collectAndSortAccelerationVeloAsRef(datafile)
-        #rotations = getAmplitudevectors(AccelvectorDict)
+        """
+        AccelvectorDictMPU9250 = collectAndSortAccelerationVeloAsRef(datafile)
+        MPU9250Rotation,MPUMagVecs,MPUPhaseVecs = getSensorRotationFromAcellVectors(AccelvectorDictMPU9250,DUTGroupDelay=-0.0015107382732839475)
+        AccelvectorDictBMA280 = collectAndSortAccelerationVeloAsRef(datafile,DUTPathName='0xf1030100_BMA_280/Acceleration')
+        BMARotation,BMAMagVecs,BMAPhaseVecs = getSensorRotationFromAcellVectors(AccelvectorDictBMA280,DUTGroupDelay=-0.00055)
