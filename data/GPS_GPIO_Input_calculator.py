@@ -40,12 +40,12 @@ def plotHist(data,bins):
     ax.set_xlabel(r"\textbf{Differenz der Zeitstempel in ns}")
     ax.set_ylabel(r"\textbf{Releative Häufigkeit}")
     fig.suptitle(title)
-    fig.savefig("timinghistogramm.svg")
-    fig.savefig("timinghistogramm.png")
+    fig.savefig("timinghistogramm.svg",bbox_inches='tight')
+    fig.savefig("timinghistogramm.png",bbox_inches='tight')
     fig.show()
 
 def plottimediffWithUncerAndZoom(data,uncer,period=(1e8+0.0005950575459905795),zoomArea=(20000,22000)):
-    timeMinusExpectedTime1 = data.astype(np.int64)-data[0].astype(np.int64) - (period * np.arange(data.size))+20
+    timeMinusExpectedTime1 = data.astype(np.int64)-data[0].astype(np.int64) - (period * np.arange(data.size))
     reltime=(data-data[0])/1e9 #since time is in nanoseconds
 
     UncerMissmatces = np.where(timeMinusExpectedTime1  > uncer, 1, 0)
@@ -64,15 +64,44 @@ def plottimediffWithUncerAndZoom(data,uncer,period=(1e8+0.0005950575459905795),z
     ax[1].plot(reltime[zoomArea[0]:zoomArea[1]],uncer[zoomArea[0]:zoomArea[1]],label='Unsicherheit von SSU generiert',color=colors[1])
     ax[1].plot(reltime[zoomArea[0]:zoomArea[1]],-1*uncer[zoomArea[0]:zoomArea[1]], color=colors[1])
     ax[1].plot(reltime[zoomArea[0]:zoomArea[1]],timeMinusExpectedTime1[zoomArea[0]:zoomArea[1]],label='Abweichung vom erwartet Wert SSU', color=colors[0])
-    ax[1].grid(True)
-    ax[1].legend()
     ax[1].set_xlabel(r"\textbf{Relative Zeit in s}")
     ax[1].set_ylabel(r"$\mathbf{\Delta t}$\textbf{ in ns}")
-    fig.savefig("timingErrorZoom.svg")
-    fig.savefig("timingErrorZoom.png")
+    ax[1].grid(True)
+    ax[1].legend()
+    fig.savefig("timingErrorZoom.svg",bbox_inches='tight')
+    fig.savefig("timingErrorZoom.png",bbox_inches='tight')
     fig.show()
 
-hdf=h5py.File('20210721MultiBoard_GPS_test.hfd5', "w")
+def plotGPSTimeSyncAlgo(hdfDset):
+    #TODO implenet gliding window
+    relTicks=hdfDset[0,1:121]-hdfDset[0,1]
+    deltaTicks=np.diff(hdfDset[0,:120])
+    blockMean=np.zeros([60])
+    blockStd=np.zeros([60])
+    for i in range(60):
+        blockMean[i]=np.mean(deltaTicks[i:i+60])
+        blockStd[i] = np.std(deltaTicks[i:i + 60])
+    fig, ax = plt.subplots(2, 1)
+    fig.set_size_inches(14, 7, forward=True)
+    ax[0].plot(relTicks,'x',label='Messwerte in Ticks')
+    ax[0].grid(True)
+    ax[0].legend()
+    ax[0].set_ylabel(r"\textbf{Counterwert in Ticks}")
+    ax[1].set_xlabel(r"\textbf{PPS Puls index alias Relative Zeit in s}")
+    ax[1].set_ylabel(r"$\mathbf{\Delta t}$\textbf{ in Tickes}\\ \textbf{1 Tick} $\mathbf{\approx}$ \textbf{9.259~ns}")
+    ax[1].fill_between(np.arange(60),blockMean-2*blockStd,blockMean+2*blockStd,alpha=0.5,color=colors[1])
+    ax[1].plot(np.arange(60), deltaTicks[59:],'x', label=r'Messwerte in Ticks', color=colors[0])
+    ax[1].plot(np.arange(60), blockMean-2*blockStd, label=r'$2\cdot$ Standardabweichung $2\sigma$='+"{:3.2f}".format(np.mean(blockStd))+'~Tickes', color=colors[1])
+    ax[1].plot(np.arange(60), blockMean+2*blockStd, color=colors[1])
+    ax[1].plot(np.arange(60), blockMean, label=r'Mittelwert $\mu$=' + "{:9.3f}".format(np.mean(blockMean)) + '~Ticks',color=colors[3])
+    ax[1].grid(True)
+    ax[1].legend()
+    fig.savefig("timingTickes.svg",bbox_inches='tight')
+    fig.savefig("timingTicks.png",bbox_inches='tight')
+
+
+
+hdf=h5py.File('20210721MultiBoard_GPS_test.hfd5', "r+")
 timediffBetweanBoards=hdf['RAWDATA/0x60ad0100_BMA_280/Absolutetime'][0,12:-998].astype(np.int64)-hdf['RAWDATA/0xf1030100_BMA_280/Absolutetime'][0,11:-999].astype(np.int64)
 timeDiffMean=np.mean(timediffBetweanBoards)
 timeDiffStd=np.std(timediffBetweanBoards)
@@ -85,5 +114,6 @@ ratuiOfUncerMissmatches=numberOfUncerMissmatches/UncerMissmatces.size
 # Fit a normal distribution to the data:
 
 bins=np.max(timediffBetweanBoards)-np.min(timediffBetweanBoards)
-plotHist(timediffBetweanBoards,bins)
-plottimediffWithUncerAndZoom(hdf['RAWDATA/0xf1030100_BMA_280/Absolutetime'][0,12:-998],uncer2)
+#plotHist(timediffBetweanBoards,bins)
+#plottimediffWithUncerAndZoom(hdf['RAWDATA/0xf1030100_BMA_280/Absolutetime'][0,12:-998],uncer2)
+plotGPSTimeSyncAlgo(hdf["RAWDATA/0xf1031400_uBlox_NEO-7_GPS/Time_Ticks"])
