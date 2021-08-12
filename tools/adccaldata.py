@@ -7,11 +7,12 @@ import matplotlib.pyplot as plt
 import logging
 
 plt.rc('font', family='serif')
-#plt.rc('text', usetex=True)
-PLTSCALFACTOR = 1.5
+plt.rc('text', usetex=True)
+PLTSCALFACTOR = 1.0
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 15 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
+DPI=160
 
 plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
 plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
@@ -21,6 +22,9 @@ plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
+def findNearestIDX(array,value):
+     idx = (np.abs(array-value)).argmin()
+     return idx
 
 class Met4FOFADCCall:
     def __init__(self, Filenames=[None]):
@@ -106,22 +110,34 @@ class Met4FOFADCCall:
         LabelExtension="",
         TitleExtension="",
         saveFigName=None,
+        startStopFreq=None,
         lang='EN'#'EN' or 'DE'
     ):
+
         BoardID = self.metadata["BordID"]
         tf = self.GetTransferFunction(Channel)
+        if startStopFreq==None:
+            plotStartFreq =np.min(tf["Frequencys"])
+            plotStopFreq =np.max(tf["Frequencys"])
+            plotStatIDX=0
+            plotStopIDX=tf["Frequencys"].size
+        else:
+            plotStartFreq =np.min(startStopFreq[0])
+            plotStopFreq =np.max(startStopFreq[1])
+            plotStatIDX =findNearestIDX(tf["Frequencys"],startStopFreq[0])
+            plotStopIDX =findNearestIDX(tf["Frequencys"],startStopFreq[1])
         if PlotType == "log":
             XInterPol = np.power(
                 10,
                 np.linspace(
-                    np.log10(np.min(tf["Frequencys"])),
-                    np.log10(np.max(tf["Frequencys"]) - 1),
+                    np.log10(plotStartFreq),
+                    np.log10(plotStopFreq),
                     interpolSteps,
                 ),
             )
         else:
             XInterPol = np.linspace(
-                np.min(tf["Frequencys"]), np.max(tf["Frequencys"]), interpolSteps
+                np.min(plotStartFreq), np.max(plotStopFreq), interpolSteps
             )
         interPolAmp = np.zeros(interpolSteps)
         interPolAmpErrMin = np.zeros(interpolSteps)
@@ -138,8 +154,8 @@ class Met4FOFADCCall:
             interPolPhaseErrMin[i] = interPolPhase[i] - tmp["PhaseUncer"]
             interPolPhaseErrMax[i] = interPolPhase[i] + tmp["PhaseUncer"]
         if fig == None and ax == [None, None]:
-            Fig, (ax1, ax2) = plt.subplots(2, 1,sharex=True)
-            Fig.set_size_inches(11.326, 7, forward=True)
+            Fig, (ax1, ax2) = plt.subplots(2, 1,sharex=True,dpi=DPI)
+            Fig.set_size_inches(14, 7, forward=True)
         else:
             Fig = fig
             ax1 = ax[0]
@@ -148,33 +164,33 @@ class Met4FOFADCCall:
             ax1.set_xscale("log")
             ax2.set_xscale("log")
         if lang=='EN':
-            labelInterpol="Interpolated"
-            lableMeasVals="Mesured Values"
-            axisCapRelMag="Relative magnitude $|S|$"
+            labelInterpol=r"Interpolated"
+            lableMeasVals=r"Mesured Values"
+            axisCapRelMag=r"Relative magnitude $|S|$"
             labelFreq=r"Frequency $f$ in Hz"
             title="Transfer function of "+ str(Channel)+ " of Board with ID"+ hex(int(BoardID/65536))+ TitleExtension
         elif 'DE':
-            labelInterpol = "Interpoliert"
-            lableMeasVals = "Messwerte"
-            axisCapRelMag = "Relative Magnitude $|S|$"
+            labelInterpol = r"Interpoliert"
+            lableMeasVals = r"Messwerte"
+            axisCapRelMag = r"Relative Magnitude $|S|$"
             labelFreq = r"Frequenz $f$ in Hz"
             labelPhase = r"Phase $\Delta\varphi$ in °"
-            title="Transferfunction  "+ str(Channel)+ " des Boards mit der ID"+ hex(int(BoardID/65536))+ TitleExtension
+            title=r"Transferfunction  "+ str(Channel)+ " des Boards mit der ID "+ hex(int(BoardID/65536))+ TitleExtension
         Fig.suptitle(title)
-        ax1.plot(XInterPol, interPolAmp, label="Interpolated" + LabelExtension)
+        ax1.plot(XInterPol, interPolAmp,ls='dotted',label=labelInterpol + LabelExtension)
         lastcolor = ax1.get_lines()[-1].get_color()
         ax1.fill_between(
             XInterPol, interPolAmpErrMin, interPolAmpErrMax, alpha=0.3, color=lastcolor
         )
         ax1.errorbar(
-            tf["Frequencys"],
-            tf["AmplitudeCoefficent"],
-            yerr=tf["AmplitudeCoefficentUncer"],
-            fmt="o",
-            markersize=4,
+            tf["Frequencys"][plotStatIDX:plotStopIDX],
+            tf["AmplitudeCoefficent"][plotStatIDX:plotStopIDX],
+            yerr=tf["AmplitudeCoefficentUncer"][plotStatIDX:plotStopIDX],
+            ls='none',
+            #markersize=4,
             label=lableMeasVals + LabelExtension,
-            uplims=True,
-            lolims=True,
+            #uplims=True,
+            #lolims=True,
             color=lastcolor,
         )
         ax1.set_ylabel(axisCapRelMag)
@@ -182,6 +198,7 @@ class Met4FOFADCCall:
         ax2.plot(
             XInterPol,
             interPolPhase / np.pi * 180,
+            ls='dotted',
             label=labelInterpol + LabelExtension,
         )
         ax2.fill_between(
@@ -192,25 +209,25 @@ class Met4FOFADCCall:
             color=lastcolor,
         )
         ax2.errorbar(
-            tf["Frequencys"],
-            tf["Phase"] / np.pi * 180,
-            yerr=tf["PhaseUncer"] / np.pi * 180,
-            fmt="o",
-            markersize=3,
+            tf["Frequencys"][plotStatIDX:plotStopIDX],
+            tf["Phase"][plotStatIDX:plotStopIDX] / np.pi * 180,
+            yerr=tf["PhaseUncer"][plotStatIDX:plotStopIDX] / np.pi * 180,
+            ls='none',
+            #markersize=3,
             label=lableMeasVals + LabelExtension,
-            uplims=True,
-            lolims=True,
+            #uplims=True,
+            #lolims=True,
             color=lastcolor,
         )
         ax2.set_xlabel(labelFreq)
         ax2.set_ylabel(labelPhase)
         ax2.grid(True)
-        ax1.legend(numpoints=1, fontsize=8, ncol=3)
-        ax2.legend(numpoints=1, fontsize=8, ncol=3)
+        ax1.legend(numpoints=1, ncol=3)
+        ax2.legend(numpoints=1, ncol=3)
         if saveFigName!=None:
-            Fig.savefig(saveFigName+".svg")
-            Fig.savefig(saveFigName + ".png")
-        plt.show()
+            Fig.savefig(saveFigName+".svg",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.5)
+            Fig.savefig(saveFigName + ".png",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.5)
+        Fig.show()
         return Fig, [ax1, ax2]
 
     def getNearestTF(self, Channel, freq):
@@ -365,5 +382,8 @@ class Met4FOFADCCall:
 if __name__ == "__main__":
     ADCTFFull=Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1V95_V195_1HZ_1MHZ.json'])
     ADCTF = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json'])
-    Fig, axs=ADCTF.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension='19.5~V',lang='DE')
-    ADCTFFull.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=100, PlotType="log", LabelExtension='19.5~V \& 1.95~V \& 0.195~V',lang='DE')
+    Fig, axs=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE')
+    ADCTF.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=100, PlotType="log", LabelExtension=r'~19.5~V',lang='DE',saveFigName='ADCTF')
+
+    Fig2, axs2=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE',startStopFreq=[1,10000])
+    ADCTF.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=100, PlotType="log",LabelExtension=r'~19.5~V' ,lang='DE',saveFigName='ADCTFZoom',startStopFreq=[1,10000])
