@@ -123,15 +123,16 @@ def binarySearch(data, val):
 
 
 class hdfmet4fofdatafile:
-    def __init__(self, hdffile,sensornames=None):
+    def __init__(self, hdffile,sensornames=None,dataGroupName='RAWDATA'):
+        self.dataGroupName=dataGroupName+'/'
         self.hdffile = hdffile
         if sensornames==None:
-            self.senorsnames = list(self.hdffile["RAWDATA"].keys())
+            self.senorsnames = list(self.hdffile[self.dataGroupName].keys())
         else:
             self.senorsnames=sensornames
         self.sensordatasets = {}
         for name in self.senorsnames:
-            datasets = list(self.hdffile["RAWDATA/" + name].keys())
+            datasets = list(self.hdffile[self.dataGroupName + name].keys())
             keystocheckandremove = [
                 "Absolutetime",
                 "Absolutetime_uncertainty",
@@ -230,7 +231,7 @@ class hdfmet4fofdatafile:
         return movementidx, np.array(movementtimes)
 
     def getnearestidxs(self, sensorname, time):
-        absolutimegroupname = "RAWDATA/" + sensorname + "/" + "Absolutetime"
+        absolutimegroupname = self.dataGroupName + sensorname + "/" + "Absolutetime"
         absolutetimes = np.squeeze(self.hdffile[absolutimegroupname])
         idxs = np.copy(time)
         with np.nditer(idxs, op_flags=["readwrite"]) as it:
@@ -297,10 +298,6 @@ class hdfmet4fofdatafile:
             SensorRAWTFGROUP = RAWTRANSFERFUNCTIONGROUP[sensor]#->RAWTRANSFERFUNCTION/0x1FE40000_MPU9250
         except KeyError:
             SensorRAWTFGROUP = RAWTRANSFERFUNCTIONGROUP.create_group(sensor)
-        try:
-            SensorRAWTFGROUPNUM = SensorRAWTFGROUP[numeratorQuantity]#->RAWTRANSFERFUNCTION/0x1FE40000_MPU9250/Acceleration
-        except KeyError:
-            SensorRAWTFGROUPNUM = SensorRAWTFGROUP.create_group(numeratorQuantity)
         try:
             SensorRAWTFGROUPNUM = SensorRAWTFGROUP[numeratorQuantity]#->RAWTRANSFERFUNCTION/0x1FE40000_MPU9250/Acceleration
         except KeyError:
@@ -429,6 +426,7 @@ class experiment:
             "experemientTypeName": experemientTypeName,
         }
         self.met4fofdatafile = hdfmet4fofdatafile
+        self.dataGroupName=self.met4fofdatafile.dataGroupName
         self.datafile = self.met4fofdatafile.hdffile
         self.experiemntID = experiementID
         self.timepoints = times
@@ -474,8 +472,8 @@ class experiment:
             )
 
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                dsetattrs = self.datafile["RAWDATA/" + sensor + "/" + dataset].attrs
-                time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+                dsetattrs = self.datafile[self.dataGroupName + sensor + "/" + dataset].attrs
+                time = self.datafile[self.dataGroupName + sensor + "/" + "Absolutetime"][
                     0, idxs[0] : idxs[1]
                 ]
                 if not absolutetime:
@@ -489,10 +487,10 @@ class experiment:
                     axs[icol, irow].set_xlabel("Unixtime in s")
                 axs[icol, irow].set_title(dataset.replace("_", " "))
                 for i in np.arange(
-                    self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[0]
+                    self.datafile[self.dataGroupName + sensor + "/" + dataset].shape[0]
                 ):
                     label = dsetattrs["Physical_quantity"][i]
-                    data = self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                    data = self.datafile[self.dataGroupName + sensor + "/" + dataset][
                         i, idxs[0] : idxs[1]
                     ]
                     axs[icol, irow].plot(time, data, label=label)
@@ -521,14 +519,14 @@ class experiment:
 
 
 class sineexcitation(experiment):
-    def __init__(self, hdfmet4fofdatafile, times, experiementID):
-        super().__init__(hdfmet4fofdatafile, times, "Sine excitation", experiementID)
+    def __init__(self, hdfmet4fofdatafile, times, experiementID,namePrefix=''):
+        super().__init__(hdfmet4fofdatafile, times, namePrefix+"Sine excitation", experiementID)
 
     def dofft(self):
         for sensor in self.met4fofdatafile.sensordatasets:
             idxs = self.idxs[sensor]
             points = idxs[1] - idxs[0]
-            time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+            time = self.datafile[self.dataGroupName + sensor + "/" + "Absolutetime"][
                 0, idxs[0] : idxs[1]
             ]
             reltime = time.astype("int64") - self.timepoints[0].astype("int64")
@@ -537,7 +535,7 @@ class sineexcitation(experiment):
                 points, self.runtimeData[sensor]["Mean Delta T"]
             )
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                data = self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                data = self.datafile[self.dataGroupName + sensor + "/" + dataset][
                     :, idxs[0] : idxs[1]
                 ]
                 self.runtimeData[sensor][dataset]["RFFT"] = np.fft.rfft(data, axis=1)
@@ -562,7 +560,7 @@ class sineexcitation(experiment):
         for sensor in self.met4fofdatafile.sensordatasets:
             idxs = self.idxs[sensor]
             points = idxs[1] - idxs[0]
-            time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+            time = self.datafile[self.dataGroupName + sensor + "/" + "Absolutetime"][
                 0, idxs[0] : idxs[1]
             ]
             reltime = time.astype("int64") - self.timepoints[0].astype("int64")
@@ -576,7 +574,7 @@ class sineexcitation(experiment):
                 except NameError:
                     self.dofft()
                 freqidx = binarySearch(uniquexfreqs, fftmaxfreq)
-                datasetrows = self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[
+                datasetrows = self.datafile[self.dataGroupName + sensor + "/" + dataset].shape[
                     0
                 ]
                 f0 = uniquexfreqs[freqidx]
@@ -585,7 +583,7 @@ class sineexcitation(experiment):
                 )  # we doing an singe frequency fit
                 # calc first row and create output array[:,idxs[0]:idxs[1]]
                 sineparams, sectionStartTimes = st.seq_threeparsinefit(
-                    self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                    self.datafile[self.dataGroupName + sensor + "/" + dataset][
                         0, idxs[0] : idxs[1]
                     ],
                     reltime,
@@ -602,7 +600,7 @@ class sineexcitation(experiment):
                 self.data[sensor][dataset]["SinParams"][0] = sineparams
                 for i in np.arange(1, datasetrows):
                     sineparams,sectionStartTimes = st.seq_threeparsinefit(
-                        self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                        self.datafile[self.dataGroupName + sensor + "/" + dataset][
                             i, idxs[0] : idxs[1]
                         ],
                         reltime,
@@ -646,9 +644,9 @@ class sineexcitation(experiment):
     def plotXYsine(
         self, sensor, dataset, axis, fig=None, ax=None, mode="XY", alpha=0.05
     ):
-        dsetattrs = self.datafile["RAWDATA/" + sensor + "/" + dataset].attrs
+        dsetattrs = self.datafile[self.dataGroupName + sensor + "/" + dataset].attrs
         idxs = self.idxs[sensor]
-        time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+        time = self.datafile[self.dataGroupName + sensor + "/" + "Absolutetime"][
             0, idxs[0] : idxs[1]
         ]
         reltime = time.astype("int64") - self.timepoints[0].astype("int64")
@@ -659,7 +657,7 @@ class sineexcitation(experiment):
         amp = sinparams[axis, 0]
         phi = sinparams[axis, 3]
         undisturbedsine = np.sin(2 * np.pi * f0 * reltime + phi) * amp + dc
-        sinedata = self.datafile["RAWDATA/" + sensor + "/" + dataset][
+        sinedata = self.datafile[self.dataGroupName + sensor + "/" + dataset][
             axis, idxs[0] : idxs[1]
         ]
         if fig == None and ax == None:
@@ -733,8 +731,8 @@ class sineexcitation(experiment):
             )
 
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                dsetattrs = self.datafile["RAWDATA/" + sensor + "/" + dataset].attrs
-                time = self.datafile["RAWDATA/" + sensor + "/" + "Absolutetime"][
+                dsetattrs = self.datafile[self.dataGroupName + sensor + "/" + dataset].attrs
+                time = self.datafile[self.dataGroupName + sensor + "/" + "Absolutetime"][
                     0, idxs[0] : idxs[1]
                 ]
                 if not absolutetime:
@@ -748,10 +746,10 @@ class sineexcitation(experiment):
                     axs[icol, irow].set_xlabel("Unixtime in s")
                 axs[icol, irow].set_title(dataset.replace("_", " "))
                 for i in np.arange(
-                    self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[0]
+                    self.datafile[self.dataGroupName + sensor + "/" + dataset].shape[0]
                 ):
                     label = dsetattrs["Physical_quantity"][i]
-                    data = self.datafile["RAWDATA/" + sensor + "/" + dataset][
+                    data = self.datafile[self.dataGroupName + sensor + "/" + dataset][
                         i, idxs[0] : idxs[1]
                     ]
                     p = axs[icol, irow].plot(time, data, label=label)
@@ -788,7 +786,7 @@ class sineexcitation(experiment):
         ADCTF = transferfunktion(self.datafile[adcreftfname]["Transferfunction"])
         for sensor in self.met4fofdatafile.sensordatasets:
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                datasetrows = self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[
+                datasetrows = self.datafile[self.dataGroupName + sensor + "/" + dataset].shape[
                     0
                 ]
                 self.data[sensor][dataset]["Transfer_coefficients"] = {}
@@ -903,7 +901,7 @@ class sineexcitation(experiment):
                             TC["DUT_amplitude"]["value"][j, i] = ufmeasamp.n
                             TC["DUT_amplitude"]["uncertainty"][j, i] = ufmeasamp.s
                             # calculate phase
-                            adcname = analogrefchannelname.replace("RAWDATA/", "")
+                            adcname = analogrefchannelname.replace(self.dataGroupName, "")
 
                             ufdutphase = ufloat(
                                 self.data[sensor][dataset]["SinPOpt"][j][3],
@@ -955,7 +953,7 @@ class sineexcitation(experiment):
             raise KeyError("only Velocity is supported right no as input")
         for sensor in self.met4fofdatafile.sensordatasets:
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                datasetrows = self.datafile["RAWDATA/" + sensor + "/" + dataset].shape[
+                datasetrows = self.datafile[self.dataGroupName + sensor + "/" + dataset].shape[
                     0
                 ]
                 self.data[sensor][dataset]["Transfer_coefficients"] = {}
@@ -1072,40 +1070,7 @@ class sineexcitation(experiment):
             raise RuntimeWarning("Data already written to hdf file. Skipping")
 
 
-def processdata(i):
-    sys.stdout.flush()
-    times = mpdata["movementtimes"][i]
-    #refidx = int(mpdata["refidx"][i])
-    #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 11e9
-    times[1] -= 2e9
-    experiment = sineexcitation(
-        mpdata["hdfinstance"], times, "{:05d}".format(i) + "_Sine_Excitation"
-    )
-    sys.stdout.flush()
-    # print(experiment)
-    sys.stdout.flush()
-
-    start = time.time()
-    experiment.dofft()
-    #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
-    #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
-    axisfreqs = mpdata["uniquexfreqs"]
-    experiment.do3paramsinefits(axisfreqs, periods=10)
-    end = time.time()
-    # print("Sin Fit Time "+str(end - start))
-    sys.stdout.flush()
-    #experiment.calculateGPSRef1freqFromVelocity()
-    #experiment.calculatetanloguephaseref1freq(
-    #    "REFERENCEDATA/Acceleration_refference",
-    #    refidx,
-    #    "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-    #    0,
-    #)
-    #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    return experiment
-
-
+#TODO move this functions to different place
 def generateCEMrefIDXfromfreqs(freqs, removefreqs=np.array([2000.0])):
     refidx = np.empty(0)
     for i in np.arange(freqs.size):
@@ -1114,17 +1079,17 @@ def generateCEMrefIDXfromfreqs(freqs, removefreqs=np.array([2000.0])):
             i = i + 1
     return refidx
 
-def collectAndSortAccelerationVeloAsRef(hdffile,RefPathName='0x00000200_OptoMet_Velocity_from_counts/Velocity',DUTPathName='0xf1030002_MPU_9250/Acceleration'):
+def collectAndSortAccelerationVeloAsRef(hdffile,RefPathName='0x00000200_OptoMet_Velocity_from_counts/Velocity',DUTPathName='0xf1030002_MPU_9250/Acceleration',experimentGroup='EXPERIMENTS/Sine excitation'):
     data={}
-    for key in hdffile['EXPERIMENTS/Sine excitation'].keys():
-        if 0==np.std(hdffile['EXPERIMENTS/Sine excitation'][key][RefPathName]['Sin_Fit_freq'][:]):
-            freq=np.mean(hdffile['EXPERIMENTS/Sine excitation'][key][RefPathName]['Sin_Fit_freq'][:])
+    for key in hdffile[experimentGroup].keys():
+        if 0==np.std(hdffile[experimentGroup][key][RefPathName]['Sin_Fit_freq'][:]):
+            freq=np.mean(hdffile[experimentGroup][key][RefPathName]['Sin_Fit_freq'][:])
             exdata={'REF':{
-                'SinPOpt':hdffile['EXPERIMENTS/Sine excitation'][key][RefPathName]['SinPOpt'][:],
-                'SinPCov': hdffile['EXPERIMENTS/Sine excitation'][key][RefPathName]['SinPCov'][:]},
+                'SinPOpt':hdffile[experimentGroup][key][RefPathName]['SinPOpt'][:],
+                'SinPCov': hdffile[experimentGroup][key][RefPathName]['SinPCov'][:]},
             'DUT': {
-            'SinPOpt': hdffile['EXPERIMENTS/Sine excitation'][key][DUTPathName]['SinPOpt'][:],
-            'SinPCov': hdffile['EXPERIMENTS/Sine excitation'][key][DUTPathName]['SinPCov'][:]}}
+            'SinPOpt': hdffile[experimentGroup][key][DUTPathName]['SinPOpt'][:],
+            'SinPCov': hdffile[experimentGroup][key][DUTPathName]['SinPCov'][:]}}
             if freq in data.keys():
                data[freq].append(exdata)
             else:
@@ -1174,8 +1139,9 @@ def getSensorRotationFromAcellVectors(data,DUTGroupDelay,freqsToUse=[10.0,20.0,3
             scaledDUT = np.concatenate((scaledDUT, magvectors[freq]['DUT']*aplitudeScaleFactor))
         #print(str(freq)+' '+str(aplitudeScaleFactor)+' '+str(rots[freq].as_euler('zyx', degrees=True))+' '+str(rmsd))
         i = i + 1
-    averageRrots, Averagermsd = scipy.spatial.transform.Rotation.align_vectors(scaledDUT,scaledREF)
+    averageRrots, Averagermsd = scipy.spatial.transform.Rotation.align_vectors(scaledREF,scaledDUT)
     print('Average from Freqs'+str(freqsToUse) +' ' +str(averageRrots.as_euler('zyx', degrees=True)) + ' ' + str(Averagermsd))
+    print('Rotations as Quaternion'+str(averageRrots.as_quat()))
     return averageRrots,magvectors,phasevectors
 
 
@@ -1214,6 +1180,48 @@ for freq in BMAPhaseVecs.keys():
         BMAfreq.append(float(freq))
 plt.plot(BMAfreq, BMAzphase, 'x')
 """
+
+
+def copyHFDatrrs(source, dest):
+    for key in list(source.attrs.keys()):
+        dest.attrs[key] = source.attrs[key]
+
+def processdata(i):
+    sys.stdout.flush()
+    times = mpdata["movementtimes"][i]
+    #refidx = int(mpdata["refidx"][i])
+    #print("DONE i=" + str(i) + "refidx=" + str(refidx))
+    times[0] += 12e9
+    times[1] -= 2e9
+    experiment = sineexcitation(
+        mpdata["hdfinstance"],
+        times,
+        "{:05d}".format(i) + "Sine_Excitation"
+        ,namePrefix='ROTATED_'
+    )
+    sys.stdout.flush()
+    # print(experiment)
+    sys.stdout.flush()
+
+    start = time.time()
+    experiment.dofft()
+    #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
+    #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
+    axisfreqs = mpdata["uniquexfreqs"]
+    experiment.do3paramsinefits(axisfreqs, periods=10)
+    end = time.time()
+    # print("Sin Fit Time "+str(end - start))
+    sys.stdout.flush()
+    #experiment.calculateGPSRef1freqFromVelocity()
+    #experiment.calculatetanloguephaseref1freq(
+    #    "REFERENCEDATA/Acceleration_refference",
+    #    refidx,
+    #    "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
+    #    0,
+    #)
+    #print("DONE i=" + str(i) + "refidx=" + str(refidx))
+    return experiment
+
 if __name__ == "__main__":
     is1DPrcoessing = False
     is3DPrcoessing = False
@@ -1227,7 +1235,7 @@ if __name__ == "__main__":
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     # is1DPrcoessing=True
     #ZEMA 3 Komponent
-    hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max.hdf5'
+    hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
     leadSensorname='0xf1030002_MPU_9250'
     is3DPrcoessing=True
 
@@ -1241,11 +1249,11 @@ if __name__ == "__main__":
 
     datafile = h5py.File(hdffilename, "r+")
 
-    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0x00000100_OptoMet_Vibrometer','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1','0xf1030a00_STM32_Internal_ADC','0x00000300_Cola_Reference'])
-    """
+    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED')#
+
     movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=0.7,blocksinrow=10, blocksize=1000, plot=True)
     numofexperiemnts=movementtimes.shape[0]
-    """
+
     if is1DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
@@ -1299,7 +1307,6 @@ if __name__ == "__main__":
         test.hdffile.flush()
         test.hdffile.close()
     if is3DPrcoessing:
-        """
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
         mpdata['hdfinstance'] = test
@@ -1311,13 +1318,119 @@ if __name__ == "__main__":
              20, 10])
         mpdata['uniquexfreqs'] = unicefreqs
         i = np.arange(numofexperiemnts)
+        #i = np.arange(8)
         processdata(0)
         results = process_map(processdata, i, max_workers=15)
         for i in range(len(results)):
             ex = results[i]
             ex.saveToHdf()
-        """
-        AccelvectorDictMPU9250 = collectAndSortAccelerationVeloAsRef(datafile)
+
+        AccelvectorDictMPU9250 = collectAndSortAccelerationVeloAsRef(datafile,experimentGroup='EXPERIMENTS/ROTATED_Sine excitation')#
         MPU9250Rotation,MPUMagVecs,MPUPhaseVecs = getSensorRotationFromAcellVectors(AccelvectorDictMPU9250,DUTGroupDelay=-0.0015107382732839475)
-        AccelvectorDictBMA280 = collectAndSortAccelerationVeloAsRef(datafile,DUTPathName='0xf1030100_BMA_280/Acceleration')
+        #MPU9250Rotation=scipy.spatial.transform.Rotation.from_quat([-0.70226073,0.71191207,-0.00244556, -0.002257  ])
+        AccelvectorDictBMA280 = collectAndSortAccelerationVeloAsRef(datafile,DUTPathName='0xf1030100_BMA_280/Acceleration',experimentGroup='EXPERIMENTS/ROTATED_Sine excitation')#,experimentGroup='EXPERIMENTS/ROTATED_Sine excitation'
         BMARotation,BMAMagVecs,BMAPhaseVecs = getSensorRotationFromAcellVectors(AccelvectorDictBMA280,DUTGroupDelay=-0.00055)
+        #BMARotation=scipy.spatial.transform.Rotation.from_quat([0.01361723, 0.01303785, 0.70243922, 0.71149401])
+        LaserVibroRotation = scipy.spatial.transform.Rotation.from_quat([0, 0, 0, 1])# the laser interferrometer need no transformation since its the target coordinate frame
+        KistlerRotation = scipy.spatial.transform.Rotation.from_quat([0, 0, 0, 1])  # we don't know any thing asuming sensor is not tilted
+        #CDTF = datafile.create_group('COORDTRANSFORMED')
+    """
+        rotationsDict={'0x00000200_OptoMet_Velocity_from_counts':{'origin':'0x00000200_OptoMet_Velocity_from_counts',
+                                                                  'target':'0x00000200_OptoMet_Velocity_from_counts',
+                                                                  'axis':'xyz',
+                                                                  'rotation':LaserVibroRotation},
+                       '0xf1030002_MPU_9250': {'origin': '0xf1030002_MPU_9250',
+                                                                   'target': '0x00000200_OptoMet_Velocity_from_counts',
+                                                                    'axis': 'xyz',
+                                                                   'rotation': MPU9250Rotation},
+                       '0xf1030100_BMA_280': {'origin': '0xf1030100_BMA_280',
+                                                                    'target': '0x00000200_OptoMet_Velocity_from_counts',
+                                                                    'axis': 'xyz',
+                                                                    'rotation': BMARotation},
+                       '0x00000000_Kistler_8712A5M1':{'origin': '0x00000000_Kistler_8712A5M1',
+                                                                    'target': '0x00000200_OptoMet_Velocity_from_counts',
+                                                                    'axis': '00z',#sensor is One Dimensional along Z axis we will convert to 3D date with zeros along x and y
+                                                                    'rotation': KistlerRotation}
+                       }
+
+        # create rotaded Data
+        GPRROTDATA=datafile.create_group('ROTATED')
+        timeAndSampleNumberKeys = [
+            "Absolutetime",
+            "Absolutetime_uncertainty",
+            "Sample_number",
+        ]
+        for sensorName in rotationsDict.keys():
+            DSETGROP=GPRROTDATA.create_group(sensorName)
+            copyHFDatrrs(datafile['RAWDATA'][sensorName], DSETGROP)
+            DSETGROP.attrs['rotation_origin']=rotationsDict[sensorName]['origin']
+            DSETGROP.attrs['rotation_target']=rotationsDict[sensorName]['target']
+            DSETGROP.attrs['rotation_axis']=rotationsDict[sensorName]['axis']
+            DSETGROP.attrs['rotation_quaternios']=rotationsDict[sensorName]['rotation'].as_quat()
+            DSETGROP.attrs['rotation_euler_zyx']=rotationsDict[sensorName]['rotation'].as_euler('zyx', degrees=True)
+            desteKeys=list(datafile['RAWDATA'][sensorName].keys())
+            measurmentDataNames=list(set(desteKeys).difference(set(timeAndSampleNumberKeys)))
+            for timeAndSampleNumberKey in timeAndSampleNumberKeys:
+                dset=DSETGROP.create_dataset(timeAndSampleNumberKey,data=datafile['RAWDATA'][sensorName][timeAndSampleNumberKey]         ,
+                                                    dtype = datafile['RAWDATA'][sensorName][timeAndSampleNumberKey].dtype,
+                                                    compression = "gzip",
+                                                    shuffle = True,
+                                                    chunks = True)
+                copyHFDatrrs(datafile['RAWDATA'][sensorName][timeAndSampleNumberKey],dset)
+            for measDataName in measurmentDataNames:
+                dimensions=datafile['RAWDATA'][sensorName][measDataName].shape[0]
+                if dimensions==3 and rotationsDict[sensorName]['axis']=='xyz':
+                    dset = DSETGROP.create_dataset(measDataName ,
+                                                   data=np.transpose(rotationsDict[sensorName]['rotation'].apply(np.transpose(datafile['RAWDATA'][sensorName][measDataName]))),                    #rotate data
+                                                    maxshape = (3, None),
+                                                    dtype = datafile['RAWDATA'][sensorName][measDataName].dtype,
+                                                    compression = "gzip",
+                                                    shuffle = True,
+                                                    chunks=True)# we use auto chunking since we know the overall langth in advance
+                    copyHFDatrrs(datafile['RAWDATA'][sensorName][measDataName], dset)
+                if dimensions==1:
+                    if rotationsDict[sensorName]['axis']== 'xyz':
+                        #TODO IMPLEMENT axis handling for each dataset but this will be done in the future
+                        #OK the data are 3D but this Dset is 1D asuming it's temeprature so we do nothing
+                        dset = DSETGROP.create_dataset(measDataName ,
+                                                       data=datafile['RAWDATA'][sensorName][measDataName],
+                                                        maxshape = (1, None),
+                                                        dtype = datafile['RAWDATA'][sensorName][measDataName],
+                                                        compression = "gzip",
+                                                        shuffle = True,
+                                                        chunks = True)  # we use auto chunking since we know the overall langth in advance
+                        copyHFDatrrs(datafile['RAWDATA'][sensorName][measDataName],dset)
+                    else:
+                        length=datafile['RAWDATA'][sensorName][measDataName].shape[1]
+                        data=np.zeros([3,length])
+                        if rotationsDict[sensorName]['axis']== 'x00':
+                            data[0,:]=datafile['RAWDATA'][sensorName][measDataName]
+                        if rotationsDict[sensorName]['axis'] == '0y0':
+                            data[1, :] = datafile['RAWDATA'][sensorName][measDataName]
+                        if rotationsDict[sensorName]['axis']== '00z':
+                            data[2,:]=datafile['RAWDATA'][sensorName][measDataName][:]
+                        dset = DSETGROP.create_dataset(measDataName ,
+                                                       data=np.transpose(rotationsDict[sensorName]['rotation'].apply(np.transpose(data))),
+                                                        maxshape = (3, None),
+                                                        dtype = datafile['RAWDATA'][sensorName][measDataName],
+                                                        compression = "gzip",
+                                                        shuffle = True,
+                                                        chunks = True)  # we use auto chunking since we know the overall langth in advance
+                        copyHFDatrrs(datafile['RAWDATA'][sensorName][measDataName],dset)
+                        physicalQuant=datafile['RAWDATA'][sensorName][measDataName].attrs["Physical_quantity"][0]
+                        if rotationsDict[sensorName]['axis'] == 'x00':
+                            dset.attrs["Physical_quantity"]=['X '+physicalQuant,
+                                                             ' (Y not Measured)'+physicalQuant,
+                                                             '(Z not Measured)'+physicalQuant]
+                        if rotationsDict[sensorName]['axis'] == '0y0':
+                            dset.attrs["Physical_quantity"] = ['(X not Measured) ' + physicalQuant ,
+                                                               'Y ' +physicalQuant,
+                                                               '(Z not Measured)'+ physicalQuant]
+                        if rotationsDict[sensorName]['axis'] == '00z':
+                            dset.attrs["Physical_quantity"]=['(X not Measured)'+physicalQuant,
+                                                             ' (Y not Measured)'+physicalQuant,
+                                                             'Z'+physicalQuant]
+    """
+    datafile.flush()
+    datafile.close()
+
