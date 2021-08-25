@@ -76,6 +76,7 @@ class DataReceiver:
             socket.AF_INET, socket.SOCK_DGRAM  # Internet
         )  # UDP
 
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)# socket can be resued instantly for debugging
         # Try to open the UDP connection
         try:
             self.socket.bind((IP, Port))
@@ -1518,7 +1519,7 @@ class HDF5Dumper:
                         data = self.buffer[
                             (
                                 self.hieracy[groupname]["copymask"]
-                                + self.dataframindexoffset
+                                #+ self.dataframindexoffset
                             ),
                             :,
                         ].astype("float32")
