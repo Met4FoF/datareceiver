@@ -1575,7 +1575,7 @@ class HDF5Dumper:
                 data = self.buffer[
                        (
                                self.hieracy[groupname]["copymask"]
-                               + self.dataframindexoffset
+                               #+ self.dataframindexoffset
                        ),
                        :,
                        ].astype("float32")
@@ -1616,6 +1616,6 @@ def stopdumpingallsensorshdf(dumperlist, dumpfile):
 if __name__ == "__main__":
     DR = DataReceiver("192.168.0.200", 7654)
     #time.sleep(10)
-    #dumperlist,file=startdumpingallsensorshdf("tesatsdtsdfasdf.hfd5")
+    #dumperlist,file=startdumpingallsensorshdf("tetratest_2.hfd5")
     #time.sleep(15)
     #stopdumpingallsensorshdf(dumperlist,file)
