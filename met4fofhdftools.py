@@ -13,6 +13,9 @@ from tools.adccaldata import Met4FOFADCCall as Met4FOFADCCall
 
 uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
+def copyHFDatrrs(source, dest):
+    for key in list(source.attrs.keys()):
+        dest.attrs[key] = source.attrs[key]
 
 def findfilesmatchingstr(folder, pattern):
     matchingfiles = []
