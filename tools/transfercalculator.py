@@ -46,6 +46,14 @@ def ufloattouncerval(ufloat):
     return result
 
 
+def angVar(data,mean):
+    angData=np.angle(data)
+    angMean=np.angle(mean)
+    deltaAng=angData-angMean
+    mappedDeltaAngle=np.arctan2(np.sin(deltaAng), np.cos(deltaAng))# map angle differences to +- 180°
+    return np.var(mappedDeltaAngle)# the mean was substraced before but this dosn't make any influnce on the variance
+
+
 # plt.rc('font', family='serif')
 # plt.rc('text', usetex=True)
 PLTSCALFACTOR = 0.5
