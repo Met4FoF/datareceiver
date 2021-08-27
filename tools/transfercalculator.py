@@ -866,9 +866,7 @@ class sineexcitation(experiment):
                             TC["Frequency"]["value"][i] = self.data[sensor][dataset][
                                 "Sin_Fit_freq"
                             ][i]
-                            TC["Excitation_frequency"]["value"][i] = self.datafile[
-                                refdatagroupname
-                            ]["Frequency"]["value"][i][refdataidx]
+                            TC["Excitation_frequency"]["value"][i] = self.datafile[refdatagroupname]["Frequency"]["value"][i][refdataidx]
                         fitfreq = self.data[sensor][dataset]["Sin_Fit_freq"][j]
                         #print(refdataidx)
                         reffreq = self.datafile[refdatagroupname]["Frequency"]['value'][
@@ -1197,15 +1195,15 @@ def copyHFDatrrs(source, dest):
 def processdata(i):
     sys.stdout.flush()
     times = mpdata["movementtimes"][i]
-    #refidx = int(mpdata["refidx"][i])
+    refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 12e9
+    times[0] += 6e9
     times[1] -= 2e9
     experiment = sineexcitation(
         mpdata["hdfinstance"],
         times,
         "{:05d}".format(i) + "Sine_Excitation"
-        ,namePrefix='ROTATED_'
+        #,namePrefix='ROTATED_'
     )
     sys.stdout.flush()
     # print(experiment)
@@ -1221,12 +1219,12 @@ def processdata(i):
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
     #experiment.calculateGPSRef1freqFromVelocity()
-    #experiment.calculatetanloguephaseref1freq(
-    #    "REFERENCEDATA/Acceleration_refference",
-    #    refidx,
-    #    "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-    #    0,
-    #)
+    experiment.calculatetanloguephaseref1freq(
+        "REFERENCEDATA/Acceleration_refference",
+        refidx,
+        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
+        1,
+    )
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -1235,17 +1233,17 @@ if __name__ == "__main__":
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    #sensorname = '0xbccb0000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
-    #1dPrcoessing=True
+    leadSensorname = '0xbccb0000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
+    is1DPrcoessing=True
     #PTB Filename and sensor Name
     #sensorname = '0x1fe40000_MPU_9250'
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     # is1DPrcoessing=True
     #ZEMA 3 Komponent
-    hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
-    leadSensorname='0xf1030002_MPU_9250'
-    is3DPrcoessing=True
+    #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
+    #leadSensorname='0xf1030002_MPU_9250'
+    #is3DPrcoessing=True
 
 
     try:
@@ -1257,9 +1255,9 @@ if __name__ == "__main__":
 
     datafile = h5py.File(hdffilename, "r+")
 
-    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED')#
+    test = hdfmet4fofdatafile(datafile,)#sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=0.7,blocksinrow=10, blocksize=1000, plot=True)
+    movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=0.1,blocksinrow=100, blocksize=50, plot=True)
     numofexperiemnts=movementtimes.shape[0]
 
     if is1DPrcoessing:
@@ -1271,16 +1269,16 @@ if __name__ == "__main__":
 
         # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
 
-        mpdata['refidx'] = np.zeros([16 * 10])
-        refidx = np.zeros([17 * 10])
-        for i in np.arange(10):
-            refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-        mpdata['refidx'] = refidx
+        #mpdata['refidx'] = np.zeros([16 * 10])
+        #refidx = np.zeros([17 * 10])
+        #for i in np.arange(10):
+        #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+        #mpdata['refidx'] = refidx
 
 
         freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
         # CEM Data
-        #refidx = generateCEMrefIDXfromfreqs(freqs)
+        refidx = generateCEMrefIDXfromfreqs(freqs)
         mpdata['refidx'] = refidx
 
         unicefreqs = np.unique(freqs, axis=0)
@@ -1310,7 +1308,7 @@ if __name__ == "__main__":
             phase[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['value'][2,2]
             phaseuncer[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['uncertainty'][2,2]
 
-        TF=getRAWTFFromExperiemnts(leadSensorname+["EXPERIMENTS/Sine excitation"],leadSensorname)
+        TF=getRAWTFFromExperiemnts(datafile['/EXPERIMENTS/Sine excitation'],leadSensorname)
         test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
         test.hdffile.flush()
         test.hdffile.close()
@@ -1439,6 +1437,6 @@ if __name__ == "__main__":
                                                              ' (Y not Measured)'+physicalQuant,
                                                              'Z'+physicalQuant]
     """
-    datafile.flush()
-    datafile.close()
+    #datafile.flush()
+    #datafile.close()
 
