@@ -1180,7 +1180,7 @@ class Sensor:
             + str(message.Data_15)
             + ";"
             + str(message.Data_16)
-            + "\n"
+            + ";"
             + str(message.time_ticks)
             + "\n"
         )

@@ -100,42 +100,51 @@ def adddumptohdf(
 
         if paramsdictjson["Name"] == "MPU 9250":
             print("MPU9250 description found adding hieracey")
-            paramsdictjson["1"]["HIERARCHY"] = "Acceleration/0"
-            paramsdictjson["2"]["HIERARCHY"] = "Acceleration/1"
-            paramsdictjson["3"]["HIERARCHY"] = "Acceleration/2"
+            if not("HIERARCHY" in paramsdictjson["1"]):
+                print("HIERARCHY not found adding hieracey")
+                paramsdictjson["1"]["HIERARCHY"] = "Acceleration/0"
+                paramsdictjson["2"]["HIERARCHY"] = "Acceleration/1"
+                paramsdictjson["3"]["HIERARCHY"] = "Acceleration/2"
 
-            paramsdictjson["4"]["HIERARCHY"] = "Angular_velocity/0"
-            paramsdictjson["5"]["HIERARCHY"] = "Angular_velocity/1"
-            paramsdictjson["6"]["HIERARCHY"] = "Angular_velocity/2"
+                paramsdictjson["4"]["HIERARCHY"] = "Angular_velocity/0"
+                paramsdictjson["5"]["HIERARCHY"] = "Angular_velocity/1"
+                paramsdictjson["6"]["HIERARCHY"] = "Angular_velocity/2"
 
-            paramsdictjson["7"]["HIERARCHY"] = "Magnetic_flux_density/0"
-            paramsdictjson["8"]["HIERARCHY"] = "Magnetic_flux_density/1"
-            paramsdictjson["9"]["HIERARCHY"] = "Magnetic_flux_density/2"
+                paramsdictjson["7"]["HIERARCHY"] = "Magnetic_flux_density/0"
+                paramsdictjson["8"]["HIERARCHY"] = "Magnetic_flux_density/1"
+                paramsdictjson["9"]["HIERARCHY"] = "Magnetic_flux_density/2"
 
-            paramsdictjson["10"]["HIERARCHY"] = "Temperature/0"
+                paramsdictjson["10"]["HIERARCHY"] = "Temperature/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         elif paramsdictjson["Name"] == "BMA 280":
             print("BMA description found adding hieracey")
-            paramsdictjson["1"]["HIERARCHY"] = "Acceleration/0"
-            paramsdictjson["2"]["HIERARCHY"] = "Acceleration/1"
-            paramsdictjson["3"]["HIERARCHY"] = "Acceleration/2"
+            if not ("HIERARCHY" in paramsdictjson["1"]):
+                print("HIERARCHY not found adding hieracey")
+                paramsdictjson["1"]["HIERARCHY"] = "Acceleration/0"
+                paramsdictjson["2"]["HIERARCHY"] = "Acceleration/1"
+                paramsdictjson["3"]["HIERARCHY"] = "Acceleration/2"
 
-            paramsdictjson["10"]["HIERARCHY"] = "Temperature/0"
+                paramsdictjson["10"]["HIERARCHY"] = "Temperature/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         elif paramsdictjson["Name"] == "STM32 Internal ADC":
-            print("STM32 Internal ADC description found adding hieracey")
-            paramsdictjson["1"]["HIERARCHY"] = "Voltage/0"
-            paramsdictjson["2"]["HIERARCHY"] = "Voltage/1"
-            paramsdictjson["3"]["HIERARCHY"] = "Voltage/2"
+            print("STM32 Internal ADC description found")
+            if not ("HIERARCHY" in paramsdictjson["1"]):
+                print("HIERARCHY not found adding hieracey")
+                paramsdictjson["1"]["HIERARCHY"] = "Voltage/0"
+                paramsdictjson["2"]["HIERARCHY"] = "Voltage/1"
+                paramsdictjson["3"]["HIERARCHY"] = "Voltage/2"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         elif paramsdictjson["Name"] == "MS5837_02BA":
             print("MS5837_02BA description found adding hieracey")
-            paramsdictjson["1"]["HIERARCHY"] = "Temeprature/0"
-            paramsdictjson["2"]["HIERARCHY"] = "Releative humidity/0"
+            if not ("HIERARCHY" in paramsdictjson["1"]):
+                paramsdictjson["1"]["HIERARCHY"] = "Temeprature/0"
+                paramsdictjson["2"]["HIERARCHY"] = "Releative humidity/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         else:
-            print("sensor " + str(paramsdictjson["Name"]) + " not supported exiting")
-            exit()
+            if not ("HIERARCHY" in paramsdictjson["1"]):
+                print("sensor " + str(paramsdictjson["Name"]) + " with out HIERARCHY not supported exiting")
+                exit()
+            sensordscp = SensorDescription(fromDict=paramsdictjson)
         baseid = int(np.floor(paramsdictjson["ID"] / 65536))
         # descriptions are now ready start the hdf dumpers
         sensordumper = HDF5Dumper(sensordscp, hdfdumpfile, hdfdumplock,correcttimeglitches=correcttimeglitches)
@@ -1036,8 +1045,8 @@ def tmp():
     for dumpfilename in dumpfilenames:
         #if dumpfilename.find("MPU_9250") != -1:
         #    adddumptohdf(dumpfilename, hdffilename, extractadcdata=True)
-        if dumpfilename.find("MS5837") != -1:
-            adddumptohdf(dumpfilename, hdffilename, correcttimeglitches=False)
+        #if dumpfilename.find("MS5837") != -1:
+        #    adddumptohdf(dumpfilename, hdffilename, correcttimeglitches=False)
         #    print("skipping MS5837 data")
         #else:
         adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
