@@ -1197,7 +1197,7 @@ def processdata(i):
     times = mpdata["movementtimes"][i]
     refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 6e9
+    times[0] += 2e9
     times[1] -= 2e9
     experiment = sineexcitation(
         mpdata["hdfinstance"],
@@ -1222,8 +1222,8 @@ def processdata(i):
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
-        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
-        1,
+        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
+        0,
     )
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
@@ -1233,13 +1233,13 @@ if __name__ == "__main__":
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    leadSensorname = '0xbccb0000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
-    is1DPrcoessing=True
+    #leadSensorname = '0xbccb0000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
+    #is1DPrcoessing=True
     #PTB Filename and sensor Name
-    #sensorname = '0x1fe40000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
-    # is1DPrcoessing=True
+    leadSensorname = '0x1fe40000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    is1DPrcoessing=True
     #ZEMA 3 Komponent
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
     #leadSensorname='0xf1030002_MPU_9250'
@@ -1266,20 +1266,20 @@ if __name__ == "__main__":
         mpdata['hdfinstance'] = test
         mpdata['movementtimes'] = movementtimes
         mpdata['lock'] = manager.Lock()
-
+        freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
         # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
 
-        #mpdata['refidx'] = np.zeros([16 * 10])
-        #refidx = np.zeros([17 * 10])
-        #for i in np.arange(10):
-        #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-        #mpdata['refidx'] = refidx
-
-
-        freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
-        # CEM Data
-        refidx = generateCEMrefIDXfromfreqs(freqs)
+        mpdata['refidx'] = np.zeros([16 * 10])
+        refidx = np.zeros([17 * 10])
+        for i in np.arange(10):
+            refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
         mpdata['refidx'] = refidx
+
+
+
+        # CEM Data
+        #refidx = generateCEMrefIDXfromfreqs(freqs)
+        #mpdata['refidx'] = refidx
 
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
