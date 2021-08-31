@@ -55,7 +55,7 @@ def angVar(data,mean):
 
 
 # plt.rc('font', family='serif')
-# plt.rc('text', usetex=True)
+plt.rc('text', usetex=False)
 PLTSCALFACTOR = 0.5
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 15 * PLTSCALFACTOR
@@ -324,7 +324,7 @@ class hdfmet4fofdatafile:
             except KeyError:
                 warnings.warn("for Dataset "+str(tfcomponentkey)+" no attrs are given in attrsdict")
             for vukey in rawtf[tfcomponentkey].keys():# loop over value and uncertanies
-                dset=group.create_dataset(vukey,rawtf[tfcomponentkey][vukey].shape, dtype="float64")
+                dset=group.create_dataset(vukey,rawtf[tfcomponentkey][vukey].shape, dtype=rawtf[tfcomponentkey][vukey].dtype)
                 dset[:]=rawtf[tfcomponentkey][vukey]
         scaledataset=RAWTFGROUP[miscdict['scale']]['value']#the values are the scale
         scaledataset.make_scale("Frequency")
@@ -600,12 +600,13 @@ class sineexcitation(experiment):
                     multiTasiking=False,
                     returnSectionStartTimes=True
                 )
+                sineparamsWstartTime=np.transpose(np.vstack([np.transpose(sineparams),sectionStartTimes]))
                 self.data[sensor][dataset]["SinPOpt"] = np.zeros([datasetrows, 4])
                 self.data[sensor][dataset]["SinPCov"] = np.zeros([datasetrows, 5, 5])
                 self.data[sensor][dataset]["SinParams"] = np.zeros(
-                    [datasetrows, sineparams.shape[0], 3]
+                    [datasetrows, sineparams.shape[0], 4]
                 )
-                self.data[sensor][dataset]["SinParams"][0] = sineparams
+                self.data[sensor][dataset]["SinParams"][0] = sineparamsWstartTime
                 for i in np.arange(1, datasetrows):
                     sineparams,sectionStartTimes = st.seq_threeparsinefit(
                         self.datafile[self.dataGroupName + sensor + "/" + dataset][
@@ -617,7 +618,8 @@ class sineexcitation(experiment):
                         multiTasiking=False,
                         returnSectionStartTimes=True
                     )
-                    self.data[sensor][dataset]["SinParams"][i] = sineparams
+                    sineparamsWstartTime = np.transpose(np.vstack([np.transpose(sineparams), sectionStartTimes]))
+                    self.data[sensor][dataset]["SinParams"][i] = sineparamsWstartTime
                 for i in np.arange(datasetrows):
                     sineparams = self.data[sensor][dataset]["SinParams"][i]
                     DC = sineparams[:, 2]
@@ -639,7 +641,7 @@ class sineexcitation(experiment):
                         abs(Complex)-lengthMean,# subtracting mean, just for safty this should change anything here
                         DC,
                         Freq,
-                        deltaAng,# Important Phase mean needs to be substraced and data needs to be maped into -180 -- 180 deg
+                        deltaAng,# Important Phase mean needs to be substraced and data needs to be maped into -180 -- 180 deg mappedDeltaAngle,
                         sectionStartTimes),# variance against time is intresting to se reidual phase du to frequency mismatch
                         axis=0
                     )
@@ -648,6 +650,21 @@ class sineexcitation(experiment):
                     )  # bias=True Nomation With N like np.std
         self.flags["Sine fit calculated"] = True
         return
+
+    def getFreqOffSetFromSineFitPhaseSlope(self,sensor,dataset,axis):
+        sineparams = self.data[sensor][dataset]["SinParams"][axis]
+        Complex = sineparams[:, 1] + 1j * sineparams[:, 0]
+        nomalized = Complex / abs(Complex)  # all vectors ar normalized
+        radialCord = np.sum(
+            nomalized) / nomalized.size  # all vectors are added to have one vector pointing in the direction of the mean value
+        deltaAng = np.angle(nomalized) - np.angle(
+            radialCord)  # differences of the angles this value can be bigger than -180 -- 180 deg
+        #mappedDeltaAngle = np.arctan2(np.sin(deltaAng),
+        #                              np.cos(deltaAng))  # map angle differences to +- 180°
+        times=sineparams[:,3]
+        coef = np.polyfit(times, deltaAng, 1) # so lets dphi /dt
+        deltaF=coef[0]/(np.pi*2)
+        return deltaF
 
     def plotXYsine(
         self, sensor, dataset, axis, fig=None, ax=None, mode="XY", alpha=0.05
@@ -781,6 +798,115 @@ class sineexcitation(experiment):
             icol = icol + 1
         fig.show()
 
+    def plotsinefitParams(self,phiDiff=False,meanMag=False,meanPhase=False):
+        plotGrid=True
+        if meanMag or meanPhase:
+            plotGrid=False
+        cols = len(self.met4fofdatafile.sensordatasets)  # one colum for every sensor
+        datasetspersensor = []
+        for sensors in self.met4fofdatafile.sensordatasets:
+            datasetspersensor.append(len(self.met4fofdatafile.sensordatasets[sensors]))
+        rows = np.max(datasetspersensor)
+        fig, axs = plt.subplots(cols, rows, sharex="all")
+        icol = 0
+        for sensor in self.met4fofdatafile.sensordatasets:
+            irow = 0
+            axs[icol, 0].annotate(
+                sensor.replace("_", " "),
+                xy=(0, 0.5),
+                xytext=(-axs[icol, 0].yaxis.labelpad - 5, 0),
+                xycoords=axs[icol, 0].yaxis.label,
+                textcoords="offset points",
+                size="large",
+                ha="right",
+                va="center",
+                rotation=90,
+            )
+
+            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
+                dsetattrs = self.datafile[self.dataGroupName + sensor + "/" + dataset].attrs
+                axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs["Unit"]))
+                axs[icol, irow].set_xlabel("Relative time in s")
+                axs[icol, irow].set_title(dataset.replace("_", " "))
+                ax2 = axs[icol, irow].twinx()
+                ax2.set_ylabel('Phi in rad',color='darkblue')
+                for i in np.arange(
+                    self.datafile[self.dataGroupName + sensor + "/" + dataset].shape[0]
+                ):
+                    label = dsetattrs["Physical_quantity"][i]
+                    sineparams = self.data[sensor][dataset]["SinParams"][i]
+                    times=sineparams[:, 3]
+                    Complex = sineparams[:, 1] + 1j * sineparams[:, 0]
+                    r=abs(Complex)
+                    phi=np.angle(Complex)
+                    sinelabel = label + " Sine Fit"
+                    p=axs[icol, irow].plot(
+                        times,
+                        r,
+                        label='|r|' + sinelabel,
+                        ls="dotted",
+                    )
+                    philabel='phi' + sinelabel,
+                    if phiDiff:
+                        phi -= phi[0]
+                        philabel=philabel+' diff to first point'
+                    ax2.plot(
+                        times,
+                        phi,
+                        label=philabel,
+                        color=p[0].get_color(),
+                    )
+                    if meanMag or meanPhase:
+                        sinPOpts = self.data[sensor][dataset]["SinPOpt"]
+                        sinCovars = self.data[sensor][dataset]["SinPCov"]
+                        optf0 = sinPOpts[i, 2]
+                        optdc = sinPOpts[i, 1]
+                        optamp = sinPOpts[i, 0]
+                        stdamp=np.sqrt(sinCovars[i,0,0])
+                        optphi = sinPOpts[i, 3]
+                        stdphi = np.sqrt(sinCovars[i,3, 3])
+                    if meanMag:
+                        axs[icol, irow].plot(
+                            times,
+                            optamp * np.ones(time.size),
+                            label='mean |r|' + sinelabel,
+                            color=p[0].get_color(),
+                            ls="dotted",
+                        )
+                        axs[icol, irow].fill_between(
+                            times,
+                            optamp*np.ones(time.size)+2*stdamp,
+                            optamp * np.ones(time.size)-2*stdamp,
+                            label='2 sigma |r|'+sinelabel,
+                            color=p[0].get_color(),
+                            alpha=0.5,
+                            ls = "dotted"
+                        )
+                    if meanPhase:
+                        ax2.plot(
+                            times,
+                            optphi * np.ones(times.size),
+                            label='mean Phi' + sinelabel,
+                            color=p[0].get_color(),
+                        )
+                        ax2.fill_between(
+                            times,
+                            optphi*np.ones(times.size)+2*stdphi,
+                            optphi * np.ones(times.size)-2*stdphi,
+                            label='2 sigma |r|'+sinelabel,
+                            color=p[0].get_color(),
+                            alpha=0.25
+                        )
+                axs[icol, irow].legend()
+                if plotGrid:
+                    axs[icol, irow].grid()
+                ax2.legend()
+                if plotGrid:
+                    ax2.grid(color='darkblue')
+                irow = irow + 1
+            icol = icol + 1
+        fig.show()
+
     def calculatetanloguephaseref1freq(
         self,
         refdatagroupname,
@@ -872,7 +998,7 @@ class sineexcitation(experiment):
                         reffreq = self.datafile[refdatagroupname]["Frequency"]['value'][
                             i
                         ][refdataidx]
-                        if fitfreq != reffreq:
+                        if not(reffreq*0.95<fitfreq) or not(reffreq*1.05>fitfreq) :
                             warinigstr = (
                                 "Frequency mismatach in Sesnor"
                                 + sensor
@@ -926,7 +1052,7 @@ class sineexcitation(experiment):
                             ufADCTFphase = ADCTF.getNearestTF(analogrefchannelidx, fitfreq)['Phase']
 
                             ufrefphase = ufloat(
-                                self.datafile[refdatagroupname]["Phase"]['value'][j][refdataidx]+np.pi,self.datafile[refdatagroupname]["Phase"]["uncertainty"][j][refdataidx]#+np.pi beause original data are velocitiy so deviation from sine is cos --> 90deg phase shift
+                                self.datafile[refdatagroupname]["Phase"]['value'][j][refdataidx],self.datafile[refdatagroupname]["Phase"]["uncertainty"][j][refdataidx]
                             )  # in rad
                             phase = (
                                 ufdutphase
@@ -1197,7 +1323,7 @@ def processdata(i):
     times = mpdata["movementtimes"][i]
     refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 2e9
+    times[0] += 6e9
     times[1] -= 2e9
     experiment = sineexcitation(
         mpdata["hdfinstance"],
@@ -1215,6 +1341,8 @@ def processdata(i):
     #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
     axisfreqs = mpdata["uniquexfreqs"]
     experiment.do3paramsinefits(axisfreqs, periods=10)
+    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0xbccb0a00_STM32_Internal_ADC','Voltage',1)
+    experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
@@ -1222,24 +1350,49 @@ def processdata(i):
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
-        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-        0,
+        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
+        1,
     )
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
+
+def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=2,stopIDX=19):
+    freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Frequency']['value'][startIDX:stopIDX]
+    uncersToPlot={}
+    phaseGroupNames=['DUT_Phase','DUT_SNYNC_Phase','REF_Phase','SSU_ADC_Phase','Phase']
+    for pGN in phaseGroupNames:
+        phaseUncerData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN]['uncertainty'][
+            startIDX:stopIDX]
+        phaseUncerDataUnit=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN].attrs['Unit']
+        if phaseUncerDataUnit=='\\radian':
+            uncersToPlot[pGN]=phaseUncerData/np.pi*180
+        elif phaseUncerDataUnit=='\\degree':
+            uncersToPlot[pGN]=phaseUncerData
+        else:
+            raise RuntimeError(phaseGroupNames+' has unsupported unit '+phaseUncerDataUnit)
+    idxs=np.arange(freqs.size)
+    fig,ax=plt.subplots()
+    i=0
+    for uncerKey in uncersToPlot.keys():
+        ax.bar(idxs+0.175*i,uncersToPlot[uncerKey],width=0.2,label=uncerKey)
+        i+=+1
+    ax.set_xticks(idxs)
+    ax.set_xticklabels(freqs, rotation=90)
+    ax.legend()
+    ax.grid(axis='y')
 
 if __name__ == "__main__":
     is1DPrcoessing = False
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    #leadSensorname = '0xbccb0000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
-    #is1DPrcoessing=True
-    #PTB Filename and sensor Name
-    leadSensorname = '0x1fe40000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    leadSensorname = '0xbccb0000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     is1DPrcoessing=True
+    #PTB Filename and sensor Name
+    #leadSensorname = '0x1fe40000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    #is1DPrcoessing=True
     #ZEMA 3 Komponent
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
     #leadSensorname='0xf1030002_MPU_9250'
@@ -1254,7 +1407,6 @@ if __name__ == "__main__":
 
 
     datafile = h5py.File(hdffilename, "r+")
-
     test = hdfmet4fofdatafile(datafile,)#sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
 
     movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=0.1,blocksinrow=100, blocksize=50, plot=True)
@@ -1269,24 +1421,24 @@ if __name__ == "__main__":
         freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
         # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
 
-        mpdata['refidx'] = np.zeros([16 * 10])
-        refidx = np.zeros([17 * 10])
-        for i in np.arange(10):
-            refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-        mpdata['refidx'] = refidx
+        #mpdata['refidx'] = np.zeros([16 * 10])
+        #refidx = np.zeros([17 * 10])
+        #for i in np.arange(10):
+        #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+        #mpdata['refidx'] = refidx
 
 
 
         # CEM Data
-        #refidx = generateCEMrefIDXfromfreqs(freqs)
-        #mpdata['refidx'] = refidx
+        refidx = generateCEMrefIDXfromfreqs(freqs)
+        mpdata['refidx'] = refidx
 
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
 
         i = np.arange(numofexperiemnts)
         results=process_map(processdata, i, max_workers=15)
-
+        #results = [processdata(0)]
         freqs = np.zeros(numofexperiemnts)
         mag = np.zeros(numofexperiemnts)
         maguncer = np.zeros(numofexperiemnts)
@@ -1311,7 +1463,11 @@ if __name__ == "__main__":
         TF=getRAWTFFromExperiemnts(datafile['/EXPERIMENTS/Sine excitation'],leadSensorname)
         test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
         test.hdffile.flush()
-        test.hdffile.close()
+        #test.hdffile.close()
+        plotRAWTFPhaseUncerComps(datafile, sensorName=leadSensorname, startIDX=0, stopIDX=17)
+        results[0].plotsinefit()
+        results[0].plotsinefitParams()
+        results[0].plotsinefitParams(meanPhase=True)
     if is3DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
