@@ -1096,8 +1096,8 @@ class sineexcitation(experiment):
                             TC["SSU_ADC_Phase"]["uncertainty"][j, i]= ufADCTFphase.s
                             TC["DUT_SNYNC_Phase"]['value'][j, i]=ufanalogrefphase.n
                             TC["DUT_SNYNC_Phase"]["uncertainty"][j, i]= ufanalogrefphase.s
-                            TC["Delta_DUTSNYC_Phase"]['value'][j, i]=ufanalogrefphase.n
-                            TC["Delta_DUTSNYC_Phase"]["uncertainty"][j, i]= ufanalogrefphase.s
+                            TC["Delta_DUTSNYC_Phase"]['value'][j, i]=udeltaDUTSNYC.n
+                            TC["Delta_DUTSNYC_Phase"]["uncertainty"][j, i]= udeltaDUTSNYC.s
                             if phase.n < -np.pi:
                                 phase += ufloat(2 * np.pi, 0)
                             elif phase.n > np.pi:
@@ -1378,7 +1378,7 @@ def processdata(i):
     times = mpdata["movementtimes"][i]
     refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 2e9
+    times[0] += 6e9
     times[1] -= 2e9
     experiment = sineexcitation(
         mpdata["hdfinstance"],
@@ -1395,8 +1395,8 @@ def processdata(i):
     #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
     #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
     axisfreqs = mpdata["uniquexfreqs"]
-    experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=['0x1fe40a00_STM32_Internal_ADC'], datasetsToFit=['Voltage'])
-    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0x1fe40a00_STM32_Internal_ADC','Voltage',0)
+    experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=['0xbccb0a00_STM32_Internal_ADC'], datasetsToFit=['Voltage'])
+    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0xbccb0a00_STM32_Internal_ADC','Voltage',1)
     experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
@@ -1405,8 +1405,8 @@ def processdata(i):
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
-        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-        0,
+        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
+        1,
     )
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
@@ -1418,13 +1418,13 @@ if __name__ == "__main__":
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    #leadSensorname = '0xbccb0000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
-    #is1DPrcoessing=True
-    #PTB Filename and sensor Name
-    leadSensorname = '0x1fe40000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    leadSensorname = '0xbccb0000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     is1DPrcoessing=True
+    #PTB Filename and sensor Name
+    #leadSensorname = '0x1fe40000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    #is1DPrcoessing=True
     #ZEMA 3 Komponent
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
     #leadSensorname='0xf1030002_MPU_9250'
@@ -1453,17 +1453,17 @@ if __name__ == "__main__":
         freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
         # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
 
-        mpdata['refidx'] = np.zeros([16 * 10])
-        refidx = np.zeros([17 * 10])
-        for i in np.arange(10):
-            refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-        mpdata['refidx'] = refidx
+        #mpdata['refidx'] = np.zeros([16 * 10])
+        #refidx = np.zeros([17 * 10])
+        #for i in np.arange(10):
+        #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+        #mpdata['refidx'] = refidx
 
 
 
         # CEM Data
-        #refidx = generateCEMrefIDXfromfreqs(freqs)
-        #mpdata['refidx'] = refidx
+        refidx = generateCEMrefIDXfromfreqs(freqs)
+        mpdata['refidx'] = refidx
 
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
