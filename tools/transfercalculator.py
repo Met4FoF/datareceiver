@@ -129,9 +129,8 @@ def binarySearch(data, val):
 
     return best_ind
 
-
 class hdfmet4fofdatafile:
-    def __init__(self, hdffile,sensornames=None,dataGroupName='RAWDATA'):
+    def __init__(self, hdffile,sensornames=None,dataGroupName='RAWDATA',):
         self.dataGroupName=dataGroupName+'/'
         self.hdffile = hdffile
         if sensornames==None:
@@ -269,6 +268,9 @@ class hdfmet4fofdatafile:
                         'Uncertainty_type': "95% coverage gausian"},
             "DUT_SNYNC_Phase": {'Unit': '\\radian',
                            'Physical_quantity': ['Phase of Reference in SSU Time Frame'],
+                           'Uncertainty_type': "95% coverage gausian"},
+            "Delta_DUTSNYC_Phase":{'Unit': '\\radian',
+                           'Physical_quantity': ['Phasedifference of DUT and SYNC in SSU Time Frame'],
                            'Uncertainty_type': "95% coverage gausian"},
             'Magnitude': {'Unit': '\\one',
                           'Unit_numerator': '\\metre\\second\\tothe{-2}',
@@ -562,10 +564,13 @@ class sineexcitation(experiment):
                 # print(self.Data[sensor][dataset]['FFT_max_freq'])
         self.flags["FFT Calculated"] = True
 
-    def do3paramsinefits(self, freqs, periods=10):
+    def do3paramsinefits(self, freqs, periods=10,sensorsToFit=None,datasetsToFit=None):
         if not self.flags["FFT Calculated"]:
             self.dofft()
-        for sensor in self.met4fofdatafile.sensordatasets:
+        if sensorsToFit==None:#use all sensors if no is specifyed
+            sensorsToFit=self.met4fofdatafile.sensordatasets
+
+        for sensor in  sensorsToFit:
             idxs = self.idxs[sensor]
             points = idxs[1] - idxs[0]
             time = self.datafile[self.dataGroupName + sensor + "/" + "Absolutetime"][
@@ -576,6 +581,10 @@ class sineexcitation(experiment):
             excitationfreqs = freqs
             uniquexfreqs = np.sort(np.unique(excitationfreqs))
             idxs = self.idxs[sensor]
+            if datasetsToFit==None:
+                datasetsToFit=self.met4fofdatafile.sensordatasets[sensor]
+            else:
+                datasetsToFit=set(self.met4fofdatafile.sensordatasets[sensor]).intersection(datasetsToFit)
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 try:
                     fftmaxfreq = self.runtimeData[sensor][dataset]["FFT_max_freq"]
@@ -976,6 +985,12 @@ class sineexcitation(experiment):
                 TC["REF_Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
                 TC["REF_Phase"]["uncertainty"][:] = np.NAN
 
+                TC["Delta_DUTSNYC_Phase"] = {}
+                TC["Delta_DUTSNYC_Phase"]["value"] = np.zeros([datasetrows, datasetrows])
+                TC["Delta_DUTSNYC_Phase"]["value"][:] = np.NAN
+                TC["Delta_DUTSNYC_Phase"]["uncertainty"] = np.zeros([datasetrows, datasetrows])
+                TC["Delta_DUTSNYC_Phase"]["uncertainty"][:] = np.NAN
+
                 TC["Frequency"] = {}
                 TC["Frequency"]["value"] = np.zeros([datasetrows])
                 TC["Frequency"]["value"][:] = np.NAN
@@ -1035,6 +1050,19 @@ class sineexcitation(experiment):
                             # calculate phase
                             adcname = analogrefchannelname.replace(self.dataGroupName, "")
 
+
+                            sineparamsDUT=self.data[sensor][dataset]['SinParams'][j]
+                            ComplexDUT = sineparamsDUT[:, 1] + 1j * sineparamsDUT[:, 0]
+                            nomalizedDUT = ComplexDUT / abs(ComplexDUT)  # all vectors ar normalized
+
+                            sineparamsSYNC=self.data[adcname][analogchannelquantity]['SinParams'][analogrefchannelidx]
+                            ComplexSYNC = sineparamsSYNC[:, 1] + 1j * sineparamsSYNC[:, 0]
+                            nomalizedSYNC = ComplexSYNC / abs(ComplexSYNC)  # all vectors ar normalized # differences of the angles this value can be bigger than -180 -- 180 deg
+                            deltaAngDUTSNYC=np.angle(nomalizedDUT) - np.angle(nomalizedSYNC)
+                            deltaAngDUTSNYC=np.arctan2(np.sin(deltaAngDUTSNYC), np.cos(deltaAngDUTSNYC))
+                            deltaAngDUTSNYCMean=np.mean(deltaAngDUTSNYC)
+                            deltaAngDUTSNYCStd=np.std(deltaAngDUTSNYC)
+                            udeltaDUTSNYC=ufloat(deltaAngDUTSNYCMean,2*deltaAngDUTSNYCStd)
                             ufdutphase = ufloat(
                                 self.data[sensor][dataset]["SinPOpt"][j][3],
                                 2*np.sqrt(self.data[sensor][dataset]["SinPCov"][j][3, 3]),
@@ -1054,11 +1082,12 @@ class sineexcitation(experiment):
                             ufrefphase = ufloat(
                                 self.datafile[refdatagroupname]["Phase"]['value'][j][refdataidx],self.datafile[refdatagroupname]["Phase"]["uncertainty"][j][refdataidx]
                             )  # in rad
-                            phase = (
-                                ufdutphase
-                                - (ufanalogrefphase + ufADCTFphase)
-                                + ufrefphase
-                            )
+                            #phase = (
+                            #    ufdutphase
+                            #    - (ufanalogrefphase + ufADCTFphase)
+                            #    + ufrefphase
+                            #)
+                            phase=udeltaDUTSNYC -ufADCTFphase+ ufrefphase
                             TC["DUT_Phase"]['value'][j, i] =ufdutphase.n
                             TC["DUT_Phase"]["uncertainty"][j, i] = ufdutphase.s
                             TC["REF_Phase"]['value'][j, i] =ufrefphase.n
@@ -1067,6 +1096,8 @@ class sineexcitation(experiment):
                             TC["SSU_ADC_Phase"]["uncertainty"][j, i]= ufADCTFphase.s
                             TC["DUT_SNYNC_Phase"]['value'][j, i]=ufanalogrefphase.n
                             TC["DUT_SNYNC_Phase"]["uncertainty"][j, i]= ufanalogrefphase.s
+                            TC["Delta_DUTSNYC_Phase"]['value'][j, i]=ufanalogrefphase.n
+                            TC["Delta_DUTSNYC_Phase"]["uncertainty"][j, i]= ufanalogrefphase.s
                             if phase.n < -np.pi:
                                 phase += ufloat(2 * np.pi, 0)
                             elif phase.n > np.pi:
@@ -1317,13 +1348,37 @@ plt.plot(BMAfreq, BMAzphase, 'x')
 def copyHFDatrrs(source, dest):
     for key in list(source.attrs.keys()):
         dest.attrs[key] = source.attrs[key]
+def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=2,stopIDX=19):
+    freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
+    uncersToPlot={}
+    phaseGroupNames=['Delta_DUTSNYC_Phase','DUT_Phase','DUT_SNYNC_Phase','REF_Phase','SSU_ADC_Phase','Phase']
+    for pGN in phaseGroupNames:
+        phaseUncerData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN]['uncertainty'][
+            startIDX:stopIDX]
+        phaseUncerDataUnit=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN].attrs['Unit']
+        if phaseUncerDataUnit=='\\radian':
+            uncersToPlot[pGN]=phaseUncerData/np.pi*180
+        elif phaseUncerDataUnit=='\\degree':
+            uncersToPlot[pGN]=phaseUncerData
+        else:
+            raise RuntimeError(phaseGroupNames+' has unsupported unit '+phaseUncerDataUnit)
+    idxs=np.arange(freqs.size)
+    fig,ax=plt.subplots()
+    i=0
+    for uncerKey in uncersToPlot.keys():
+        ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],width=1/(len(uncersToPlot.keys())+1),label=uncerKey)
+        i+=+1
+    ax.set_xticks(idxs)
+    ax.set_xticklabels(freqs, rotation=90)
+    ax.legend()
+    ax.grid(axis='y')
 
 def processdata(i):
     sys.stdout.flush()
     times = mpdata["movementtimes"][i]
     refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 6e9
+    times[0] += 2e9
     times[1] -= 2e9
     experiment = sineexcitation(
         mpdata["hdfinstance"],
@@ -1340,8 +1395,8 @@ def processdata(i):
     #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
     #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
     axisfreqs = mpdata["uniquexfreqs"]
-    experiment.do3paramsinefits(axisfreqs, periods=10)
-    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0xbccb0a00_STM32_Internal_ADC','Voltage',1)
+    experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=['0x1fe40a00_STM32_Internal_ADC'], datasetsToFit=['Voltage'])
+    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0x1fe40a00_STM32_Internal_ADC','Voltage',0)
     experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
@@ -1350,49 +1405,26 @@ def processdata(i):
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
-        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
-        1,
+        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
+        0,
     )
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
-def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=2,stopIDX=19):
-    freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Frequency']['value'][startIDX:stopIDX]
-    uncersToPlot={}
-    phaseGroupNames=['DUT_Phase','DUT_SNYNC_Phase','REF_Phase','SSU_ADC_Phase','Phase']
-    for pGN in phaseGroupNames:
-        phaseUncerData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN]['uncertainty'][
-            startIDX:stopIDX]
-        phaseUncerDataUnit=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN].attrs['Unit']
-        if phaseUncerDataUnit=='\\radian':
-            uncersToPlot[pGN]=phaseUncerData/np.pi*180
-        elif phaseUncerDataUnit=='\\degree':
-            uncersToPlot[pGN]=phaseUncerData
-        else:
-            raise RuntimeError(phaseGroupNames+' has unsupported unit '+phaseUncerDataUnit)
-    idxs=np.arange(freqs.size)
-    fig,ax=plt.subplots()
-    i=0
-    for uncerKey in uncersToPlot.keys():
-        ax.bar(idxs+0.175*i,uncersToPlot[uncerKey],width=0.2,label=uncerKey)
-        i+=+1
-    ax.set_xticks(idxs)
-    ax.set_xticklabels(freqs, rotation=90)
-    ax.legend()
-    ax.grid(axis='y')
+
 
 if __name__ == "__main__":
     is1DPrcoessing = False
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    leadSensorname = '0xbccb0000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
-    is1DPrcoessing=True
-    #PTB Filename and sensor Name
-    #leadSensorname = '0x1fe40000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    #leadSensorname = '0xbccb0000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     #is1DPrcoessing=True
+    #PTB Filename and sensor Name
+    leadSensorname = '0x1fe40000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    is1DPrcoessing=True
     #ZEMA 3 Komponent
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
     #leadSensorname='0xf1030002_MPU_9250'
@@ -1421,17 +1453,17 @@ if __name__ == "__main__":
         freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
         # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
 
-        #mpdata['refidx'] = np.zeros([16 * 10])
-        #refidx = np.zeros([17 * 10])
-        #for i in np.arange(10):
-        #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-        #mpdata['refidx'] = refidx
+        mpdata['refidx'] = np.zeros([16 * 10])
+        refidx = np.zeros([17 * 10])
+        for i in np.arange(10):
+            refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+        mpdata['refidx'] = refidx
 
 
 
         # CEM Data
-        refidx = generateCEMrefIDXfromfreqs(freqs)
-        mpdata['refidx'] = refidx
+        #refidx = generateCEMrefIDXfromfreqs(freqs)
+        #mpdata['refidx'] = refidx
 
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
@@ -1440,6 +1472,7 @@ if __name__ == "__main__":
         results=process_map(processdata, i, max_workers=15)
         #results = [processdata(0)]
         freqs = np.zeros(numofexperiemnts)
+        ex_freqs = np.zeros(numofexperiemnts)
         mag = np.zeros(numofexperiemnts)
         maguncer = np.zeros(numofexperiemnts)
         examp = np.zeros(numofexperiemnts)
@@ -1455,6 +1488,7 @@ if __name__ == "__main__":
             mag[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['value'][2,2]
             maguncer[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Magnitude']['uncertainty'][2,2]
             examp[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Excitation_amplitude']['value'][2,2]
+            ex_freqs[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Excitation_frequency']['value'][2]
             freqs[i] = ex.data[leadSensorname]['Acceleration']['SinPOpt'][2][2]
             rawamp[i] = ex.data[leadSensorname]['Acceleration']['SinPOpt'][2][0]
             phase[i] = ex.data[leadSensorname]['Acceleration']['Transfer_coefficients']['Acceleration']['Phase']['value'][2,2]
