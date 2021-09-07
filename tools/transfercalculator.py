@@ -1260,7 +1260,7 @@ def collectAndSortAccelerationVeloAsRef(hdffile,RefPathName='0x00000200_OptoMet_
     #print(data)
     return data
 
-def getSensorRotationFromAcellVectors(data,DUTGroupDelay,freqsToUse=[10.0,20.0,30.0,40.0]):            #
+def getSensorRotationFromAcellVectors(data,DUTGroupDelay,freqsToUse=[10.0,20.0,30.0,40.0]):
     freqs=np.zeros(len(data.keys()))
     i=0
     magvectors={}
@@ -1376,9 +1376,9 @@ def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=
 def processdata(i):
     sys.stdout.flush()
     times = mpdata["movementtimes"][i]
-    refidx = int(mpdata["refidx"][i])
+    #refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 2e9
+    times[0] += 10e9
     times[1] -= 2e9
     experiment = sineexcitation(
         mpdata["hdfinstance"],
@@ -1395,19 +1395,20 @@ def processdata(i):
     #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
     #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
     axisfreqs = mpdata["uniquexfreqs"]
-    experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=['0x1fe40a00_STM32_Internal_ADC'], datasetsToFit=['Voltage'])
-    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0x1fe40a00_STM32_Internal_ADC','Voltage',0)
-    experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
+    #experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=['0x1fe40a00_STM32_Internal_ADC'], datasetsToFit=['Voltage'])
+    #deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0x1fe40a00_STM32_Internal_ADC','Voltage',0)
+    #experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
+    experiment.do3paramsinefits(axisfreqs, periods=5)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
     #experiment.calculateGPSRef1freqFromVelocity()
-    experiment.calculatetanloguephaseref1freq(
-        "REFERENCEDATA/Acceleration_refference",
-        refidx,
-        "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-        0,
-    )
+    #experiment.calculatetanloguephaseref1freq(
+    #    "REFERENCEDATA/Acceleration_refference",
+    #    refidx,
+    #    "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
+    #    0,
+    #)
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -1422,13 +1423,13 @@ if __name__ == "__main__":
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     #is1DPrcoessing=True
     #PTB Filename and sensor Name
-    leadSensorname = '0x1fe40000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
-    is1DPrcoessing=True
+    #leadSensorname = '0x1fe40000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    #is1DPrcoessing=True
     #ZEMA 3 Komponent
-    #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
-    #leadSensorname='0xf1030002_MPU_9250'
-    #is3DPrcoessing=True
+    hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
+    leadSensorname='0xf1030002_MPU_9250'
+    is3DPrcoessing=True
 
 
     try:
@@ -1439,9 +1440,9 @@ if __name__ == "__main__":
 
 
     datafile = h5py.File(hdffilename, "r+")
-    test = hdfmet4fofdatafile(datafile,)#sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
+    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED')#
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=0.1,blocksinrow=100, blocksize=50, plot=True)
+    movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=1,blocksinrow=10, blocksize=1000, plot=True)
     numofexperiemnts=movementtimes.shape[0]
 
     if is1DPrcoessing:
@@ -1514,12 +1515,10 @@ if __name__ == "__main__":
              20, 10])
         mpdata['uniquexfreqs'] = unicefreqs
         i = np.arange(numofexperiemnts)
-        #i = np.arange(8)
-        processdata(0)
-        results = process_map(processdata, i, max_workers=15)
-        for i in range(len(results)):
-            ex = results[i]
-            ex.saveToHdf()
+        #results = process_map(processdata, i, max_workers=15)
+        #for i in range(len(results)):
+        #    ex = results[i]
+            #ex.saveToHdf()
 
         AccelvectorDictMPU9250 = collectAndSortAccelerationVeloAsRef(datafile,experimentGroup='EXPERIMENTS/ROTATED_Sine excitation')#
         MPU9250Rotation,MPUMagVecs,MPUPhaseVecs = getSensorRotationFromAcellVectors(AccelvectorDictMPU9250,DUTGroupDelay=-0.0015107382732839475)
@@ -1527,6 +1526,9 @@ if __name__ == "__main__":
         AccelvectorDictBMA280 = collectAndSortAccelerationVeloAsRef(datafile,DUTPathName='0xf1030100_BMA_280/Acceleration',experimentGroup='EXPERIMENTS/ROTATED_Sine excitation')#,experimentGroup='EXPERIMENTS/ROTATED_Sine excitation'
         BMARotation,BMAMagVecs,BMAPhaseVecs = getSensorRotationFromAcellVectors(AccelvectorDictBMA280,DUTGroupDelay=-0.00055)
         #BMARotation=scipy.spatial.transform.Rotation.from_quat([0.01361723, 0.01303785, 0.70243922, 0.71149401])
+        AccelvectorDictKistler = collectAndSortAccelerationVeloAsRef(datafile,DUTPathName='0x00000000_Kistler_8712A5M1/Acceleration',experimentGroup='EXPERIMENTS/ROTATED_Sine excitation')#,experimentGroup='EXPERIMENTS/ROTATED_Sine excitation'
+        KistlerRotation,KistlerMagVecs,KistlerPhaseVecs = getSensorRotationFromAcellVectors(AccelvectorDictKistler ,DUTGroupDelay=0.0)
+
         LaserVibroRotation = scipy.spatial.transform.Rotation.from_quat([0, 0, 0, 1])# the laser interferrometer need no transformation since its the target coordinate frame
         KistlerRotation = scipy.spatial.transform.Rotation.from_quat([0, 0, 0, 1])  # we don't know any thing asuming sensor is not tilted
         #CDTF = datafile.create_group('COORDTRANSFORMED')
