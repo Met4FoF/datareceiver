@@ -54,9 +54,9 @@ def angVar(data,mean):
     return np.var(mappedDeltaAngle)# the mean was substraced before but this dosn't make any influnce on the variance
 
 
-# plt.rc('font', family='serif')
-plt.rc('text', usetex=False)
-PLTSCALFACTOR = 0.5
+plt.rc('font', family='serif')
+plt.rc('text', usetex=True)
+PLTSCALFACTOR = 2
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 15 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
@@ -1348,10 +1348,28 @@ plt.plot(BMAfreq, BMAzphase, 'x')
 def copyHFDatrrs(source, dest):
     for key in list(source.attrs.keys()):
         dest.attrs[key] = source.attrs[key]
-def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=2,stopIDX=19):
+def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components PTB measurments',zoom=5):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
-    phaseGroupNames=['Delta_DUTSNYC_Phase','DUT_Phase','DUT_SNYNC_Phase','REF_Phase','SSU_ADC_Phase','Phase']
+    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_Phase','DUT_SNYNC_Phase']
+    phaselabels={'Delta_DUTSNYC_Phase':r'$u(\Delta\varphi_{\mathrm{DUT}}(\omega))$',
+                'SSU_ADC_Phase':r'$u(\Delta\varphi_{DAUADC}(\omega))$',
+                'REF_Phase':r'$u(\Delta\varphi_{\mathrm{ref}}(\omega))$',
+                'DUT_Phase':r'$u(\varphi_{\mathrm{DUT}}(\omega))$',
+                'DUT_SNYNC_Phase':r'$u(\varphi_{\mathrm{syncDAU}}(\omega))$',
+                'Phase':r'$u(\Delta\varphi(\omega))$'}
+    alphas={'Delta_DUTSNYC_Phase':1,
+                'SSU_ADC_Phase':1,
+                'REF_Phase':1,
+                'DUT_Phase':0.5,
+                'DUT_SNYNC_Phase':0.5,
+                'Phase':1}
+    hatches={'Delta_DUTSNYC_Phase':"O.",
+                'SSU_ADC_Phase':"|",
+                'REF_Phase': "/",
+                'DUT_Phase':"o",
+                'DUT_SNYNC_Phase':"O",
+                'Phase':"|/o."}
     for pGN in phaseGroupNames:
         phaseUncerData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN]['uncertainty'][
             startIDX:stopIDX]
@@ -1366,12 +1384,33 @@ def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=
     fig,ax=plt.subplots()
     i=0
     for uncerKey in uncersToPlot.keys():
-        ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],width=1/(len(uncersToPlot.keys())+1),label=uncerKey)
+        ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],width=1/(len(uncersToPlot.keys())+1),label=phaselabels[uncerKey],alpha=alphas[uncerKey],hatch=hatches[uncerKey])
         i+=+1
     ax.set_xticks(idxs)
     ax.set_xticklabels(freqs, rotation=90)
+    ax.set_xlabel(r'Excitation Frequency  $\omega$ in Hz')
+    ax.set_ylabel(r'Uncertainty of the phases component $u$ in $\frac{m}{s^2}$')
     ax.legend()
     ax.grid(axis='y')
+    ax.set_title(title)
+    if zoom!=False:
+        numPlotCOmponents=len(uncersToPlot.keys())
+        ax2=fig.add_axes([0.175,0.6,0.2,0.2])
+        ylim=2*uncersToPlot['SSU_ADC_Phase'][zoom]
+        i=0
+        ax2.set_ylim(ylim)
+        for uncerKey in uncersToPlot.keys():
+            ax2.bar((1/numPlotCOmponents)*i, uncersToPlot[uncerKey][zoom],width=(1/(numPlotCOmponents)), label=phaselabels[uncerKey], alpha=alphas[uncerKey],hatch=hatches[uncerKey])
+            i=i+1
+            ax2.set_ylim([0,ylim])
+            # for major ticks
+            ax2.set_xticks([])
+            # for minor ticks
+            ax2.set_xticks([], minor=True)
+            ax2.set_xlabel(r'Frequency '+str(freqs[zoom])+' Hz')
+            ax2.set_ylabel(r'$u$ in $\frac{m}{s^2}$')
+
+    fig.show()
 
 def processdata(i):
     sys.stdout.flush()
@@ -1423,28 +1462,29 @@ if __name__ == "__main__":
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     #is1DPrcoessing=True
     #PTB Filename and sensor Name
-    #leadSensorname = '0x1fe40000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    leadSensorname = '0x1fe40000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     #is1DPrcoessing=True
     #ZEMA 3 Komponent
-    hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
-    leadSensorname='0xf1030002_MPU_9250'
-    is3DPrcoessing=True
+    #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
+    #leadSensorname='0xf1030002_MPU_9250'
+    #is3DPrcoessing=True
 
-
+    """
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
         pass
     shutil.copyfile(hdffilename.replace(".hdf5","(copy).hdf5"), hdffilename)
-
+    """
 
     datafile = h5py.File(hdffilename, "r+")
-    test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED')#
+    plotRAWTFPhaseUncerComps(datafile, sensorName=leadSensorname)
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=1,blocksinrow=10, blocksize=1000, plot=True)
-    numofexperiemnts=movementtimes.shape[0]
+    #test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED')#
 
+    #movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=1,blocksinrow=10, blocksize=1000, plot=True)
+    #numofexperiemnts=movementtimes.shape[0]
     if is1DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
@@ -1498,7 +1538,7 @@ if __name__ == "__main__":
         TF=getRAWTFFromExperiemnts(datafile['/EXPERIMENTS/Sine excitation'],leadSensorname)
         test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
         test.hdffile.flush()
-        #test.hdffile.close()
+        test.hdffile.close()
         plotRAWTFPhaseUncerComps(datafile, sensorName=leadSensorname, startIDX=0, stopIDX=17)
         results[0].plotsinefit()
         results[0].plotsinefitParams()
