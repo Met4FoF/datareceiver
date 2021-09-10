@@ -56,7 +56,8 @@ def angVar(data,mean):
 
 plt.rc('font', family='serif')
 plt.rc('text', usetex=True)
-PLTSCALFACTOR = 2
+plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
+PLTSCALFACTOR =3
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 15 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
@@ -1348,7 +1349,7 @@ plt.plot(BMAfreq, BMAzphase, 'x')
 def copyHFDatrrs(source, dest):
     for key in list(source.attrs.keys()):
         dest.attrs[key] = source.attrs[key]
-def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components PTB measurments',zoom=5):
+def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=5):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
     phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_Phase','DUT_SNYNC_Phase']
@@ -1382,20 +1383,23 @@ def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=
             raise RuntimeError(phaseGroupNames+' has unsupported unit '+phaseUncerDataUnit)
     idxs=np.arange(freqs.size)
     fig,ax=plt.subplots()
+    fig.set_size_inches(20, 10)
     i=0
     for uncerKey in uncersToPlot.keys():
         ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],width=1/(len(uncersToPlot.keys())+1),label=phaselabels[uncerKey],alpha=alphas[uncerKey],hatch=hatches[uncerKey])
         i+=+1
     ax.set_xticks(idxs)
-    ax.set_xticklabels(freqs, rotation=90)
-    ax.set_xlabel(r'Excitation Frequency  $\omega$ in Hz')
-    ax.set_ylabel(r'Uncertainty of the phases component $u$ in $\frac{m}{s^2}$')
-    ax.legend()
+    boldFreqlabels = []
+    for freq in freqs:
+        boldFreqlabels.append(r'\textbf{' + str(freq) + '}')
+    ax.set_xticklabels(boldFreqlabels, rotation=0)
+    ax.set_xlabel(r'\textbf{Excitation Frequency}  $\omega$ \textbf{in Hz}')
+    ax.set_ylabel(r'\textbf{Uncertainty of phases components} $u$ \textbf{in} $\frac{m}{s^2}$')
     ax.grid(axis='y')
-    ax.set_title(title)
+    ax.set_title(r'\textbf{'+title+'}')
     if zoom!=False:
         numPlotCOmponents=len(uncersToPlot.keys())
-        ax2=fig.add_axes([0.175,0.6,0.2,0.2])
+        ax2=fig.add_axes([0.35,0.6,0.2,0.2])
         ylim=2*uncersToPlot['SSU_ADC_Phase'][zoom]
         i=0
         ax2.set_ylim(ylim)
@@ -1407,9 +1411,10 @@ def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=
             ax2.set_xticks([])
             # for minor ticks
             ax2.set_xticks([], minor=True)
-            ax2.set_xlabel(r'Frequency '+str(freqs[zoom])+' Hz')
-            ax2.set_ylabel(r'$u$ in $\frac{m}{s^2}$')
-
+            ax2.set_xlabel(r'\textbf{Frequency '+str(freqs[zoom])+' Hz}')
+            ax2.set_ylabel(r'$u$ \textbf{in} $\frac{m}{s^2}$')
+    ax.legend()
+    fig.savefig('tmp.png', dpi=200)
     fig.show()
 
 def processdata(i):
@@ -1458,12 +1463,12 @@ if __name__ == "__main__":
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    #leadSensorname = '0xbccb0000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
+    leadSensorname = '0xbccb0000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
     #is1DPrcoessing=True
     #PTB Filename and sensor Name
-    leadSensorname = '0x1fe40000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    #leadSensorname = '0x1fe40000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
     #is1DPrcoessing=True
     #ZEMA 3 Komponent
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
