@@ -48,7 +48,6 @@ def readspektraprpasdf(filename):
     df.apply(lambda x: x.replace(",", "."))  # remove nasty commas
     return df.iloc[1:]
 
-
 def spektraprptohdfref(filenamelist):
     df = readspektraprpasdf(filenamelist[0])
     df["loop"] = np.zeros(df.shape[0])
@@ -66,6 +65,55 @@ def spektraprptohdfref(filenamelist):
     resultdf["ex_amp_std"] = df["Accel.,"] * 0.001  # aussimming 0.1% uncertanty
     resultdf["phase"] = df["Phase,"]
     resultdf["phase_std"] = 0.1
+    return resultdf
+
+def readspektracsvFromxls(filename):
+    df = pd.read_csv(
+        filename,
+        decimal=",",
+        sep="\t",
+        encoding="ISO-8859-1",
+        header=17,
+        na_values=[
+            "Hz",
+            "m/s² Peak",
+            "mV/(m/s²)",
+            "%",
+            "dB",
+            "Degree",
+            "%",
+            "(Ref. value)",
+        ],
+    )
+    df.apply(lambda x: x.replace(",", "."))  # remove nasty commas
+    return df.iloc[1:]
+
+def readspektraCSVasdf(filename):
+    df=pd.read_csv(filename, sep=';', skiprows=[1])
+    df.loc[-1] = {'Number': 0, 'Frequency': 80, 'Acceleration': np.NaN, 'S': np.NaN,# add row with index -1
+                  'Std.dev. S': np.NaN,'Dev.': np.NaN, 'Phase': np.NaN, 'Std.Dev. Phase': np.NaN,
+                  'Distortion. Ref': np.NaN,'Distortion. DUT.': np.NaN, 'Gain. Ref': np.NaN, 'Gain DUT': np.NaN}
+    df.index = df.index + 1  # shifting index
+    df = df.sort_index()
+    return df
+
+def spektraCSVtohdfref(filenamelist):
+    df = readspektraCSVasdf(filenamelist[0])
+    df["loop"] = np.zeros(df.shape[0])
+    filecount = len(filenamelist)
+    for i in range(filecount - 1):
+        nextdf = readspektraCSVasdf(filenamelist[i + 1])
+        nextdf["loop"] = np.ones(nextdf.shape[0]) * (i + 1)
+        df = df.append(nextdf)
+    resultdf = pd.DataFrame(df["loop"])
+    # loop;frequency;ex_amp;ex_amp_std;phase;phase_std<
+    resultdf["frequency"] = df["Frequency"]
+    resultdf["frequency"] = df["Frequency"]
+    resultdf["ex_amp"] = df['Acceleration']
+    # resultdf['ex_amp_std']=df['Accel.,']*(df['Stdrd. dev.,']/df['S,'])*2
+    resultdf["ex_amp_std"] = df['Acceleration']*2*0.01*df['Std.dev. S']#  df['Std.dev. S'] is relative uncer in % times to because 95% coverage 0.01*df['Acceleration'] to have absolute not relative value
+    resultdf["phase"] = df['Phase']
+    resultdf["phase_std"] = 2*df['Std.Dev. Phase']
     return resultdf
 
 
@@ -1029,10 +1077,11 @@ def combineHDFRawdata(outputfilename,listfiles):
 
     print("Done")
 if __name__ == "__main__":
+    """
     combineHDFRawdata('/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max.hdf5',['/media/benedikt/nvme/data/zema_dynamic_cal/tmp/z_250_10_delta_10Hz_50ms2max.hdf5',
                                  '/media/benedikt/nvme/data/zema_dynamic_cal/tmp/y_250_10_delta_10Hz_50ms2max.hdf5',
                                  '/media/benedikt/nvme/data/zema_dynamic_cal/tmp/x_250_10_delta_10Hz_50ms2max.hdf5'])
-def tmp():
+    
     folder = r"/media/benedikt/nvme/data/strath/DOE2"
     #reffile = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     # find all dumpfiles in folder matching str
@@ -1050,11 +1099,15 @@ def tmp():
         #    print("skipping MS5837 data")
         #else:
         adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
-
+    """
     # find al spektra reference files
-    #reffilenames = findfilesmatchingstr(folder, 'prp.txt')
+    folder = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM"
+    reffilenames = findfilesmatchingstr(folder, 'prp.txt')
     # parse spektra reference files
-    #cemref=spektraprptohdfref(reffilenames)
+    cemref=spektraprptohdfref(reffilenames)
+
+    csvfilenames = findfilesmatchingstr(folder, 'results_with_uncer.csv')
+    cemref2=spektraCSVtohdfref(csvfilenames)
     #hdffile = h5py.File(hdffilename, "a")
     # add reference file
     #add1dsinereferencedatatohdffile(reffile, hdffile, "PTB HF acceleration standard", 2, isdeg=True)
