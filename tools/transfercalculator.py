@@ -1417,12 +1417,13 @@ def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=
     fig.savefig('tmp.png', dpi=200)
     fig.show()
 
+
 def processdata(i):
     sys.stdout.flush()
     times = mpdata["movementtimes"][i]
-    #refidx = int(mpdata["refidx"][i])
+    refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 10e9
+    times[0] += 6e9
     times[1] -= 2e9
     experiment = sineexcitation(
         mpdata["hdfinstance"],
@@ -1439,20 +1440,19 @@ def processdata(i):
     #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
     #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
     axisfreqs = mpdata["uniquexfreqs"]
-    #experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=['0x1fe40a00_STM32_Internal_ADC'], datasetsToFit=['Voltage'])
-    #deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0x1fe40a00_STM32_Internal_ADC','Voltage',0)
-    #experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
-    experiment.do3paramsinefits(axisfreqs, periods=5)
+    experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=['0xbccb0a00_STM32_Internal_ADC'], datasetsToFit=['Voltage'])
+    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0xbccb0a00_STM32_Internal_ADC','Voltage',1)
+    experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
     #experiment.calculateGPSRef1freqFromVelocity()
-    #experiment.calculatetanloguephaseref1freq(
-    #    "REFERENCEDATA/Acceleration_refference",
-    #    refidx,
-    #    "RAWDATA/0x1fe40a00_STM32_Internal_ADC",
-    #    0,
-    #)
+    experiment.calculatetanloguephaseref1freq(
+        "REFERENCEDATA/Acceleration_refference",
+        refidx,
+        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
+        1,
+    )
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -1464,8 +1464,8 @@ if __name__ == "__main__":
     start = time.time()
     #CEM Filename and sensor Name
     leadSensorname = '0xbccb0000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEM.hdf5"
-    #is1DPrcoessing=True
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
+    is1DPrcoessing=True
     #PTB Filename and sensor Name
     #leadSensorname = '0x1fe40000_MPU_9250'
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
@@ -1475,21 +1475,23 @@ if __name__ == "__main__":
     #leadSensorname='0xf1030002_MPU_9250'
     #is3DPrcoessing=True
 
-    """
+
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
         pass
     shutil.copyfile(hdffilename.replace(".hdf5","(copy).hdf5"), hdffilename)
-    """
+
 
     datafile = h5py.File(hdffilename, "r+")
-    plotRAWTFPhaseUncerComps(datafile, sensorName=leadSensorname)
 
-    #test = hdfmet4fofdatafile(datafile,sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED')#
 
-    #movementidx, movementtimes = test.detectmovment('RAWDATA/'+leadSensorname+'/Acceleration', 'RAWDATA/'+leadSensorname+'/Absolutetime', treshold=1,blocksinrow=10, blocksize=1000, plot=True)
-    #numofexperiemnts=movementtimes.shape[0]
+    test = hdfmet4fofdatafile(datafile,)#sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
+
+    movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration',
+                                                    'RAWDATA/' + leadSensorname + '/Absolutetime', treshold=0.1,
+                                                    blocksinrow=100, blocksize=50, plot=True)
+    numofexperiemnts = movementtimes.shape[0]
     if is1DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
@@ -1499,17 +1501,17 @@ if __name__ == "__main__":
         freqs = test.hdffile['REFERENCEDATA/Acceleration_refference/Frequency']['value'][2, :]
         # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
 
-        mpdata['refidx'] = np.zeros([16 * 10])
-        refidx = np.zeros([17 * 10])
-        for i in np.arange(10):
-            refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-        mpdata['refidx'] = refidx
+        #mpdata['refidx'] = np.zeros([16 * 10])
+        #refidx = np.zeros([17 * 10])
+        #for i in np.arange(10):
+        #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+        #mpdata['refidx'] = refidx
 
 
 
         # CEM Data
-        #refidx = generateCEMrefIDXfromfreqs(freqs)
-        #mpdata['refidx'] = refidx
+        refidx = generateCEMrefIDXfromfreqs(freqs)
+        mpdata['refidx'] = refidx
 
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
@@ -1543,11 +1545,11 @@ if __name__ == "__main__":
         TF=getRAWTFFromExperiemnts(datafile['/EXPERIMENTS/Sine excitation'],leadSensorname)
         test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
         test.hdffile.flush()
-        test.hdffile.close()
-        plotRAWTFPhaseUncerComps(datafile, sensorName=leadSensorname, startIDX=0, stopIDX=17)
+        plotRAWTFPhaseUncerComps(datafile, sensorName=leadSensorname, startIDX=2, stopIDX=19)
         results[0].plotsinefit()
         results[0].plotsinefitParams()
         results[0].plotsinefitParams(meanPhase=True)
+        test.hdffile.close()
     if is3DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
