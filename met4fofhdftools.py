@@ -282,9 +282,7 @@ def adddumptohdf(
         hdfdumpfile.close()
 
 
-def add1dsinereferencedatatohdffile(
-    dataframeOrFilename, hdffile, refference_name, axis, isdeg=True
-):
+def add1dsinereferencedatatohdffile(dataframeOrFilename, hdffile, refference_name, axis, isdeg=True,overWrite=False):
     if isinstance(dataframeOrFilename, pd.DataFrame):
         refcsv = dataframeOrFilename
         isaccelerationreference1d = True
@@ -323,35 +321,40 @@ def add1dsinereferencedatatohdffile(
             REFDATA = hdffile["REFERENCEDATA"]
         except KeyError:
             REFDATA = hdffile.create_group("REFERENCEDATA")
-        group = REFDATA.create_group("Acceleration_refference")
+        try:
+            group = REFDATA.create_group("Acceleration_refference")
+        except ValueError as ve:
+            if overWrite:
+                group = REFDATA["Acceleration_refference"]
+            else:
+                raise ve
         group.attrs["Refference_name"] = refference_name
         group.attrs["Sensor_name"] = group.attrs["Refference_name"]
         group.attrs["Refference_type"] = "1D Acceleration"
         group.attrs["Refference_Qauntitiy"] = "Acceleration"
-        DSGroups["Frequency"] = group.create_group(
-            "Frequency"
-        )
-        FreqVal= DSGroups["Frequency"].create_dataset(
-            "value", ([3, refcsv.shape[0]]), dtype="float64"
-        )
-        FreqUncer= DSGroups["Frequency"].create_dataset(
-            "uncertainty", ([3, refcsv.shape[0]]), dtype="float64"
-        )
+        try:
+            DSGroups["Frequency"] = group.create_group("Frequency")
+            FreqVal = DSGroups["Frequency"].create_dataset("value", ([3, refcsv.shape[0]]), dtype="float64")
+            FreqUncer = DSGroups["Frequency"].create_dataset("uncertainty", ([3, refcsv.shape[0]]), dtype="float64")
+        except ValueError as ve:
+            if overWrite:
+                DSGroups["Frequency"]=group["Frequency"]
+            else:
+                raise ve
         DSGroups["Frequency"]['value'].make_scale("Frequency")
         DSGroups["Frequency"].attrs["Unit"] = "\\hertz"
         DSGroups["Frequency"].attrs["Physical_quantity"] = "Excitation frequency"
         DSGroups["Frequency"]['value'][axis, :] = refcsv["frequency"].to_numpy()
         DSGroups["Frequency"]['uncertainty'][axis, :] = refcsv["frequency"].to_numpy()*np.NaN
-
-        DSGroups["Cycle_count"] = group.create_group(
-            "Cycle_count")
-        NVal = DSGroups["Cycle_count"].create_dataset(
-            "value", ([refcsv.shape[0]]), dtype="int32"
-        )
-        NUncer = DSGroups["Cycle_count"].create_dataset(
-            "uncertainty", ([refcsv.shape[0]]), dtype="int32"
-        )
-
+        try:
+            DSGroups["Cycle_count"] = group.create_group("Cycle_count")
+            NVal = DSGroups["Cycle_count"].create_dataset("value", ([refcsv.shape[0]]), dtype="int32")
+            NUncer = DSGroups["Cycle_count"].create_dataset("uncertainty", ([refcsv.shape[0]]), dtype="int32")
+        except ValueError as ve:
+            if overWrite:
+                DSGroups["Cycle_count"] = group["Cycle_count"]
+            else:
+                raise ve
         DSGroups["Cycle_count"].attrs["Unit"] = "\\one"
         DSGroups["Cycle_count"].attrs["Physical_quantity"] = "Cycle_count"
         DSGroups["Cycle_count"].attrs['Uncertainty_type'] = "Errorless integer number"
@@ -359,11 +362,15 @@ def add1dsinereferencedatatohdffile(
         DSGroups["Cycle_count"]["uncertainty"][:] = refcsv["loop"].to_numpy()*0
         DSGroups["Cycle_count"]['value'].dims[0].label = "Frequency"
         DSGroups["Cycle_count"]['value'].dims[0].attach_scale(DSGroups["Frequency"]['value'])
-
-        DSGroups["Excitation_amplitude"] = group.create_group("Excitation_amplitude")
-        ExAmpval = DSGroups["Excitation_amplitude"].create_dataset("value", ([3, refcsv.shape[0]]), dtype=float)
-
-        ExAmpuncer= DSGroups["Excitation_amplitude"].create_dataset("uncertainty", ([3, refcsv.shape[0]]), dtype=float)
+        try:
+            DSGroups["Excitation_amplitude"] = group.create_group("Excitation_amplitude")
+            ExAmpval = DSGroups["Excitation_amplitude"].create_dataset("value", ([3, refcsv.shape[0]]), dtype=float)
+            ExAmpuncer= DSGroups["Excitation_amplitude"].create_dataset("uncertainty", ([3, refcsv.shape[0]]), dtype=float)
+        except ValueError as ve:
+            if overWrite:
+                DSGroups["Excitation_amplitude"] = group["Excitation_amplitude"]
+            else:
+                raise ve
         DSGroups["Excitation_amplitude"].attrs["Unit"] = "\\metre\\second\\tothe{-2}"
         DSGroups["Excitation_amplitude"].attrs["Physical_quantity"] = [
             "X Acceleration Excitation_amplitude",
@@ -383,13 +390,15 @@ def add1dsinereferencedatatohdffile(
         DSGroups["Excitation_amplitude"]["value"].dims[0].attach_scale(
             DSGroups["Frequency"]["value"]
         )
-        DSGroups["Phase"] = group.create_group("Phase")
-        PhaseVal=DSGroups["Phase"].create_dataset(
-            "value", ([3, refcsv.shape[0]]), dtype=float
-        )
-        PhaseUcer=DSGroups["Phase"].create_dataset(
-            "uncertainty", ([3, refcsv.shape[0]]), dtype=float
-        )
+        try:
+            DSGroups["Phase"] = group.create_group("Phase")
+            PhaseVal=DSGroups["Phase"].create_dataset("value", ([3, refcsv.shape[0]]), dtype=float)
+            PhaseUcer=DSGroups["Phase"].create_dataset("uncertainty", ([3, refcsv.shape[0]]), dtype=float)
+        except ValueError as ve:
+            if overWrite:
+                DSGroups["Phase"] = group["Phase"]
+            else:
+                raise ve
         DSGroups["Phase"]["value"][:] = np.NaN
         DSGroups["Phase"]["uncertainty"][:] = np.NaN
         DSGroups["Phase"].attrs["Unit"] = "\\radian"
@@ -413,7 +422,7 @@ def add1dsinereferencedatatohdffile(
         hdffile.flush()
 
 
-def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True):
+def addadctransferfunctiontodset(hdffile, adcname, jsonfilelist, isdeg=True,overwrite=False):
     ADCCal = Met4FOFADCCall(Filenames=jsonfilelist)
     TFs = {}
     for channel in ADCCal.fitResults.keys():
@@ -1108,7 +1117,10 @@ if __name__ == "__main__":
 
     csvfilenames = findfilesmatchingstr(folder, 'results_with_uncer.csv')
     cemref2=spektraCSVtohdfref(csvfilenames)
-    #hdffile = h5py.File(hdffilename, "a")
+    hdffile = h5py.File('/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewREF.hdf5', "a")
+    add1dsinereferencedatatohdffile(cemref2, hdffile, "CEM HF acceleration standard", 2, isdeg=True,overWrite=True)
+    hdffile.flush()
+    hdffile.close()
     # add reference file
     #add1dsinereferencedatatohdffile(reffile, hdffile, "PTB HF acceleration standard", 2, isdeg=True)
     #addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
