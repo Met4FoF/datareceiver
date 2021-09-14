@@ -1349,44 +1349,66 @@ plt.plot(BMAfreq, BMAzphase, 'x')
 def copyHFDatrrs(source, dest):
     for key in list(source.attrs.keys()):
         dest.attrs[key] = source.attrs[key]
-def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=5):
+
+def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
     phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_Phase','DUT_SNYNC_Phase']
-    phaselabels={'Delta_DUTSNYC_Phase':r'$u(\Delta\varphi_{\mathrm{DUT}}(\omega))$',
+    ampGroupNames=['DUT_amplitude','Excitation_amplitude','Magnitude']
+    labels={'Delta_DUTSNYC_Phase':r'$u(\Delta\varphi_{\mathrm{DUT}}(\omega))$',
                 'SSU_ADC_Phase':r'$u(\Delta\varphi_{DAUADC}(\omega))$',
                 'REF_Phase':r'$u(\Delta\varphi_{\mathrm{ref}}(\omega))$',
                 'DUT_Phase':r'$u(\varphi_{\mathrm{DUT}}(\omega))$',
                 'DUT_SNYNC_Phase':r'$u(\varphi_{\mathrm{syncDAU}}(\omega))$',
-                'Phase':r'$u(\Delta\varphi(\omega))$'}
+                'Phase':r'$u(\Delta\varphi(\omega))$',
+                'DUT_amplitude': '$u(DUT)$',
+                'Excitation_amplitude': '$u(REF)$',
+                'Magnitude': '$u(Mag)$'
+            }
     alphas={'Delta_DUTSNYC_Phase':1,
                 'SSU_ADC_Phase':1,
                 'REF_Phase':1,
                 'DUT_Phase':0.5,
                 'DUT_SNYNC_Phase':0.5,
-                'Phase':1}
+                'Phase':1,
+                'DUT_amplitude':1,
+                'Excitation_amplitude':1,
+                'Magnitude':1
+            }
     hatches={'Delta_DUTSNYC_Phase':"O.",
                 'SSU_ADC_Phase':"|",
                 'REF_Phase': "/",
                 'DUT_Phase':"o",
                 'DUT_SNYNC_Phase':"O",
-                'Phase':"|/o."}
-    for pGN in phaseGroupNames:
-        phaseUncerData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN]['uncertainty'][
-            startIDX:stopIDX]
-        phaseUncerDataUnit=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN].attrs['Unit']
-        if phaseUncerDataUnit=='\\radian':
-            uncersToPlot[pGN]=phaseUncerData/np.pi*180
-        elif phaseUncerDataUnit=='\\degree':
-            uncersToPlot[pGN]=phaseUncerData
-        else:
-            raise RuntimeError(phaseGroupNames+' has unsupported unit '+phaseUncerDataUnit)
+                'Phase':"|/o.",
+                'DUT_amplitude': '|',
+                'Excitation_amplitude': '-',
+                'Magnitude': '+'
+             }
+    if type=='Phase':
+        for pGN in phaseGroupNames:
+            phaseUncerData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN]['uncertainty'][
+                startIDX:stopIDX]
+            phaseUncerDataUnit=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN].attrs['Unit']
+            if phaseUncerDataUnit=='\\radian':
+                uncersToPlot[pGN]=phaseUncerData/np.pi*180
+            elif phaseUncerDataUnit=='\\degree':
+                uncersToPlot[pGN]=phaseUncerData
+            else:
+                raise RuntimeError(phaseGroupNames+' has unsupported unit '+phaseUncerDataUnit)
+    if type=='Mag':
+        for ampGN in ampGroupNames:
+            ampUncerData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][ampGN]['uncertainty'][
+                startIDX:stopIDX]
+            ampValData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][ampGN]['value'][
+                startIDX:stopIDX]
+            uncersToPlot[ampGN]=(ampUncerData/ampValData)*100
     idxs=np.arange(freqs.size)
     fig,ax=plt.subplots()
     fig.set_size_inches(20, 10)
     i=0
     for uncerKey in uncersToPlot.keys():
-        ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],width=1/(len(uncersToPlot.keys())+1),label=phaselabels[uncerKey],alpha=alphas[uncerKey],hatch=hatches[uncerKey])
+        ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],width=1/(len(uncersToPlot.keys())+1),label=labels[uncerKey],alpha=alphas[uncerKey],hatch=hatches[uncerKey])
         i+=+1
     ax.set_xticks(idxs)
     boldFreqlabels = []
@@ -1394,17 +1416,22 @@ def plotRAWTFPhaseUncerComps(datafile,sensorName='0xbccb0000_MPU_9250',startIDX=
         boldFreqlabels.append(r'\textbf{' + str(freq) + '}')
     ax.set_xticklabels(boldFreqlabels, rotation=0)
     ax.set_xlabel(r'\textbf{Excitation Frequency}  $\omega$ \textbf{in Hz}')
-    ax.set_ylabel(r'\textbf{Uncertainty of phases components} $u$ \textbf{in} $\frac{m}{s^2}$')
+    if type == 'Phase':
+        ax.set_ylabel(r'\textbf{Uncertainty of phases components} $u$ \textbf{in} $\frac{m}{s^2}$')
+    if type == 'Mag':
+        ax.set_ylabel(r'\textbf{Relative uncertainty\\ of Magnitude components} in \%')
     ax.grid(axis='y')
     ax.set_title(r'\textbf{'+title+'}')
     if zoom!=False:
+        if type != 'Phase':
+            raise ValueError("zoom is only usefull for Phase")
         numPlotCOmponents=len(uncersToPlot.keys())
         ax2=fig.add_axes([0.35,0.6,0.2,0.2])
         ylim=2*uncersToPlot['SSU_ADC_Phase'][zoom]
         i=0
         ax2.set_ylim(ylim)
         for uncerKey in uncersToPlot.keys():
-            ax2.bar((1/numPlotCOmponents)*i, uncersToPlot[uncerKey][zoom],width=(1/(numPlotCOmponents)), label=phaselabels[uncerKey], alpha=alphas[uncerKey],hatch=hatches[uncerKey])
+            ax2.bar((1/numPlotCOmponents)*i, uncersToPlot[uncerKey][zoom],width=(1/(numPlotCOmponents)), label=labels[uncerKey], alpha=alphas[uncerKey],hatch=hatches[uncerKey])
             i=i+1
             ax2.set_ylim([0,ylim])
             # for major ticks
@@ -1423,8 +1450,8 @@ def processdata(i):
     times = mpdata["movementtimes"][i]
     refidx = int(mpdata["refidx"][i])
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
-    times[0] += 6e9
-    times[1] -= 2e9
+    times[0] += mpdata['startCutOutns']
+    times[1] -= mpdata['endCutOutns']
     experiment = sineexcitation(
         mpdata["hdfinstance"],
         times,
@@ -1440,8 +1467,8 @@ def processdata(i):
     #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
     #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
     axisfreqs = mpdata["uniquexfreqs"]
-    experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=['0xbccb0a00_STM32_Internal_ADC'], datasetsToFit=['Voltage'])
-    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope('0xbccb0a00_STM32_Internal_ADC','Voltage',1)
+    experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=[mpdata['ADCName']], datasetsToFit=['Voltage'])
+    deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope(mpdata['ADCName'],'Voltage',mpdata['AnalogrefChannel'])
     experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
@@ -1450,8 +1477,8 @@ def processdata(i):
     experiment.calculatetanloguephaseref1freq(
         "REFERENCEDATA/Acceleration_refference",
         refidx,
-        "RAWDATA/0xbccb0a00_STM32_Internal_ADC",
-        1,
+        "RAWDATA/"+mpdata['ADCName'],
+        mpdata['AnalogrefChannel'],
     )
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
@@ -1463,35 +1490,35 @@ if __name__ == "__main__":
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    leadSensorname = '0xbccb0000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
-    is1DPrcoessing=True
+    #leadSensorname = '0xbccb0000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
+    #is1DPrcoessing=True
     #PTB Filename and sensor Name
-    #leadSensorname = '0x1fe40000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTB.hdf5"
+    leadSensorname = '0x1fe40000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTBnewRef.hdf5"
     #is1DPrcoessing=True
     #ZEMA 3 Komponent
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
     #leadSensorname='0xf1030002_MPU_9250'
     #is3DPrcoessing=True
-
-
+    """
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
         pass
     shutil.copyfile(hdffilename.replace(".hdf5","(copy).hdf5"), hdffilename)
-
+    """
 
     datafile = h5py.File(hdffilename, "r+")
-
-
     test = hdfmet4fofdatafile(datafile,)#sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
+    plotRAWTFUncerComps(datafile, sensorName=leadSensorname,
+                        title='Uncertainty of the phase components PTB measurments', startIDX=0, stopIDX=17, zoom=5)
+    plotRAWTFUncerComps(datafile, type='Mag', sensorName=leadSensorname,
+                        title='Uncertainty of the magnitude components PTB measurments', startIDX=0, stopIDX=17)
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration',
-                                                    'RAWDATA/' + leadSensorname + '/Absolutetime', treshold=0.1,
-                                                    blocksinrow=100, blocksize=50, plot=True)
-    numofexperiemnts = movementtimes.shape[0]
+    #movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration','RAWDATA/' + leadSensorname + '/Absolutetime', treshold=0.1,blocksinrow=100, blocksize=50, plot=True)
+    #numofexperiemnts = movementtimes.shape[0]
+
     if is1DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
@@ -1502,17 +1529,24 @@ if __name__ == "__main__":
         # PTB Data CALCULATE REFERENCE data index skipping one data set at the end of evry loop
 
         #mpdata['refidx'] = np.zeros([16 * 10])
-        #refidx = np.zeros([17 * 10])
-        #for i in np.arange(10):
-        #    refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-        #mpdata['refidx'] = refidx
-
-
+        refidx = np.zeros([17 * 10])
+        for i in np.arange(10):
+            refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
+        mpdata['refidx'] = refidx
+        mpdata['startCutOutns']=2e9
+        mpdata['endCutOutns'] = 2e9
+        mpdata['ADCName']='0x1fe40a00_STM32_Internal_ADC'
+        mpdata['AnalogrefChannel']=0
+        # __________________________________________________________________
 
         # CEM Data
-        refidx = generateCEMrefIDXfromfreqs(freqs)
-        mpdata['refidx'] = refidx
-
+        #refidx = generateCEMrefIDXfromfreqs(freqs)
+        #mpdata['refidx'] = refidx
+        #mpdata['startCutOutns']=6e9
+        #mpdata['endCutOutns'] = 2e9
+        #mpdata['ADCName']='0xbccb0a00_STM32_Internal_ADC'
+        #mpdata['AnalogrefChannel']=1
+        #__________________________________________________________________
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
 
@@ -1545,10 +1579,11 @@ if __name__ == "__main__":
         TF=getRAWTFFromExperiemnts(datafile['/EXPERIMENTS/Sine excitation'],leadSensorname)
         test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
         test.hdffile.flush()
-        plotRAWTFPhaseUncerComps(datafile, sensorName=leadSensorname, startIDX=2, stopIDX=19)
-        results[0].plotsinefit()
-        results[0].plotsinefitParams()
-        results[0].plotsinefitParams(meanPhase=True)
+        plotRAWTFUncerComps(datafile, sensorName=leadSensorname,title='Uncertainty of the phase components PTB measurments', startIDX=0, stopIDX=17,zoom=5)
+        plotRAWTFUncerComps(datafile,type='Mag', sensorName=leadSensorname,title='Uncertainty of the magnitude components PTB measurments', startIDX=0, stopIDX=17)
+        #results[0].plotsinefit()
+        #results[0].plotsinefitParams()
+        #results[0].plotsinefitParams(meanPhase=True)
         test.hdffile.close()
     if is3DPrcoessing:
         manager = multiprocessing.Manager()
