@@ -1353,17 +1353,17 @@ def copyHFDatrrs(source, dest):
 def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
-    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_Phase','DUT_SNYNC_Phase']
+    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase']#'DUT_SNYNC_Phase','DUT_Phase',
     ampGroupNames=['DUT_amplitude','Excitation_amplitude','Magnitude']
-    labels={'Delta_DUTSNYC_Phase':r'$u(\Delta\varphi_{\mathrm{DUT}}(\omega))$',
+    labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\Delta\varphi_{\mathrm{DUT-sync}}(\omega))$',
                 'SSU_ADC_Phase':r'$u(\Delta\varphi_{DAUADC}(\omega))$',
-                'REF_Phase':r'$u(\Delta\varphi_{\mathrm{ref}}(\omega))$',
-                'DUT_Phase':r'$u(\varphi_{\mathrm{DUT}}(\omega))$',
-                'DUT_SNYNC_Phase':r'$u(\varphi_{\mathrm{syncDAU}}(\omega))$',
-                'Phase':r'$u(\Delta\varphi(\omega))$',
-                'DUT_amplitude': '$u(DUT)$',
-                'Excitation_amplitude': '$u(REF)$',
-                'Magnitude': '$u(Mag)$'
+                'REF_Phase':r'$2\sigma(\Delta\varphi_{\mathrm{ref}}(\omega))$',
+                'DUT_Phase':r'$2\sigma(\varphi_{\mathrm{DUT}}(\omega))$',
+                'DUT_SNYNC_Phase':r'$2\sigma(\varphi_{\mathrm{syncDAU}}(\omega))$',
+                'Phase':r'$u_{stat}(\Delta\varphi(\omega))$',
+                'DUT_amplitude': '$2\sigma(DUT)$',
+                'Excitation_amplitude': '$2\sigma(REF)$',
+                'Magnitude': '$u_{stat}(Mag)$'
             }
     alphas={'Delta_DUTSNYC_Phase':1,
                 'SSU_ADC_Phase':1,
@@ -1417,7 +1417,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     ax.set_xticklabels(boldFreqlabels, rotation=0)
     ax.set_xlabel(r'\textbf{Excitation Frequency}  $\omega$ \textbf{in Hz}')
     if type == 'Phase':
-        ax.set_ylabel(r'\textbf{Uncertainty of phases components} $u$ \textbf{in} $\frac{m}{s^2}$')
+        ax.set_ylabel(r'\textbf{Uncertainty contributions\\ of phases components} \textbf{in} $^\circ$')
     if type == 'Mag':
         ax.set_ylabel(r'\textbf{Relative uncertainty\\ of Magnitude components} in \%')
     ax.grid(axis='y')
@@ -1426,7 +1426,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
         if type != 'Phase':
             raise ValueError("zoom is only usefull for Phase")
         numPlotCOmponents=len(uncersToPlot.keys())
-        ax2=fig.add_axes([0.35,0.6,0.2,0.2])
+        ax2=fig.add_axes([0.15,0.6,0.2,0.2])
         ylim=2*uncersToPlot['SSU_ADC_Phase'][zoom]
         i=0
         ax2.set_ylim(ylim)
@@ -1439,7 +1439,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             # for minor ticks
             ax2.set_xticks([], minor=True)
             ax2.set_xlabel(r'\textbf{Frequency '+str(freqs[zoom])+' Hz}')
-            ax2.set_ylabel(r'$u$ \textbf{in} $\frac{m}{s^2}$')
+            #ax2.set_ylabel(r'$^\circ$')
     ax.legend()
     fig.savefig('tmp.png', dpi=200)
     fig.show()
@@ -1490,12 +1490,12 @@ if __name__ == "__main__":
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    #leadSensorname = '0xbccb0000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
+    leadSensorname = '0xbccb0000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
     #is1DPrcoessing=True
     #PTB Filename and sensor Name
-    leadSensorname = '0x1fe40000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTBnewRef.hdf5"
+    #leadSensorname = '0x1fe40000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTBnewRef.hdf5"
     #is1DPrcoessing=True
     #ZEMA 3 Komponent
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
@@ -1512,9 +1512,9 @@ if __name__ == "__main__":
     datafile = h5py.File(hdffilename, "r+")
     test = hdfmet4fofdatafile(datafile,)#sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
     plotRAWTFUncerComps(datafile, sensorName=leadSensorname,
-                        title='Uncertainty of the phase components PTB measurments', startIDX=0, stopIDX=17, zoom=5)
+                        title='Uncertainty of the phase components CEM measurments', startIDX=2, stopIDX=19, zoom=5)
     plotRAWTFUncerComps(datafile, type='Mag', sensorName=leadSensorname,
-                        title='Uncertainty of the magnitude components PTB measurments', startIDX=0, stopIDX=17)
+                        title='Uncertainty of the magnitude components CEM measurments', startIDX=2, stopIDX=19)
 
     #movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration','RAWDATA/' + leadSensorname + '/Absolutetime', treshold=0.1,blocksinrow=100, blocksize=50, plot=True)
     #numofexperiemnts = movementtimes.shape[0]
