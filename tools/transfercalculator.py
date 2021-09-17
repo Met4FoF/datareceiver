@@ -235,6 +235,7 @@ class hdfmet4fofdatafile:
             for i in np.arange(len(movementtimes)):
                 relmovementimes = (movementtimes[i] - tmpTime[0]) / 1e9
                 ax.plot(relmovementimes, np.array([treshold, treshold]), label=str(i))
+                ax.annotate(str(i),(relmovementimes[0]+0.5*(relmovementimes[1]-relmovementimes[0]),treshold))
             fig.show()
         return movementidx, np.array(movementtimes)
 
@@ -1010,7 +1011,7 @@ class sineexcitation(experiment):
                         reffreq = self.datafile[refdatagroupname]["Frequency"]['value'][
                             i
                         ][refdataidx]
-                        if not(reffreq*0.95<fitfreq) or not(reffreq*1.05>fitfreq) :
+                        if not(reffreq*0.99<fitfreq) or not(reffreq*1.01>fitfreq) :
                             if printFreqMissMatchWarning:
                                 warinigstr = (
                                     "Frequency mismatach in Sesnor"
@@ -1472,13 +1473,15 @@ def processdata(i):
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
     #experiment.calculateGPSRef1freqFromVelocity()
-    experiment.calculatetanloguephaseref1freq(
-        "REFERENCEDATA/Acceleration_refference",
-        refidx,
-        "RAWDATA/"+mpdata['ADCName'],
-        mpdata['AnalogrefChannel'],
-    )
-    
+    try:
+        experiment.calculatetanloguephaseref1freq(
+            "REFERENCEDATA/Acceleration_refference",
+            refidx,
+            "RAWDATA/"+mpdata['ADCName'],
+            mpdata['AnalogrefChannel'],
+        )
+    except ValueError:
+        print("Calculation at experminet index i "+str(i)+" invalide")
     #print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
@@ -1497,8 +1500,13 @@ if __name__ == "__main__":
     is1DPrcoessing=True
 
     #PTB Filename and sensor Name
-    #leadSensorname = '0x1fe40000_MPU_9250'
+    #DataSettype = 'PTB1D'
+
     #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTBnewRef.hdf5"
+    #leadSensorname = '0x1fe40000_MPU_9250'
+
+    #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280PTB.hdf5"
+    #leadSensorname = '0x1fe40000_BMA_280'
     #is1DPrcoessing=True
     #ZEMA 3 Komponent
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
@@ -1546,7 +1554,7 @@ if __name__ == "__main__":
             # CEM Data
             refidx = generateCEMrefIDXfromfreqs(freqs)
             mpdata['refidx'] = refidx
-            mpdata['startCutOutns']=6e9
+            mpdata['startCutOutns']=8e9
             mpdata['endCutOutns'] = 2e9
             mpdata['ADCName']='0xbccb0a00_STM32_Internal_ADC'
             mpdata['AnalogrefChannel']=1
