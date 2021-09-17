@@ -123,7 +123,8 @@ def adddumptohdf(
     hdfdumplock=threading.Lock(),
     adcbaseid=10,
     extractadcdata=False,
-    correcttimeglitches=True
+    correcttimeglitches=False,
+    chunksize=2048
 ):
     # lock use for multi threading lock in met4FOF hdf dumper implementation
     # adcbaseid=10
@@ -148,7 +149,7 @@ def adddumptohdf(
 
         if paramsdictjson["Name"] == "MPU 9250":
             print("MPU9250 description found adding hieracey")
-            if not("HIERARCHY" in paramsdictjson["1"]):
+            if (not"HIERARCHY" in paramsdictjson["1"])or (paramsdictjson["1"]["HIERARCHY"]==None):
                 print("HIERARCHY not found adding hieracey")
                 paramsdictjson["1"]["HIERARCHY"] = "Acceleration/0"
                 paramsdictjson["2"]["HIERARCHY"] = "Acceleration/1"
@@ -166,8 +167,8 @@ def adddumptohdf(
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         elif paramsdictjson["Name"] == "BMA 280":
             print("BMA description found adding hieracey")
-            if not ("HIERARCHY" in paramsdictjson["1"]):
-                print("HIERARCHY not found adding hieracey")
+            if (not ("HIERARCHY" in paramsdictjson["1"])) or (paramsdictjson["1"]["HIERARCHY"]==None):
+                print("HIERARCHY not found or NONE adding hieracey")
                 paramsdictjson["1"]["HIERARCHY"] = "Acceleration/0"
                 paramsdictjson["2"]["HIERARCHY"] = "Acceleration/1"
                 paramsdictjson["3"]["HIERARCHY"] = "Acceleration/2"
@@ -176,7 +177,7 @@ def adddumptohdf(
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         elif paramsdictjson["Name"] == "STM32 Internal ADC":
             print("STM32 Internal ADC description found")
-            if not ("HIERARCHY" in paramsdictjson["1"]):
+            if (not "HIERARCHY" in paramsdictjson["1"]) or (paramsdictjson["1"]["HIERARCHY"]==None):
                 print("HIERARCHY not found adding hieracey")
                 paramsdictjson["1"]["HIERARCHY"] = "Voltage/0"
                 paramsdictjson["2"]["HIERARCHY"] = "Voltage/1"
@@ -184,18 +185,18 @@ def adddumptohdf(
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         elif paramsdictjson["Name"] == "MS5837_02BA":
             print("MS5837_02BA description found adding hieracey")
-            if not ("HIERARCHY" in paramsdictjson["1"]):
+            if (not "HIERARCHY" in paramsdictjson["1"]) or (paramsdictjson["1"]["HIERARCHY"]==None):
                 paramsdictjson["1"]["HIERARCHY"] = "Temeprature/0"
                 paramsdictjson["2"]["HIERARCHY"] = "Releative humidity/0"
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         else:
-            if not ("HIERARCHY" in paramsdictjson["1"]):
+            if (not "HIERARCHY" in paramsdictjson["1"]) or (paramsdictjson["1"]["HIERARCHY"]==None):
                 print("sensor " + str(paramsdictjson["Name"]) + " with out HIERARCHY not supported exiting")
                 exit()
             sensordscp = SensorDescription(fromDict=paramsdictjson)
         baseid = int(np.floor(paramsdictjson["ID"] / 65536))
         # descriptions are now ready start the hdf dumpers
-        sensordumper = HDF5Dumper(sensordscp, hdfdumpfile, hdfdumplock,correcttimeglitches=correcttimeglitches)
+        sensordumper = HDF5Dumper(sensordscp, hdfdumpfile, hdfdumplock,correcttimeglitches=correcttimeglitches,chunksize=chunksize)
         if extractadcdata:
             adcid = int(baseid * 65536 + 256 * adcbaseid)
             print("ADC ID " + hex(adcid))
@@ -1110,17 +1111,34 @@ if __name__ == "__main__":
         adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
     """
     # find al spektra reference files
-    folder = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM"
-    reffilenames = findfilesmatchingstr(folder, 'prp.txt')
+    #reffilenames = findfilesmatchingstr(folder, 'prp.txt')
     # parse spektra reference files
-    cemref=spektraprptohdfref(reffilenames)
+    #cemref=spektraprptohdfref(reffilenames)
+    hdffilename='/media/benedikt/nvme/data/BMACEMPTB/CEM/BMA280CEM.hdf5'
+    folder = r"/media/benedikt/nvme/data/BMACEMPTB/CEM/"
 
+    dumpfilenames = findfilesmatchingstr(folder, r".dump")  # input file name
+    for dumpfilename in dumpfilenames:
+        # if dumpfilename.find("MPU_9250") != -1:
+        #    adddumptohdf(dumpfilename, hdffilename, extractadcdata=True)
+        if dumpfilename.find("BMA_280") != -1:
+            adddumptohdf(dumpfilename, hdffilename, extractadcdata=True,correcttimeglitches=True)
+        # if dumpfilename.find("MS5837") != -1:
+        #    adddumptohdf(dumpfilename, hdffilename, correcttimeglitches=False)
+        #    print("skipping MS5837 data")
+        # else:
+        # adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
     csvfilenames = findfilesmatchingstr(folder, 'results_with_uncer.csv')
-    cemref2=spektraCSVtohdfref(csvfilenames)
-    hdffile = h5py.File('/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewREF.hdf5', "a")
-    add1dsinereferencedatatohdffile(cemref2, hdffile, "CEM HF acceleration standard", 2, isdeg=True,overWrite=True)
-    hdffile.flush()
-    hdffile.close()
+
+    cemref=spektraCSVtohdfref(csvfilenames)
+    hdffile = h5py.File(hdffilename, "a")
+    addadctransferfunctiontodset(hdffile, '0xbccb0a00_STM32_Internal_ADC', [
+        r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
+    add1dsinereferencedatatohdffile(cemref, hdffile, "CEM HF acceleration standard", 2, isdeg=True,overWrite=True)
+    # find all dumpfiles in folder matching str
+
+    #hdffile.flush()
+    #hdffile.close()
     # add reference file
     #add1dsinereferencedatatohdffile(reffile, hdffile, "PTB HF acceleration standard", 2, isdeg=True)
     #addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
