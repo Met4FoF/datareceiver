@@ -1349,13 +1349,13 @@ def copyHFDatrrs(source, dest):
 def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False,lang='EN',zoomPlotPos=[0.3,0.5,0.2,0.2]):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
-    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase']#,'DUT_SNYNC_Phase','DUT_Phase'
+    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_SNYNC_Phase','DUT_Phase']#,
     ampGroupNames=['DUT_amplitude','Excitation_amplitude','Magnitude']
-    labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(\omega)-\varphi_\mathrm{sync}(\omega))$',
+    labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
                 'SSU_ADC_Phase':r'$2u(\varphi_{ADC_{DAU}}(\omega))$',
-                'REF_Phase':r'$2\sigma(\varphi_\mathrm{ACS}(\omega)-\varphi_\mathrm{DAUSync}(\omega))$',
+                'REF_Phase':r'$2\sigma(\varphi_\mathrm{ACS}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
                 'DUT_Phase':r'$2\sigma(\varphi_{\mathrm{DUT}}(\omega))$',
-                'DUT_SNYNC_Phase':r'$2\sigma(\varphi_{\mathrm{syncDAU}}(\omega))$',
+                'DUT_SNYNC_Phase':r'$2\sigma(\varphi_{\mathrm{Sync_{DAU}}}(\omega))$',
                 'Phase':r'$u(\varphi(\omega))$',
                 'DUT_amplitude': '$2\sigma(\hat{y}_\mathrm{DUT})$',
                 'Excitation_amplitude': '$2\sigma(\hat{a}_\mathrm{ACS})$',
@@ -1414,17 +1414,17 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     if lang=='EN':
         ax.set_xlabel(r'\textbf{Excitation frequency} \textbf{in Hz}')
     elif lang=='DE':
-        ax.set_xlabel(r'\textbf{Anregungsfrequenz}  $\omega$ \textbf{in Hz}')
+        ax.set_xlabel(r'\textbf{Anregungsfrequenz in Hz}')
     if type == 'Phase':
         if lang=='EN':
-            ax.set_ylabel(r'\textbf{Type A components of}'+'\n' +r'\textbf{phase in} $^\circ$')
+            ax.set_ylabel(r'\textbf{Type A components of}'+'\n' +r'\textbf{phase in $^\circ$}')
         elif lang=='DE':
-            ax.set_ylabel(r'\textbf{Statistische Unsicherheit\\ der Phasenkomponenten} \textbf{in} $^\circ$')
+            ax.set_ylabel(r'\textbf{Phasenkomponenten Typ A in $^\circ$}')
     if type == 'Mag':
         if lang== 'EN':
-            ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude in }\%')
+            ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude in \%}')
         elif lang=='DE':
-            ax.set_ylabel(r'\textbf{Statistische Unsicherheit\\ der Magnitudenkomponenten in} \%')
+            ax.set_ylabel(r'\textbf{Magnitudenkomponenten Typ A in \%}')
     ax.grid()
     if title!=None and title != '':
             ax.set_title(r'\textbf{'+title+'}')
@@ -1522,8 +1522,8 @@ if __name__ == "__main__":
     start = time.time()
     #CEM Filename and sensor Name
     #DataSettype = 'CEM1D'
-    leadSensorname = '0xbccb0000_MPU_9250'
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
+    #leadSensorname = '0xbccb0000_MPU_9250'
+    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
     #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280CEM.hdf5"
     #leadSensorname = '0xbccb0000_BMA_280'
     #is1DPrcoessing=True
@@ -1531,8 +1531,8 @@ if __name__ == "__main__":
     #PTB Filename and sensor Name
     #DataSettype = 'PTB1D'
 
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTBnewRef.hdf5"
-    #leadSensorname = '0x1fe40000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTBnewRef.hdf5"
+    leadSensorname = '0x1fe40000_MPU_9250'
 
     #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280PTB.hdf5"
     #leadSensorname = '0x1fe40000_BMA_280'
@@ -1553,9 +1553,9 @@ if __name__ == "__main__":
     datafile = h5py.File(hdffilename, "r+")
     test = hdfmet4fofdatafile(datafile,)
     plotRAWTFUncerComps(datafile, type='Phase',sensorName=leadSensorname,
-                        title=None, startIDX=2, stopIDX=19, zoom=2,lang='EN',zoomPlotPos=[0.15,0.62,0.2,0.2])#'Statistische Unsicherheit der Phasenkomponenten der CEM Messungen MPU 9250'
+                        title=None, startIDX=0, stopIDX=17, zoom=2,lang='DE',zoomPlotPos=[0.15,0.62,0.2,0.2])#'Statistische Unsicherheit der Phasenkomponenten der CEM Messungen MPU 9250'
     plotRAWTFUncerComps(datafile, type='Mag', sensorName=leadSensorname,
-                        title=None, startIDX=2, stopIDX=19,lang='EN')#'Statistische Unsicherheit der Magnitudenkomponenten der CEM Messungen MPU 9250'
+                        title=None, startIDX=0, stopIDX=17,lang='DE')#'Statistische Unsicherheit der Magnitudenkomponenten der CEM Messungen MPU 9250'
     #sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
     #plotRAWTFUncerComps(datafile, sensorName=leadSensorname,
     #                    title='Uncertainty of the phase components CEM measurments', startIDX=2, stopIDX=19, zoom=5)
