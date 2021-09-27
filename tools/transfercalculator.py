@@ -54,21 +54,7 @@ def angVar(data,mean):
     return np.var(mappedDeltaAngle)# the mean was substraced before but this dosn't make any influnce on the variance
 
 
-plt.rc('font', family='serif')
-plt.rc('text', usetex=True)
-plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
-PLTSCALFACTOR =3
-SMALL_SIZE = 12 * PLTSCALFACTOR
-MEDIUM_SIZE = 15 * PLTSCALFACTOR
-BIGGER_SIZE = 18 * PLTSCALFACTOR
 
-plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
-plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
-plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
-plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
 def getplotableunitstring(unitstr, Latex=False):
@@ -90,8 +76,8 @@ def getplotableunitstring(unitstr, Latex=False):
             "\\degree": "$^\circ$",
             "\\micro\\tesla": "$\micro T$",
             "\\radian\\second\\tothe{-1}": "$\\frac{rad}{s}$",
-            "\\metre\\second\\tothe{-2}": "$\\frac{m}{s^2}",
-            "\\metre\\second\\tothe{-1}": "$\\frac{m}{s}",
+            "\\metre\\second\\tothe{-2}": "$\\frac{m}{s^2}$",
+            "\\metre\\second\\tothe{-1}": "$\\frac{m}{s}$",
             "\\metre": "m",
             "\\volt": "v",
             "\\hertz": "Hz",
@@ -206,8 +192,17 @@ class hdfmet4fofdatafile:
         blocksinrow=5,
         blocksize=100,
         plot=False,
+        plotLabels=None
     ):
         tmpData = np.squeeze(self.hdffile[datahdfpath])
+        if plotLabels==None:
+            plotLabels={}
+
+            yQuant=str(r'\\'.join(self.hdffile[datahdfpath].attrs['Physical_quantity']))
+            yUnit = str(self.hdffile[datahdfpath].attrs['Unit'])
+            plotLabels['y']=r"Magnitude of\\ "+yQuant+r"\\ in "+getplotableunitstring(yUnit,Latex=True)
+            plotLabels['x'] = "Relative time in Seconds"
+            plotLabels['title'] = "Blockweise STD "+str(datahdfpath).replace("/"," ").replace('_', ' ')+" treshold "+str(treshold)+' blocks in row '+str(blocksinrow)+' blocksize '+str(blocksize)
         tmpTime = np.squeeze(self.hdffile[timehdfpath])  # fetch data from hdffile
         mag = np.linalg.norm(tmpData, axis=0)
         std = self.calcblockwiesestd(mag, blocksize=blocksize)
@@ -236,6 +231,9 @@ class hdfmet4fofdatafile:
                 relmovementimes = (movementtimes[i] - tmpTime[0]) / 1e9
                 ax.plot(relmovementimes, np.array([treshold, treshold]), label=str(i))
                 ax.annotate(str(i),(relmovementimes[0]+0.5*(relmovementimes[1]-relmovementimes[0]),treshold))
+            ax.set_xlabel(plotLabels['x'])
+            ax.set_ylabel(plotLabels['y'])
+            ax.set_title(plotLabels['title'])
             fig.show()
         return movementidx, np.array(movementtimes)
 
@@ -1348,20 +1346,20 @@ def copyHFDatrrs(source, dest):
     for key in list(source.attrs.keys()):
         dest.attrs[key] = source.attrs[key]
 
-def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False):
+def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False,lang='EN',zoomPlotPos=[0.3,0.5,0.2,0.2]):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
-    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase']#'DUT_SNYNC_Phase','DUT_Phase',
+    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase']#,'DUT_SNYNC_Phase','DUT_Phase'
     ampGroupNames=['DUT_amplitude','Excitation_amplitude','Magnitude']
-    labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\Delta\varphi_{\mathrm{DUT-sync}}(\omega))$',
-                'SSU_ADC_Phase':r'$u(\Delta\varphi_{DAUADC}(\omega))$',
-                'REF_Phase':r'$2\sigma(\Delta\varphi_{\mathrm{ref}}(\omega))$',
+    labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(\omega)-\varphi_\mathrm{sync}(\omega))$',
+                'SSU_ADC_Phase':r'$2u(\varphi_{ADC_{DAU}}(\omega))$',
+                'REF_Phase':r'$2\sigma(\varphi_\mathrm{ACS}(\omega)-\varphi_\mathrm{DAUSync}(\omega))$',
                 'DUT_Phase':r'$2\sigma(\varphi_{\mathrm{DUT}}(\omega))$',
                 'DUT_SNYNC_Phase':r'$2\sigma(\varphi_{\mathrm{syncDAU}}(\omega))$',
-                'Phase':r'$u_{stat}(\Delta\varphi(\omega))$',
-                'DUT_amplitude': '$2\sigma(DUT)$',
-                'Excitation_amplitude': '$2\sigma(REF)$',
-                'Magnitude': '$u_{stat}(Mag)$'
+                'Phase':r'$u(\varphi(\omega))$',
+                'DUT_amplitude': '$2\sigma(\hat{y}_\mathrm{DUT})$',
+                'Excitation_amplitude': '$2\sigma(\hat{a}_\mathrm{ACS})$',
+                'Magnitude': '$2\sigma(|S(\omega)|)$'
             }
     alphas={'Delta_DUTSNYC_Phase':1,
                 'SSU_ADC_Phase':1,
@@ -1413,18 +1411,28 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     for freq in freqs:
         boldFreqlabels.append(r'\textbf{' + str(freq) + '}')
     ax.set_xticklabels(boldFreqlabels, rotation=0)
-    ax.set_xlabel(r'\textbf{Excitation Frequency}  $\omega$ \textbf{in Hz}')
+    if lang=='EN':
+        ax.set_xlabel(r'\textbf{Excitation frequency} \textbf{in Hz}')
+    elif lang=='DE':
+        ax.set_xlabel(r'\textbf{Anregungsfrequenz}  $\omega$ \textbf{in Hz}')
     if type == 'Phase':
-        ax.set_ylabel(r'\textbf{Uncertainty contributions\\ of phases components} \textbf{in} $^\circ$')
+        if lang=='EN':
+            ax.set_ylabel(r'\textbf{Type A components of}'+'\n' +r'\textbf{phase in} $^\circ$')
+        elif lang=='DE':
+            ax.set_ylabel(r'\textbf{Statistische Unsicherheit\\ der Phasenkomponenten} \textbf{in} $^\circ$')
     if type == 'Mag':
-        ax.set_ylabel(r'\textbf{Relative uncertainty\\ of Magnitude components} in \%')
-    ax.grid(axis='y')
-    ax.set_title(r'\textbf{'+title+'}')
+        if lang== 'EN':
+            ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude in }\%')
+        elif lang=='DE':
+            ax.set_ylabel(r'\textbf{Statistische Unsicherheit\\ der Magnitudenkomponenten in} \%')
+    ax.grid()
+    if title!=None and title != '':
+            ax.set_title(r'\textbf{'+title+'}')
     if zoom!=False:
         if type != 'Phase':
             raise ValueError("zoom is only usefull for Phase")
         numPlotCOmponents=len(uncersToPlot.keys())
-        ax2=fig.add_axes([0.15,0.6,0.2,0.2])
+        ax2=fig.add_axes(zoomPlotPos)
         ylim=2*uncersToPlot['SSU_ADC_Phase'][zoom]
         i=0
         ax2.set_ylim(ylim)
@@ -1432,11 +1440,15 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             ax2.bar((1/numPlotCOmponents)*i, uncersToPlot[uncerKey][zoom],width=(1/(numPlotCOmponents)), label=labels[uncerKey], alpha=alphas[uncerKey],hatch=hatches[uncerKey])
             i=i+1
             ax2.set_ylim([0,ylim])
+            ax2.ticklabel_format(axis='y', scilimits=[-2, 2])
             # for major ticks
             ax2.set_xticks([])
             # for minor ticks
             ax2.set_xticks([], minor=True)
-            ax2.set_xlabel(r'\textbf{Frequency '+str(freqs[zoom])+' Hz}')
+            if lang=='EN':
+                ax2.set_xlabel(r'\textbf{Frequency '+str(freqs[zoom])+' Hz}')
+            elif lang=='DE':
+                ax2.set_xlabel(r'\textbf{Frequenz ' + str(freqs[zoom]) + ' Hz}')
             #ax2.set_ylabel(r'$^\circ$')
     ax.legend()
     fig.savefig('tmp.png', dpi=200)
@@ -1488,16 +1500,33 @@ def processdata(i):
 
 
 if __name__ == "__main__":
+
+    plt.rc('font', family='serif')
+    plt.rc('text', usetex=True)
+    plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
+    PLTSCALFACTOR = 3
+    SMALL_SIZE = 12 * PLTSCALFACTOR
+    MEDIUM_SIZE = 16 * PLTSCALFACTOR
+    BIGGER_SIZE = 18 * PLTSCALFACTOR
+
+    plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
+    plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
+    plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+    plt.rc("xtick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+    plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+    plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
+    plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
     is1DPrcoessing = False
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    DataSettype = 'CEM1D'
-    #leadSensorname = '0xbccb0000_MPU_9250'
-    #hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
-    hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280CEM.hdf5"
-    leadSensorname = '0xbccb0000_BMA_280'
-    is1DPrcoessing=True
+    #DataSettype = 'CEM1D'
+    leadSensorname = '0xbccb0000_MPU_9250'
+    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/Messungen_CEM/MPU9250CEMnewRef.hdf5"
+    #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280CEM.hdf5"
+    #leadSensorname = '0xbccb0000_BMA_280'
+    #is1DPrcoessing=True
 
     #PTB Filename and sensor Name
     #DataSettype = 'PTB1D'
@@ -1513,22 +1542,28 @@ if __name__ == "__main__":
     #leadSensorname='0xf1030002_MPU_9250'
     #is3DPrcoessing=True
 
+    """
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
         pass
     shutil.copyfile(hdffilename.replace(".hdf5","(copy).hdf5"), hdffilename)
-
+    """
 
     datafile = h5py.File(hdffilename, "r+")
-    test = hdfmet4fofdatafile(datafile,)#sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
+    test = hdfmet4fofdatafile(datafile,)
+    plotRAWTFUncerComps(datafile, type='Phase',sensorName=leadSensorname,
+                        title=None, startIDX=2, stopIDX=19, zoom=2,lang='EN',zoomPlotPos=[0.15,0.62,0.2,0.2])#'Statistische Unsicherheit der Phasenkomponenten der CEM Messungen MPU 9250'
+    plotRAWTFUncerComps(datafile, type='Mag', sensorName=leadSensorname,
+                        title=None, startIDX=2, stopIDX=19,lang='EN')#'Statistische Unsicherheit der Magnitudenkomponenten der CEM Messungen MPU 9250'
+    #sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
     #plotRAWTFUncerComps(datafile, sensorName=leadSensorname,
     #                    title='Uncertainty of the phase components CEM measurments', startIDX=2, stopIDX=19, zoom=5)
     #plotRAWTFUncerComps(datafile, type='Mag', sensorName=leadSensorname,
     #                    title='Uncertainty of the magnitude components CEM measurments', startIDX=2, stopIDX=19)
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration','RAWDATA/' + leadSensorname + '/Absolutetime', treshold=1.3,blocksinrow=100, blocksize=200, plot=True)
-    numofexperiemnts = movementtimes.shape[0]
+    #movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration','RAWDATA/' + leadSensorname + '/Absolutetime', treshold=1.3,blocksinrow=100, blocksize=100, plot=True,plotLabels={'y':r'\textbf{Blockweise Standardabweichung der\\ Beschleunigungs Amplitude in} $\frac{m}{s^2}$','x':'Test','title':'test'})#\\$\sigma(\sqrt{X[0..100]^2+Z[0..100]^2+Z[0..100]^2}$
+    #numofexperiemnts = movementtimes.shape[0]
 
     if is1DPrcoessing:
         manager = multiprocessing.Manager()
