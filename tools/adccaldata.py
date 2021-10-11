@@ -6,22 +6,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 
+
+DPI=160
 plt.rc('font', family='serif')
 plt.rc('text', usetex=True)
-PLTSCALFACTOR = 1.0
+plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
+PLTSCALFACTOR = 1.5
 SMALL_SIZE = 12 * PLTSCALFACTOR
-MEDIUM_SIZE = 15 * PLTSCALFACTOR
+MEDIUM_SIZE = 16 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
-DPI=160
 
 plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
 plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
 plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc("xtick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
-
 def findNearestIDX(array,value):
      idx = (np.abs(array-value)).argmin()
      return idx
@@ -379,11 +380,54 @@ class Met4FOFADCCall:
         )  # will not print anything
         return [fP(freq), fPErr(freq)]
 
-if __name__ == "__main__":
-    ADCTFFull=Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1V95_V195_1HZ_1MHZ.json'])
-    ADCTF = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1HZ_1MHZ.json'])
-    Fig, axs=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE')
-    ADCTF.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=100, PlotType="log", LabelExtension=r'~19.5~V',lang='DE',saveFigName='ADCTF')
+def jsonsplitterFortestVoltages(jsonFile):
+    ouputDicts=[{},{},{}]
+    outIDXFromVoltage={19.5:0,1.95:1,0.195:2}
+    with open(jsonFile) as json_file:
+        tmp = json.load(json_file)
+    metadata = tmp["MeataData"]
+    fitResults = tmp["FitResults"]
+    ouputDicts[0]["MeataData"]=metadata
+    ouputDicts[1]["MeataData"] = metadata
+    ouputDicts[2]["MeataData"] = metadata
+    ouputDicts[0]["FitResults"]={'ADC1':{},'ADC2':{},'ADC3':{}}
+    ouputDicts[1]["FitResults"]={'ADC1':{},'ADC2':{},'ADC3':{}}
+    ouputDicts[2]["FitResults"]={'ADC1':{},'ADC2':{},'ADC3':{}}
+    for ADCname in fitResults.keys():
+        for freq in fitResults[ADCname].keys():
+            for datapointdict in fitResults[ADCname][freq]:
+                examp=datapointdict['TestAmplVPP.']
+                try:
+                    ouputDicts[outIDXFromVoltage[examp]]["FitResults"][ADCname][freq].append(datapointdict)
+                except:
+                    ouputDicts[outIDXFromVoltage[examp]]["FitResults"][ADCname][freq]=[datapointdict]
+    #caldata['FitResults']['ADC1']['1.0'][0]
+    #{'Freq': 1.0, 'Amplitude': 1.0029198553691523, 'Phase': 8.555608677440536e-06, 'TestAmplVPP.': 19.5}
+    return ouputDicts
 
-    Fig2, axs2=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE',startStopFreq=[1,10000])
-    ADCTF.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=100, PlotType="log",LabelExtension=r'~19.5~V' ,lang='DE',saveFigName='ADCTFZoom',startStopFreq=[1,10000])
+
+
+
+
+if __name__ == "__main__":
+    """
+    ouputDicts=jsonsplitterFortestVoltages('../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1V95_V195_1HZ_1MHZ.json')
+    with open('../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1HZ_1MHZ_SPLIT.json', 'w') as outfile:
+        json.dump(ouputDicts[0], outfile)
+    with open('../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_1V95_1HZ_1MHZ_SPLIT.json', 'w') as outfile:
+        json.dump(ouputDicts[1], outfile)
+    with open('../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_0V195_1HZ_1MHZ_SPLIT.json', 'w') as outfile:
+        json.dump(ouputDicts[2], outfile)
+    """
+    ADCTF19V5=Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1HZ_1MHZ_SPLIT.json'])
+    ADCTF1V95 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_1V95_1HZ_1MHZ_SPLIT.json'])
+    ADCTF0V195 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_0V195_1HZ_1MHZ_SPLIT.json'])
+    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",
+                                            LabelExtension=r'~0.195~V',lang='DE')
+    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=100, PlotType="log",
+                                   LabelExtension=r'~1.95~V',lang='DE',saveFigName='ADCTF')
+    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=100, PlotType="log",
+                                   LabelExtension=r'~19.5~V', lang='DE', saveFigName='ADCTF')
+
+    #Fig2, axs2=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE',startStopFreq=[1,10000])
+    #ADCTF.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=100, PlotType="log",LabelExtension=r'~19.5~V' ,lang='DE',saveFigName='ADCTFZoom',startStopFreq=[1,10000])
