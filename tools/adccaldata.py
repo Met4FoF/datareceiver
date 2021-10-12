@@ -11,7 +11,7 @@ DPI=160
 plt.rc('font', family='serif')
 plt.rc('text', usetex=True)
 plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
-PLTSCALFACTOR = 1.5
+PLTSCALFACTOR = 1
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 16 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
@@ -165,18 +165,18 @@ class Met4FOFADCCall:
             ax1.set_xscale("log")
             ax2.set_xscale("log")
         if lang=='EN':
-            labelInterpol=r"Interpolated"
-            lableMeasVals=r"Mesured Values"
+            labelInterpol=r"\textbf{Interpolated}"
+            lableMeasVals=r"\textbf{Mesured Values"
             axisCapRelMag=r"Relative magnitude $|S|$"
-            labelFreq=r"Frequency $f$ in Hz"
-            title="Transfer function of "+ str(Channel)+ " of Board with ID"+ hex(int(BoardID/65536))+ TitleExtension
+            labelFreq=r"\textbf{Frequency $f$ in Hz"
+            title="\textbf{Transfer function of "+ str(Channel)+ " of Board with ID"+ hex(int(BoardID/65536))+ TitleExtension
         elif 'DE':
-            labelInterpol = r"Interpoliert"
-            lableMeasVals = r"Messwerte"
-            axisCapRelMag = r"Relative Magnitude $|S|$"
-            labelFreq = r"Frequenz $f$ in Hz"
-            labelPhase = r"Phase $\Delta\varphi$ in °"
-            title=r"Transferfunction  "+ str(Channel)+ " des Boards mit der ID "+ hex(int(BoardID/65536))+ TitleExtension
+            labelInterpol = r"\textbf{Interpoliert}"
+            lableMeasVals = r"\textbf{Messwerte}"
+            axisCapRelMag = r"\textbf{Relative Magnitude} $|S|$"
+            labelFreq = r"\textbf{Frequenz }$f$ \textbf{in Hz}"
+            labelPhase = r"\textbf{Phase $\varphi$ in °"
+            title=r"\textbf{Transferfunction  "+ str(Channel)+ " des Boards mit der ID "+ hex(int(BoardID/65536))+'}'+ TitleExtension
         Fig.suptitle(title)
         ax1.plot(XInterPol, interPolAmp,ls='dotted',label=labelInterpol + LabelExtension)
         lastcolor = ax1.get_lines()[-1].get_color()
@@ -422,11 +422,11 @@ if __name__ == "__main__":
     ADCTF19V5=Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1HZ_1MHZ_SPLIT.json'])
     ADCTF1V95 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_1V95_1HZ_1MHZ_SPLIT.json'])
     ADCTF0V195 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_0V195_1HZ_1MHZ_SPLIT.json'])
-    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",
+    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC2',interpolSteps=100,PlotType="log",
                                             LabelExtension=r'~0.195~V',lang='DE')
-    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=100, PlotType="log",
+    ADCTF1V95.PlotTransferfunction('ADC2',fig=Fig,ax=axs, interpolSteps=100, PlotType="log",
                                    LabelExtension=r'~1.95~V',lang='DE',saveFigName='ADCTF')
-    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=100, PlotType="log",
+    ADCTF19V5.PlotTransferfunction('ADC2', fig=Fig, ax=axs, interpolSteps=100, PlotType="log",
                                    LabelExtension=r'~19.5~V', lang='DE', saveFigName='ADCTF')
 
     #Fig2, axs2=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE',startStopFreq=[1,10000])
