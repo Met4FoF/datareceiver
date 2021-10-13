@@ -11,7 +11,7 @@ DPI=160
 plt.rc('font', family='serif')
 plt.rc('text', usetex=True)
 plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
-PLTSCALFACTOR = 1
+PLTSCALFACTOR = 3
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 16 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
@@ -410,23 +410,14 @@ def jsonsplitterFortestVoltages(jsonFile):
 
 
 if __name__ == "__main__":
-    """
-    ouputDicts=jsonsplitterFortestVoltages('../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1V95_V195_1HZ_1MHZ.json')
-    with open('../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1HZ_1MHZ_SPLIT.json', 'w') as outfile:
-        json.dump(ouputDicts[0], outfile)
-    with open('../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_1V95_1HZ_1MHZ_SPLIT.json', 'w') as outfile:
-        json.dump(ouputDicts[1], outfile)
-    with open('../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_0V195_1HZ_1MHZ_SPLIT.json', 'w') as outfile:
-        json.dump(ouputDicts[2], outfile)
-    """
-    ADCTF19V5=Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_19V5_1HZ_1MHZ_SPLIT.json'])
-    ADCTF1V95 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_1V95_1HZ_1MHZ_SPLIT.json'])
-    ADCTF0V195 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200318_1FE4_ADC123_0V195_1HZ_1MHZ_SPLIT.json'])
-    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC2',interpolSteps=100,PlotType="log",
+    ADCTF19V5 =  Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_19V5_1HZ_1MHZ.json'])
+    ADCTF1V95 =  Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_1V95_1HZ_1MHZ.json'])
+    ADCTF0V195 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_V195_1HZ_1MHZ.json'])
+    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",
                                             LabelExtension=r'~0.195~V',lang='DE')
-    ADCTF1V95.PlotTransferfunction('ADC2',fig=Fig,ax=axs, interpolSteps=100, PlotType="log",
+    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=100, PlotType="log",
                                    LabelExtension=r'~1.95~V',lang='DE',saveFigName='ADCTF')
-    ADCTF19V5.PlotTransferfunction('ADC2', fig=Fig, ax=axs, interpolSteps=100, PlotType="log",
+    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=100, PlotType="log",
                                    LabelExtension=r'~19.5~V', lang='DE', saveFigName='ADCTF')
 
     #Fig2, axs2=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE',startStopFreq=[1,10000])
