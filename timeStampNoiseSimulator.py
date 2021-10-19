@@ -3,37 +3,161 @@ import matplotlib.pyplot as plt
 import sinetools.SineTools as st
 from multiprocessing import Pool
 from tqdm.contrib.concurrent import process_map
+from matplotlib import cm
 
-def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=30):
-    originalTimpoints=np.linspace(0,lengthInS,num=fs*lengthInS)
+plt.rc('font', family='serif')
+plt.rc('text', usetex=True)
+plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
+PLTSCALFACTOR = 2
+SMALL_SIZE = 12 * PLTSCALFACTOR
+MEDIUM_SIZE = 16 * PLTSCALFACTOR
+BIGGER_SIZE = 18 * PLTSCALFACTOR
+
+plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
+plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
+plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+plt.rc("xtick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
+plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=0.1):
+    originalTimpoints=np.linspace(0,lengthInS,num=int(fs*lengthInS))
     Signal=np.sin(originalTimpoints*np.pi*2*freq)
     timeWJitter=originalTimpoints+np.random.normal(scale=t_jitter,size=Signal.size)
     fitparams=st.threeparsinefit(Signal,timeWJitter,freq)
-    return st.phase(fitparams)
+    return st.phase(fitparams),st.amplitude(fitparams)
 
 def getmuAndSTdForFreq(testparams,numOfruns=100):
     freq=testparams[0]
     t_jitter=testparams[1]
+    length = testparams[2]
     FitPhases=np.zeros(numOfruns)
+    FitMags=np.zeros(numOfruns)
     for i in range(numOfruns):
-        FitPhases[i]=generateFitWithPhaseNoise(freq,t_jitter=t_jitter)
-    return np.std(FitPhases),np.mean(FitPhases)
+        FitPhases[i],FitMags[i]=generateFitWithPhaseNoise(freq,t_jitter=t_jitter,lengthInS=length)
+    return np.std(FitPhases),np.mean(FitPhases),np.std(FitMags),np.mean(FitMags)
 
-freqPoints=100
-ampPoints=10
-freqs=np.zeros(freqPoints*ampPoints)
-noiseLevel=np.zeros(freqPoints*ampPoints)
-for i in range(ampPoints):
-    tmpFreqs=np.logspace(1.00,5.00,freqPoints)
-    freqToNear=(tmpFreqs % 1000) < 5
-    freqToNear+=(tmpFreqs % 500) < 5
-    freqToAdd=10*freqToNear
-    tmpFreqs+=freqToAdd
-    tmpNoiseLevel=np.ones(freqPoints)*i*10e-9
-    freqs[i*freqPoints:(i+1)*freqPoints]=tmpFreqs
-    noiseLevel[i * freqPoints:(i + 1) * freqPoints] = tmpNoiseLevel
-testparams=np.array([freqs,noiseLevel]).transpose()
-results=process_map(getmuAndSTdForFreq, testparams, max_workers=4)
-results=np.array(results)
-plt.plot(freqs,results[:,0]/np.pi*180)
-plt.plot(freqs,results[:,1]/np.pi*180)
+if __name__ == "__main__":
+
+    freqPoints=200
+    ampPoints=6
+    nsPreAmpStep=20
+    lengthInS=10
+    freqs=np.zeros(freqPoints*ampPoints)
+    noiseLevel=np.zeros(freqPoints*ampPoints)
+    for i in range(ampPoints):
+        tmpFreqs=np.logspace(1.00,3.30,freqPoints)
+        freqToNear=(tmpFreqs % 1000) < 5
+        freqToNear+=(tmpFreqs % 500) < 5
+        freqToAdd=10*freqToNear
+        tmpFreqs+=freqToAdd
+        tmpNoiseLevel=np.ones(freqPoints)*i*nsPreAmpStep*10e-9
+        freqs[i*freqPoints:(i+1)*freqPoints]=tmpFreqs
+        noiseLevel[i * freqPoints:(i + 1) * freqPoints] = tmpNoiseLevel
+    length=np.ones(freqs.size)*lengthInS
+    testparams=np.array([freqs,noiseLevel,length]).transpose()
+    results=process_map(getmuAndSTdForFreq, testparams, max_workers=7)
+    results=np.array(results)
+    fig,ax=plt.subplots(2)
+    fig.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = "+str(lengthInS)+' s}')
+    for i in range(ampPoints):
+        ax[0].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
+                   2*results[i * freqPoints: (i + 1) * freqPoints,0]/np.pi*180,
+                   label=r"\textbf{jitter= "+str(i*nsPreAmpStep)+" ns}")
+        ax[1].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
+                   results[i * freqPoints: (i + 1) * freqPoints, 1] / np.pi * 180,
+                   label=r"\textbf{jitter= " + str(i * nsPreAmpStep) + " ns}")
+    ax[0].legend()
+    ax[1].legend()
+    ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+    ax[0].set_ylabel(r"$2\sigma \varphi$ \textbf{in} $^\circ$")
+    ax[1].set_ylabel(r"$\overline{\varphi}$ \textbf{in} $^\circ$")
+    ax[0].grid(True)
+    ax[1].grid(True)
+
+    fig.show()
+
+    fig1,ax=plt.subplots(2)
+    fig1.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = "+str(lengthInS)+' s}')
+    for i in range(ampPoints):
+        ax[0].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
+                   200*results[i * freqPoints: (i + 1) * freqPoints,2],
+                   label=r"\textbf{jitter= "+str(i*nsPreAmpStep)+" ns}")
+        ax[1].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
+                   results[i * freqPoints: (i + 1) * freqPoints, 3],
+                   label=r"\textbf{jitter= " + str(i * nsPreAmpStep) + " ns}")
+    ax[0].legend()
+    ax[1].legend()
+    ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+    ax[0].set_ylabel(r"$2\sigma(\hat{A})$ \textbf{in \%}")
+    ax[1].set_ylabel(r"$\overline{\hat{A}}$ \textbf{in A.U.}")
+    ax[0].grid(True)
+    ax[1].grid(True)
+
+    fig1.show()
+
+    """
+    fig2 = plt.figure()
+    ax2 = fig2.add_subplot(111, projection='3d')
+    surf=ax2.plot_trisurf(freqs, noiseLevel, results[:, 0],cmap=cm.coolwarm)
+    fig2.colorbar(surf, shrink=0.5, aspect=5)
+    fig2.show()
+    """
+    lengthPoints=15
+    StartLength=64
+    noiseLevelToUse=100*10e-9
+    freqs=np.zeros(freqPoints*lengthPoints)
+    noiseLevel=np.zeros(freqPoints*lengthPoints)
+    length = np.ones(freqs.size)
+    for i in range(lengthPoints):
+        tmpFreqs=np.logspace(1.00,3.3,freqPoints)
+        freqToNear=(tmpFreqs % 1000) < 5
+        freqToNear = (tmpFreqs % 1000) > 995
+        freqToNear+=(tmpFreqs % 500) < 5
+        freqToNear += (tmpFreqs % 500) > 495
+        freqToAdd=10*freqToNear
+        tmpFreqs+=freqToAdd
+        tmpNoiseLevel=np.ones(freqPoints)*noiseLevelToUse
+        freqs[i*freqPoints:(i+1)*freqPoints]=tmpFreqs
+        noiseLevel[i * freqPoints:(i + 1) * freqPoints] = tmpNoiseLevel
+        length[i * freqPoints:(i + 1) * freqPoints]=StartLength/((i+1)*(i+1))
+    testparams=np.array([freqs,noiseLevel,length]).transpose()
+    results=process_map(getmuAndSTdForFreq, testparams, max_workers=7)
+    results=np.array(results)
+    fig2,ax=plt.subplots(2)
+    fig2.suptitle(r"\textbf{SampleRate = 1 kHz Jitter = 100 ns}")
+    for i in range(lengthPoints):
+        ax[0].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
+                   2*results[i * freqPoints: (i + 1) * freqPoints,0]/np.pi*180,
+                   label=r"\textbf{Dauer= "+"{:.2f}".format(StartLength/((i+1)*(i+1)))+" s}")
+        ax[1].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
+                   results[i * freqPoints: (i + 1) * freqPoints, 1] / np.pi * 180,
+                   label=r"\textbf{Dauer = " + "{:.2f}".format(StartLength/((i+1)*(i+1))) + " s}")
+    ax[0].legend(ncol=2)
+    ax[1].legend(ncol=2)
+    ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+    ax[0].set_ylabel(r"$2\sigma(\varphi)$ \textbf{in} $^\circ$")
+    ax[1].set_ylabel(r"$\overline{\varphi}$ \textbf{in} $^\circ$")
+    ax[0].grid(True)
+    ax[1].grid(True)
+
+    fig2.show()
+
+    fig3,ax=plt.subplots(2)
+    fig3.suptitle(r"\textbf{SampleRate = 1 kHz Jitter = 100 ns}")
+    for i in range(lengthPoints):
+        ax[0].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
+                   2*results[i * freqPoints: (i + 1) * freqPoints,2]*100,
+                   label=r"\textbf{Dauer= "+"{:.2f}".format(StartLength/((i+1)*(i+1)))+" s}")
+        ax[1].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
+                   results[i * freqPoints: (i + 1) * freqPoints, 3],
+                   label=r"\textbf{Dauer = " + "{:.2f}".format(StartLength/((i+1)*(i+1))) + " s}")
+    ax[0].legend(ncol=2)
+    ax[1].legend(ncol=2)
+    ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+    ax[0].set_ylabel(r"$2\sigma(\hat{A})$ \textbf{in \%}")
+    ax[1].set_ylabel(r"$\overline{\hat{A}}$ \textbf{in A.U.}")
+    ax[0].grid(True)
+    ax[1].grid(True)
+    fig3.show()
