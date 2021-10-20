@@ -10,6 +10,9 @@ def gaus(x,a,sigma):
     x0=0
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
+def logGisticPICaped(x,k,x0,L):
+    return L/(1+np.exp(-k*(x-x0)))
+
 plt.rc('font', family='serif')
 plt.rc('text', usetex=True)
 plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
@@ -52,7 +55,7 @@ if __name__ == "__main__":
     freqs=np.zeros(freqPoints*ampPoints)
     noiseLevel=np.zeros(freqPoints*ampPoints)
     for i in range(ampPoints):
-        tmpFreqs=np.logspace(1.00,3.3,freqPoints)
+        tmpFreqs=np.logspace(1.00,6.0,freqPoints)
         freqToNear=(tmpFreqs % 1000) < 5
         freqToNear+=(tmpFreqs % 500) < 5
         freqToAdd=10*freqToNear
@@ -64,24 +67,6 @@ if __name__ == "__main__":
     testparams=np.array([freqs,noiseLevel,length]).transpose()
     results=process_map(getmuAndSTdForFreq, testparams, max_workers=7)
     results=np.array(results)
-    fig,ax=plt.subplots(2)
-    fig.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = "+str(lengthInS)+' s}')
-    for i in range(ampPoints):
-        ax[0].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
-                   2*results[i * freqPoints: (i + 1) * freqPoints,0]/np.pi*180,
-                   label=r"\textbf{jitter= "+str(i*nsPreAmpStep)+" ns}")
-        ax[1].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
-                   results[i * freqPoints: (i + 1) * freqPoints, 1] / np.pi * 180,
-                   label=r"\textbf{jitter= " + str(i * nsPreAmpStep) + " ns}")
-    ax[0].legend(ncol=4)
-    ax[1].legend(ncol=4)
-    ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
-    ax[0].set_ylabel(r"$2\sigma \varphi$ \textbf{in} $^\circ$")
-    ax[1].set_ylabel(r"$\overline{\varphi}$ \textbf{in} $^\circ$")
-    ax[0].grid(True)
-    ax[1].grid(True)
-
-    fig.show()
     bw=np.ones(ampPoints)
     fig1,ax=plt.subplots(2)
     fig1.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = "+str(lengthInS)+' s}')
@@ -110,9 +95,39 @@ if __name__ == "__main__":
     ax[1].set_ylabel(r"$\overline{\hat{A}}$ \textbf{in R.U.}")
     ax[0].grid(True)
     ax[1].grid(True)
-
     fig1.show()
 
+    fig, ax = plt.subplots(2)
+    fig.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = " + str(lengthInS) + ' s}')
+    for i in range(ampPoints):
+        tmpFreqs = freqs[i * freqPoints: (i + 1) * freqPoints]
+        sigmaPhase = results[i * freqPoints: (i + 1) * freqPoints, 0]
+        dataPlot = ax[0].plot(tmpFreqs,
+                              2 * sigmaPhase / np.pi * 180,
+                              label=r"\textbf{jitter= " + str(i * nsPreAmpStep) + " ns}")
+        ax[1].plot(tmpFreqs,
+                   results[i * freqPoints: (i + 1) * freqPoints, 1] / np.pi * 180,
+                   label=r"\textbf{jitter= " + str(i * nsPreAmpStep) + " ns}")
+        """
+        if i != 0:
+            popt, pcov = curve_fit(logGisticPICaped, tmpFreqs, sigmaPhase, p0=[0.001, bw[i],np.pi])
+            ax[0].plot(tmpFreqs, logGisticPICaped(tmpFreqs, popt[0], popt[1], popt[2]) / (np.pi * 180),
+                       label=r"\textbf{ Fit Bandbreite = }" + "{:.2f}".format(abs(popt[1]) / 1e6) + " MHz",
+                       color=dataPlot[-1].get_color(), ls='--')
+            bw[i] = popt[1]
+            print('______' + str(i * nsPreAmpStep) + ' ns ___________')
+            print(popt)
+            print(popt[1] / (i * nsPreAmpStep * 10e-9) * (i * nsPreAmpStep * 10e-9))
+            print('_____________________________________________')
+        """
+    ax[0].legend(ncol=4)
+    ax[1].legend(ncol=4)
+    ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+    ax[0].set_ylabel(r"$2\sigma \varphi$ \textbf{in} $^\circ$")
+    ax[1].set_ylabel(r"$\overline{\varphi}$ \textbf{in} $^\circ$")
+    ax[0].grid(True)
+    ax[1].grid(True)
+    fig.show()
     """
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, projection='3d')
