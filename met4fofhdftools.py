@@ -1095,32 +1095,18 @@ if __name__ == "__main__":
     folder = r"/media/benedikt/nvme/data/strath/DOE2"
     #reffile = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
     # find all dumpfiles in folder matching str
-    dumpfilenames = findfilesmatchingstr(folder, r".dump")  # input file name
-    hdffilename = folder+r"Radial-Forge-Data-DOE2-SensorData.hdf5"
-    try:
-        os.remove(hdffilename)
-    except FileNotFoundError:
-        pass
-    for dumpfilename in dumpfilenames:
-        #if dumpfilename.find("MPU_9250") != -1:
-        #    adddumptohdf(dumpfilename, hdffilename, extractadcdata=True)
-        #if dumpfilename.find("MS5837") != -1:
-        #    adddumptohdf(dumpfilename, hdffilename, correcttimeglitches=False)
-        #    print("skipping MS5837 data")
-        #else:
-        adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
-    """
+
     # find al spektra reference files
     #reffilenames = findfilesmatchingstr(folder, 'prp.txt')
     # parse spektra reference files
     #cemref=spektraprptohdfref(reffilenames)
-    hdffilename='/media/benedikt/nvme/data/BMACEMPTB/CEM/BMA280CEM.hdf5'
-    folder = r"/media/benedikt/nvme/data/BMACEMPTB/CEM/"
-
+    """
+    hdffilename='/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5'
+    folder = r"/home/benedikt/data/IMUPTBCEM/PTB/"
     dumpfilenames = findfilesmatchingstr(folder, r".dump")  # input file name
     for dumpfilename in dumpfilenames:
-        # if dumpfilename.find("MPU_9250") != -1:
-        #    adddumptohdf(dumpfilename, hdffilename, extractadcdata=True)
+        if dumpfilename.find("MPU_9250") != -1:
+            adddumptohdf(dumpfilename, hdffilename, extractadcdata=True,correcttimeglitches=True)
         if dumpfilename.find("BMA_280") != -1:
             adddumptohdf(dumpfilename, hdffilename, extractadcdata=True,correcttimeglitches=True)
         # if dumpfilename.find("MS5837") != -1:
@@ -1128,30 +1114,15 @@ if __name__ == "__main__":
         #    print("skipping MS5837 data")
         # else:
         # adddumptohdf(dumpfilename, hdffilename, extractadcdata=False)
+    """
     csvfilenames = findfilesmatchingstr(folder, 'results_with_uncer.csv')
 
     cemref=spektraCSVtohdfref(csvfilenames)
+    """
     hdffile = h5py.File(hdffilename, "a")
-    addadctransferfunctiontodset(hdffile, '0xbccb0a00_STM32_Internal_ADC', [
-        r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
-    add1dsinereferencedatatohdffile(cemref, hdffile, "CEM HF acceleration standard", 2, isdeg=True,overWrite=True)
-    # find all dumpfiles in folder matching str
+    addadctransferfunctiontodset(hdffile, '0x1fe40a00_STM32_Internal_ADC', ['cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_19V5_1HZ_1MHZ.json'])
+    ptbref=r"/home/benedikt/data/IMUPTBCEM/PTB/20200907160043_MPU_9250_0x1fe40000_metallhalter_sensor_sensor_SN31_WDH3_Ref_TF.csv"
+    add1dsinereferencedatatohdffile(ptbref, hdffile, "PTB HF acceleration standard", 2, isdeg=True,overWrite=True)
+    hdffile.flush()
+    hdffile.close()
 
-    #hdffile.flush()
-    #hdffile.close()
-    # add reference file
-    #add1dsinereferencedatatohdffile(reffile, hdffile, "PTB HF acceleration standard", 2, isdeg=True)
-    #addadctransferfunctiontodset(hdffile,'0xbccb0a00_STM32_Internal_ADC', [r"/home/benedikt/datareceiver/cal_data/BCCB_AC_CAL/201006_BCCB_ADC123_3CLCES_19V5_1HZ_1MHZ.json"])
-    #addadctransferfunctiontodset(
-    #   hdffile,
-    #   "0x1fe40a00_STM32_Internal_ADC",
-    #   [
-    #       r"/home/benedikt/datareceiver/cal_data/1FE4_AC_CAL/200615_1FE4_ADC123_3CLCES_19V5_1HZ_1MHZ.json"
-    #   ],
-    #)
-    #hdffile.close()
-
-    # hdffilename = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\Test2 XY 10_4Hz.hdf5"
-    # TDMSDatafile = r"D:\data\MessdatenTeraCube\Test2_XY 10_4Hz\27_10_2020_122245\Spannung.tdms"
-    # hdffile=h5py.File(hdffilename, 'a')
-    # add3compTDMSData(TDMSDatafile, hdffile)

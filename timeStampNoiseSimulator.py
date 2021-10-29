@@ -5,6 +5,7 @@ from multiprocessing import Pool
 from tqdm.contrib.concurrent import process_map
 from matplotlib import cm
 from scipy.optimize import curve_fit
+import h5py as h5py
 
 def gaus(x,a,sigma):
     x0=0
@@ -29,10 +30,44 @@ plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE/1.5)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=0.1):
+
+
+class realWordJitterGen:
+
+    def __init__(self,HDfFile,sensorName):
+        self.datafile=HDfFile
+        self.Dataset=self.datafile['RAWDATA/'+sensorName+'/Absolutetime']
+        self.dataPoints=self.datafile['RAWDATA/'+sensorName].attrs['Data_point_number']# use only valide points
+        self.timeData=(self.Dataset[0,0:self.dataPoints]-self.Dataset[0,0])/1e9# substract first point to avoid precisionlos with f64 the divide by 1e9 to ahve seconds
+        self.length=self.timeData[-1]-self.timeData[0] #calculate length of dataSet
+        self.fs=self.dataPoints/(self.length) #calculate smaple freq
+        self.deltaT=self.length/(self.dataPoints-1)
+        print("Sample frequenc is "+str(self.fs)+' Hz')
+        self.expectedTime=np.arange(self.dataPoints)*self.deltaT
+        self.deviationFromNominal=self.timeData-self.expectedTime#calulate deviation from Expected Mean
+
+    def plotDeviation(self):
+        fig,ax=plt.subplots()
+        ax.plot(self.timeData,self.deviationFromNominal)
+        fig.show()
+
+    def getrandomDeviations(self,length):
+        idx=np.random.randint(self.dataPoints-(length+1))
+        return self.deviationFromNominal[idx:idx+length]
+
+dataFile = h5py.File('/home/benedikt/Downloads/jitter_recording.hfd5','r')
+sensorName='0xe0040100_BMA_280'
+jitterGen=realWordJitterGen(dataFile,sensorName)
+
+
+def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=0.1,jitterGen=jitterGen):
     originalTimpoints=np.linspace(0,lengthInS,num=int(fs*lengthInS))
     Signal=np.sin(originalTimpoints*np.pi*2*freq)
-    timeWJitter=originalTimpoints+np.random.normal(scale=t_jitter,size=Signal.size)
+    if t_jitter >=0:
+        jitter=np.random.normal(scale=t_jitter, size=Signal.size)
+    else:
+        jitter=jitterGen.getrandomDeviations(Signal.size)
+    timeWJitter=originalTimpoints+jitter
     fitparams=st.threeparsinefit(Signal,timeWJitter,freq)
     return st.phase(fitparams),st.amplitude(fitparams)
 
@@ -46,21 +81,23 @@ def getmuAndSTdForFreq(testparams,numOfruns=100):
         FitPhases[i],FitMags[i]=generateFitWithPhaseNoise(freq,t_jitter=t_jitter,lengthInS=length)
     return np.std(FitPhases),np.mean(FitPhases),np.std(FitMags),np.mean(FitMags)
 
+
 if __name__ == "__main__":
 
+    jitterGen.plotDeviation()
     freqPoints=200
-    ampPoints=12
+    ampPoints=13
     nsPreAmpStep=10
     lengthInS=10
     freqs=np.zeros(freqPoints*ampPoints)
     noiseLevel=np.zeros(freqPoints*ampPoints)
     for i in range(ampPoints):
-        tmpFreqs=np.logspace(1.00,6.0,freqPoints)
+        tmpFreqs=np.logspace(1.00,7.0,freqPoints)
         freqToNear=(tmpFreqs % 1000) < 5
         freqToNear+=(tmpFreqs % 500) < 5
         freqToAdd=10*freqToNear
         tmpFreqs+=freqToAdd
-        tmpNoiseLevel=np.ones(freqPoints)*i*nsPreAmpStep*10e-9
+        tmpNoiseLevel=np.ones(freqPoints)*(i-1)*nsPreAmpStep*10e-9
         freqs[i*freqPoints:(i+1)*freqPoints]=tmpFreqs
         noiseLevel[i * freqPoints:(i + 1) * freqPoints] = tmpNoiseLevel
     length=np.ones(freqs.size)*lengthInS
@@ -72,14 +109,18 @@ if __name__ == "__main__":
     fig1.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = "+str(lengthInS)+' s}')
     for i in range(ampPoints):
         tmpFreqs=freqs[i * freqPoints: (i + 1) * freqPoints]
+        if i==0:
+            label=r"\textbf{Reale Zeitabweichungen}"
+        else:
+            label=r"\textbf{Jitter = " + str((i-1) * nsPreAmpStep) + " ns}"
         ax[0].plot(tmpFreqs,
                    200*results[i * freqPoints: (i + 1) * freqPoints,2],
-                   label=r"\textbf{Jitter = "+str(i*nsPreAmpStep)+" ns}")
+                   label=label)
         AMPS=results[i * freqPoints: (i + 1) * freqPoints, 3]
         dataPlot=ax[1].plot(tmpFreqs,
                    AMPS,
-                   label=r"\textbf{Jitter = " + str(i * nsPreAmpStep) + " ns}")
-        if i!=0:
+                   label=label)
+        if i!=1:
             popt, pcov = curve_fit(gaus, tmpFreqs, AMPS, p0=[1, 5e5])
             ax[1].plot(tmpFreqs,gaus(tmpFreqs,popt[0],popt[1]),label=r"\textbf{ Fit Bandbreite = }"+"{:.2f}".format(abs(popt[1])/1e6)+" MHz",color=dataPlot[-1].get_color(),ls='--')
             bw[i]=popt[1]
@@ -100,14 +141,18 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(2)
     fig.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = " + str(lengthInS) + ' s}')
     for i in range(ampPoints):
+        if i==0:
+            label=r"\textbf{Reale Zeitabweichungen}"
+        else:
+            label=r"\textbf{Jitter = " + str((i-1) * nsPreAmpStep) + " ns}"
         tmpFreqs = freqs[i * freqPoints: (i + 1) * freqPoints]
         sigmaPhase = results[i * freqPoints: (i + 1) * freqPoints, 0]
         dataPlot = ax[0].plot(tmpFreqs,
                               2 * sigmaPhase / np.pi * 180,
-                              label=r"\textbf{jitter= " + str(i * nsPreAmpStep) + " ns}")
+                              label=label)
         ax[1].plot(tmpFreqs,
                    results[i * freqPoints: (i + 1) * freqPoints, 1] / np.pi * 180,
-                   label=r"\textbf{jitter= " + str(i * nsPreAmpStep) + " ns}")
+                   label=label)
         """
         if i != 0:
             popt, pcov = curve_fit(logGisticPICaped, tmpFreqs, sigmaPhase, p0=[0.001, bw[i],np.pi])

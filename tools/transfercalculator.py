@@ -37,6 +37,7 @@ from met4fofhdftools import (
 )  # uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
 
 import scipy
+from scipy.spatial.transform import Rotation as R
 
 
 def ufloattouncerval(ufloat):
@@ -57,7 +58,7 @@ def angVar(data,mean):
 
 
 
-def getplotableunitstring(unitstr, Latex=False):
+def getplotableunitstring(unitstr, Latex=True):
     if not Latex:
         convDict = {
             "\\degreecelsius": "°C",
@@ -74,7 +75,7 @@ def getplotableunitstring(unitstr, Latex=False):
         convDict = {
             "\\degreecelsius": "$^\circ C$",
             "\\degree": "$^\circ$",
-            "\\micro\\tesla": "$\micro T$",
+            "\\micro\\tesla": "$\mu T$",
             "\\radian\\second\\tothe{-1}": "$\\frac{rad}{s}$",
             "\\metre\\second\\tothe{-2}": "$\\frac{m}{s^2}$",
             "\\metre\\second\\tothe{-1}": "$\\frac{m}{s}$",
@@ -601,7 +602,6 @@ class sineexcitation(experiment):
                     reltime,
                     f0,
                     periods=periods,
-                    multiTasiking=False,
                     returnSectionStartTimes=True
                 )
                 sineparamsWstartTime=np.transpose(np.vstack([np.transpose(sineparams),sectionStartTimes]))
@@ -619,7 +619,6 @@ class sineexcitation(experiment):
                         reltime,
                         f0,
                         periods=periods,
-                        multiTasiking=False,
                         returnSectionStartTimes=True
                     )
                     sineparamsWstartTime = np.transpose(np.vstack([np.transpose(sineparams), sectionStartTimes]))
@@ -910,6 +909,121 @@ class sineexcitation(experiment):
                 irow = irow + 1
             icol = icol + 1
         fig.show()
+
+    def orbitViewFit(self,dataSetNames=['0x1fe40000_MPU_9250'],timePoints=1000,useDC=False,equalScale=True,upscalingFactor=10,fig=None,ax=None,z_ang=0):
+
+        i=0
+        for dSetName in dataSetNames:
+            quantities=self.met4fofdatafile.sensordatasets[dSetName]
+            if 'Acceleration' in quantities:
+                AccDset=self.data[dSetName]['Acceleration']
+                print('Acceleration Found')
+
+                sinparams = AccDset["SinPOpt"]
+                accxyz=np.zeros([3,timePoints])
+                velxyz = np.zeros([3, timePoints])
+                subaccxy = np.zeros([3, timePoints * upscalingFactor])
+                accamp=np.zeros(3)
+                f0 = sinparams[2, 2] #taking z axis time
+                time=np.arange(timePoints)*(1/(f0*timePoints))
+                subdeltaT = (1 / (f0*timePoints * upscalingFactor))
+                subTimePoints = np.arange(timePoints * upscalingFactor) * subdeltaT * 2
+                for i in range(3):
+
+                    if useDC:
+                        accdc = sinparams[i, 1]
+                    else:
+                        accdc=0
+                    accamp[i] = sinparams[i, 0]
+                    accphi = sinparams[i, 3]
+                    accxyz[i,:] = np.sin(2 * np.pi  * time*f0 + accphi) * accamp[i] + accdc
+                    velxyz[i, :] = np.sin(2 * np.pi  * time *f0+ accphi-np.pi/2) * accamp[i]/(2*np.pi*f0) + accdc
+                    subaccxy[i, :] = np.sin(2 * np.pi * subTimePoints*f0 + accphi) * accamp[i]
+                if 'Angular_velocity' in quantities:
+                    angVelDset = self.data[dSetName]['Acceleration']
+                    print('Angular Velocity Found')
+                    angVarsinparams = angVelDset["SinPOpt"]
+                    angVelxyz = np.zeros([3, timePoints])
+                    angxyz = np.zeros([3, timePoints])
+
+                    subangxy=np.zeros([3,timePoints*upscalingFactor])
+
+                    for i in range(3):
+                        if useDC:
+                            dc = angVarsinparams[i, 1]
+                        else:
+                            dc = 0
+                        amp = angVarsinparams[i, 0]
+                        phi = angVarsinparams[i, 3]
+                        angVelxyz[i, :] = np.sin(2 * np.pi  * time*f0 + phi) * amp + dc
+                        angxyz[i, :] = -np.cos(2 * np.pi * time *f0+ phi ) * amp / (2 * np.pi * f0) + dc
+                        #angxyz[i, :]=angxyz[i, :] -angxyz[i, 0]
+                        subangxy[i,:] = -np.cos(2 * np.pi * subTimePoints*f0 + phi) * amp / (2 * np.pi * f0) + dc
+                        #subangxy[i, :]=subangxy[i,:] -subangxy[i,0]
+                    posxyz =np.zeros([3,timePoints*upscalingFactor])
+                    posxyzwoROT = np.zeros([3, timePoints * upscalingFactor])
+                    velwoROT = np.zeros([3, timePoints * upscalingFactor])
+                    velInNavFrame = np.zeros([3, timePoints * upscalingFactor])
+                    accInNavFrame = np.zeros([3, timePoints * upscalingFactor])
+                    for i in range((timePoints*upscalingFactor-1)):
+                        #if i%10000==0:
+                        #    print(str(i/10000) +'%')
+                        rotvec=subangxy[:,i]+np.array([0,0,z_ang])
+                        r= R.from_rotvec(rotvec)
+                        accInNavFrame[:,i] = r.apply(subaccxy[:,i])
+                        velwoROT[:,i+1]=velwoROT[:,i]+subaccxy[:,i]*subdeltaT
+                        velInNavFrame[:,i+1]=velInNavFrame[:,i]+accInNavFrame[:,i]*subdeltaT
+                        posxyz[:,i]=posxyz[:,i]+velInNavFrame[:,i+1]*subdeltaT
+                        posxyzwoROT[:, i] = posxyzwoROT[:, i] + velwoROT[:, i + 1]* subdeltaT
+        """
+        fig1 = plt.figure()
+        ax1 = fig.gca(projection='3d')
+        ax1.plot(accxyz[0,:], accxyz[1,:], accxyz[2,:])
+        ax1.legend()
+
+        if equalScale:
+            plotLimt = 1.05 * np.max(sinparams[:, 0])
+            ax1.set_xlim3d(-plotLimt, plotLimt)
+            ax1.set_ylim3d(-plotLimt, plotLimt)
+            ax1.set_zlim3d(-plotLimt, plotLimt)
+        ax1.quiver(-accamp[0], 0, 0, 2*accamp[0], 0, 0, color='red')
+        ax1.quiver(0, -accamp[1], 0, 0, 2*accamp[1], 0, color='green')
+        ax1.quiver(0, 0, -accamp[2], 0, 0, 2*accamp[2], color='blue')
+        fig.show()
+        """
+        if fig==None and ax==None:
+            fig2 = plt.figure()
+            ax2 = fig2.gca(projection='3d')
+        else:
+            fig2=fig
+            ax2=ax
+        ax2.plot(posxyzwoROT[0, ::upscalingFactor], posxyzwoROT[1, ::upscalingFactor], posxyzwoROT[2, ::upscalingFactor])
+        ax2.plot(posxyz[0,::upscalingFactor], posxyz[1,::upscalingFactor], posxyz[2,::upscalingFactor])
+        if equalScale:
+            plotLimt = 1.05 * np.max(abs(posxyz))
+            ax2.set_xlim3d(-plotLimt, plotLimt)
+            ax2.set_ylim3d(-plotLimt, plotLimt)
+            ax2.set_zlim3d(-plotLimt, plotLimt)
+        xmin=np.min(posxyz[0,:])
+        xmax = np.max(posxyz[0, :])
+        ymin = np.min(posxyz[1, :])
+        ymax = np.max(posxyz[1, :])
+        zmin = np.min(posxyz[2, :])
+        zmax = np.max(posxyz[2, :])
+        ax2.quiver(xmin, 0, 0, xmax-xmin, 0, 0, color='red')
+        ax2.quiver(0, ymin, 0, 0, ymax-ymin, 0, color='green')
+        ax2.quiver(0, 0, zmin, 0, 0, zmax-zmin, color='blue')
+        ax2.legend()
+        fig2.show()
+        """
+        fig5, ax5 = plt.subplots()
+        ax5.plot(posxyz[0, :])
+        ax5.plot(posxyz[1, :])
+        ax5.plot(posxyz[2, :])
+        fig5.show()
+        """
+        print("Done")
+        return fig2,ax2
 
     def calculatetanloguephaseref1freq(
         self,
@@ -1326,22 +1440,6 @@ def plotRotations(Rotations,Names,linestyles):
     ax.set_zlim([-1.1, 1.1])
     plt.show()
 
-
-"""
-BMAxphase = []
-BMAyphase = []
-BMAzphase = []
-BMAfreq = []
-for freq in BMAPhaseVecs.keys():
-    for experiment in BMAPhaseVecs[freq]['DELTA']:
-        BMAxphase.append(experiment[0])
-        BMAyphase.append(experiment[1])
-        BMAzphase.append(experiment[2])
-        BMAfreq.append(float(freq))
-plt.plot(BMAfreq, BMAzphase, 'x')
-"""
-
-
 def copyHFDatrrs(source, dest):
     for key in list(source.attrs.keys()):
         dest.attrs[key] = source.attrs[key]
@@ -1502,9 +1600,9 @@ def processdata(i):
 if __name__ == "__main__":
 
     plt.rc('font', family='serif')
-    plt.rc('text', usetex=True)
+    #plt.rc('text', usetex=True)
     plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
-    PLTSCALFACTOR = 3
+    PLTSCALFACTOR = 0.5
     SMALL_SIZE = 12 * PLTSCALFACTOR
     MEDIUM_SIZE = 16 * PLTSCALFACTOR
     BIGGER_SIZE = 18 * PLTSCALFACTOR
@@ -1517,7 +1615,7 @@ if __name__ == "__main__":
     plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
     plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-    is1DPrcoessing = False
+    is1DPrcoessing = True
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
@@ -1529,9 +1627,9 @@ if __name__ == "__main__":
     #is1DPrcoessing=True
 
     #PTB Filename and sensor Name
-    #DataSettype = 'PTB1D'
-
-    hdffilename = r"/media/benedikt/nvme/data/IMUPTBCEM/WDH3/MPU9250PTBnewRef.hdf5"
+    DataSettype = 'PTB1D'
+    #hdffilename = r"/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
+    hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
     leadSensorname = '0x1fe40000_MPU_9250'
 
     #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280PTB.hdf5"
@@ -1541,29 +1639,23 @@ if __name__ == "__main__":
     #hdffilename='/media/benedikt/nvme/data/zema_dynamic_cal/tmp/zyx_250_10_delta_10Hz_50ms2max_WROT.hdf5'
     #leadSensorname='0xf1030002_MPU_9250'
     #is3DPrcoessing=True
-
-    """
     try:
         os.remove(hdffilename)
     except FileNotFoundError:
         pass
     shutil.copyfile(hdffilename.replace(".hdf5","(copy).hdf5"), hdffilename)
-    """
+
 
     datafile = h5py.File(hdffilename, "r+")
     test = hdfmet4fofdatafile(datafile,)
-    plotRAWTFUncerComps(datafile, type='Phase',sensorName=leadSensorname,
-                        title=None, startIDX=0, stopIDX=17, zoom=2,lang='DE',zoomPlotPos=[0.15,0.62,0.2,0.2])#'Statistische Unsicherheit der Phasenkomponenten der CEM Messungen MPU 9250'
-    plotRAWTFUncerComps(datafile, type='Mag', sensorName=leadSensorname,
-                        title=None, startIDX=0, stopIDX=17,lang='DE')#'Statistische Unsicherheit der Magnitudenkomponenten der CEM Messungen MPU 9250'
     #sensornames=['0x00000200_OptoMet_Velocity_from_counts','0xf1030002_MPU_9250', '0xf1030100_BMA_280','0x00000000_Kistler_8712A5M1'],dataGroupName='ROTATED'
     #plotRAWTFUncerComps(datafile, sensorName=leadSensorname,
     #                    title='Uncertainty of the phase components CEM measurments', startIDX=2, stopIDX=19, zoom=5)
     #plotRAWTFUncerComps(datafile, type='Mag', sensorName=leadSensorname,
     #                    title='Uncertainty of the magnitude components CEM measurments', startIDX=2, stopIDX=19)
 
-    #movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration','RAWDATA/' + leadSensorname + '/Absolutetime', treshold=1.3,blocksinrow=100, blocksize=100, plot=True,plotLabels={'y':r'\textbf{Blockweise Standardabweichung der\\ Beschleunigungs Amplitude in} $\frac{m}{s^2}$','x':'Test','title':'test'})#\\$\sigma(\sqrt{X[0..100]^2+Z[0..100]^2+Z[0..100]^2}$
-    #numofexperiemnts = movementtimes.shape[0]
+    movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration','RAWDATA/' + leadSensorname + '/Absolutetime', treshold=1.0,blocksinrow=100, blocksize=100, plot=False,plotLabels={'y':r'\textbf{Blockweise Standardabweichung der\\ Beschleunigungs Amplitude in} $\frac{m}{s^2}$','x':'Test','title':'test'})#\\$\sigma(\sqrt{X[0..100]^2+Z[0..100]^2+Z[0..100]^2}$
+    numofexperiemnts = movementtimes.shape[0]
 
     if is1DPrcoessing:
         manager = multiprocessing.Manager()
@@ -1576,14 +1668,17 @@ if __name__ == "__main__":
 
         #mpdata['refidx'] = np.zeros([16 * 10])
         if DataSettype == 'PTB1D':
-            refidx = np.zeros([17 * 10])
-            for i in np.arange(10):
-                refidx[i * 17:(i + 1) * 17] = np.arange(17) + i * 18
-            mpdata['refidx'] = refidx
-            mpdata['startCutOutns']=2e9
+
+            mpdata['startCutOutns']=5e9
             mpdata['endCutOutns'] = 2e9
             mpdata['ADCName']='0x1fe40a00_STM32_Internal_ADC'
             mpdata['AnalogrefChannel']=0
+            numOfFres=(np.unique(freqs, axis=0).size)-1
+            numOfLoops=int(numofexperiemnts/numOfFres)
+            refidx = np.zeros([numOfFres * numOfLoops])
+            for i in np.arange(numOfLoops):
+                refidx[i * numOfFres:(i + 1) * numOfFres] = np.arange(numOfFres) + i * (numOfFres+1)
+            mpdata['refidx'] = refidx
         # __________________________________________________________________
         elif DataSettype=='CEM1D':
             # CEM Data
@@ -1601,7 +1696,6 @@ if __name__ == "__main__":
 
         i = np.arange(numofexperiemnts)
         results=process_map(processdata, i, max_workers=15)
-        #results = [processdata(0)]
         freqs = np.zeros(numofexperiemnts)
         ex_freqs = np.zeros(numofexperiemnts)
         mag = np.zeros(numofexperiemnts)
@@ -1628,12 +1722,22 @@ if __name__ == "__main__":
         TF=getRAWTFFromExperiemnts(datafile['/EXPERIMENTS/Sine excitation'],leadSensorname)
         test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
         test.hdffile.flush()
-        plotRAWTFUncerComps(datafile, sensorName=leadSensorname,title='Uncertainty of the phase components PTB measurments', startIDX=0, stopIDX=17,zoom=5)
-        plotRAWTFUncerComps(datafile,type='Mag', sensorName=leadSensorname,title='Uncertainty of the magnitude components PTB measurments', startIDX=0, stopIDX=17)
-        #results[0].plotsinefit()
-        #results[0].plotsinefitParams()
-        #results[0].plotsinefitParams(meanPhase=True)
-        test.hdffile.close()
+
+        #plotRAWTFUncerComps(datafile, sensorName=leadSensorname,title='Uncertainty of the phase components PTB measurments', startIDX=0, stopIDX=17,zoom=5)
+        #plotRAWTFUncerComps(datafile,type='Mag', sensorName=leadSensorname,title='Uncertainty of the magnitude components PTB measurments', startIDX=0, stopIDX=17)
+
+        #results[15].orbitViewFit()
+        #results[15].plotsinefitParams()
+        #results[15].plotsinefitParams(meanPhase=True)
+
+        fig,ax=results[3].orbitViewFit(equalScale=False,z_ang=0)
+        for i in range(4):
+            results[3+(i+1)*17*5].orbitViewFit(fig=fig,ax=ax,equalScale=False)
+        fig2,ax2=results[3].orbitViewFit(equalScale=True,z_ang=0)
+        for i in range(4):
+            results[3+(i+1)*17*5].orbitViewFit(fig=fig2,ax=ax2,equalScale=True)
+        print("Done")
+
     if is3DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
