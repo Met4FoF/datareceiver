@@ -910,106 +910,52 @@ class sineexcitation(experiment):
             icol = icol + 1
         fig.show()
 
-    def orbitViewFit(self,dataSetNames=['0x1fe40000_MPU_9250'],timePoints=1000,useDC=False,equalScale=True,upscalingFactor=10,fig=None,ax=None,z_ang=0):
+    def orbitViewFit(self,dataSetNames=['0x1fe40000_MPU_9250'],timePoints=1000,equalScale=True,fig=None,ax=None,z_ang=0,scalingfactors=np.array([1e6,1e6,1e6]),unitStr=[r'\textmu m',r'\textmu m',r'\textmu m']):
 
         i=0
         for dSetName in dataSetNames:
             quantities=self.met4fofdatafile.sensordatasets[dSetName]
             if 'Acceleration' in quantities:
                 AccDset=self.data[dSetName]['Acceleration']
-                print('Acceleration Found')
-
+                print('Acceleration found')
                 sinparams = AccDset["SinPOpt"]
                 accxyz=np.zeros([3,timePoints])
-                velxyz = np.zeros([3, timePoints])
-                subaccxy = np.zeros([3, timePoints * upscalingFactor])
+                velxyz = np.zeros([3,timePoints])
+                posxyz = np.zeros([3,timePoints])
                 accamp=np.zeros(3)
                 f0 = sinparams[2, 2] #taking z axis time
                 time=np.arange(timePoints)*(1/(f0*timePoints))
-                subdeltaT = (1 / (f0*timePoints * upscalingFactor))
-                subTimePoints = np.arange(timePoints * upscalingFactor) * subdeltaT * 2
                 for i in range(3):
-
-                    if useDC:
-                        accdc = sinparams[i, 1]
-                    else:
-                        accdc=0
                     accamp[i] = sinparams[i, 0]
                     accphi = sinparams[i, 3]
-                    accxyz[i,:] = np.sin(2 * np.pi  * time*f0 + accphi) * accamp[i] + accdc
-                    velxyz[i, :] = np.sin(2 * np.pi  * time *f0+ accphi-np.pi/2) * accamp[i]/(2*np.pi*f0) + accdc
-                    subaccxy[i, :] = np.sin(2 * np.pi * subTimePoints*f0 + accphi) * accamp[i]
+                    accxyz[i] = np.sin(2 * np.pi  * time*f0 + accphi) * accamp[i]
+                    velxyz[i] = np.sin(2 * np.pi * time* f0 + accphi + np.pi/2) * accamp[i]/(2*np.pi*f0)
+                    posxyz[i] = np.sin(2 * np.pi * time* f0 + accphi + np.pi ) * accamp[i] / (2 * np.pi * f0)**2
+                    posxyz[i]=posxyz[i]*scalingfactors[i]
                 if 'Angular_velocity' in quantities:
-                    angVelDset = self.data[dSetName]['Acceleration']
-                    print('Angular Velocity Found')
-                    angVarsinparams = angVelDset["SinPOpt"]
-                    angVelxyz = np.zeros([3, timePoints])
-                    angxyz = np.zeros([3, timePoints])
+                    print("Angular velocity found")
 
-                    subangxy=np.zeros([3,timePoints*upscalingFactor])
-
-                    for i in range(3):
-                        if useDC:
-                            dc = angVarsinparams[i, 1]
-                        else:
-                            dc = 0
-                        amp = angVarsinparams[i, 0]
-                        phi = angVarsinparams[i, 3]
-                        angVelxyz[i, :] = np.sin(2 * np.pi  * time*f0 + phi) * amp + dc
-                        angxyz[i, :] = -np.cos(2 * np.pi * time *f0+ phi ) * amp / (2 * np.pi * f0) + dc
-                        #angxyz[i, :]=angxyz[i, :] -angxyz[i, 0]
-                        subangxy[i,:] = -np.cos(2 * np.pi * subTimePoints*f0 + phi) * amp / (2 * np.pi * f0) + dc
-                        #subangxy[i, :]=subangxy[i,:] -subangxy[i,0]
-                    posxyz =np.zeros([3,timePoints*upscalingFactor])
-                    posxyzwoROT = np.zeros([3, timePoints * upscalingFactor])
-                    velwoROT = np.zeros([3, timePoints * upscalingFactor])
-                    velInNavFrame = np.zeros([3, timePoints * upscalingFactor])
-                    accInNavFrame = np.zeros([3, timePoints * upscalingFactor])
-                    for i in range((timePoints*upscalingFactor-1)):
-                        #if i%10000==0:
-                        #    print(str(i/10000) +'%')
-                        rotvec=subangxy[:,i]+np.array([0,0,z_ang])
-                        r= R.from_rotvec(rotvec)
-                        accInNavFrame[:,i] = r.apply(subaccxy[:,i])
-                        velwoROT[:,i+1]=velwoROT[:,i]+subaccxy[:,i]*subdeltaT
-                        velInNavFrame[:,i+1]=velInNavFrame[:,i]+accInNavFrame[:,i]*subdeltaT
-                        posxyz[:,i]=posxyz[:,i]+velInNavFrame[:,i+1]*subdeltaT
-                        posxyzwoROT[:, i] = posxyzwoROT[:, i] + velwoROT[:, i + 1]* subdeltaT
-        """
-        fig1 = plt.figure()
-        ax1 = fig.gca(projection='3d')
-        ax1.plot(accxyz[0,:], accxyz[1,:], accxyz[2,:])
-        ax1.legend()
-
-        if equalScale:
-            plotLimt = 1.05 * np.max(sinparams[:, 0])
-            ax1.set_xlim3d(-plotLimt, plotLimt)
-            ax1.set_ylim3d(-plotLimt, plotLimt)
-            ax1.set_zlim3d(-plotLimt, plotLimt)
-        ax1.quiver(-accamp[0], 0, 0, 2*accamp[0], 0, 0, color='red')
-        ax1.quiver(0, -accamp[1], 0, 0, 2*accamp[1], 0, color='green')
-        ax1.quiver(0, 0, -accamp[2], 0, 0, 2*accamp[2], color='blue')
-        fig.show()
-        """
         if fig==None and ax==None:
             fig2 = plt.figure()
             ax2 = fig2.gca(projection='3d')
         else:
             fig2=fig
             ax2=ax
-        ax2.plot(posxyzwoROT[0, ::upscalingFactor], posxyzwoROT[1, ::upscalingFactor], posxyzwoROT[2, ::upscalingFactor])
-        ax2.plot(posxyz[0,::upscalingFactor], posxyz[1,::upscalingFactor], posxyz[2,::upscalingFactor])
+        ax2.plot(posxyz[0],posxyz[1], posxyz[2])
+        ax2.set_xlabel(r'\textbf{X Pos in '+unitStr[0]+'}', labelpad=30, color='r')
+        ax2.set_ylabel(r'\textbf{Y Pos in '+unitStr[1]+'}', labelpad=30, color='g')
+        ax2.set_zlabel(r'\textbf{Z Pos in '+unitStr[2]+'}', labelpad=30, color='b')
         if equalScale:
             plotLimt = 1.05 * np.max(abs(posxyz))
             ax2.set_xlim3d(-plotLimt, plotLimt)
             ax2.set_ylim3d(-plotLimt, plotLimt)
             ax2.set_zlim3d(-plotLimt, plotLimt)
-        xmin=np.min(posxyz[0,:])
-        xmax = np.max(posxyz[0, :])
-        ymin = np.min(posxyz[1, :])
-        ymax = np.max(posxyz[1, :])
-        zmin = np.min(posxyz[2, :])
-        zmax = np.max(posxyz[2, :])
+        xmin=np.min(posxyz[0])
+        xmax = np.max(posxyz[0])
+        ymin = np.min(posxyz[1])
+        ymax = np.max(posxyz[1])
+        zmin = np.min(posxyz[2])
+        zmax = np.max(posxyz[2])
         ax2.quiver(xmin, 0, 0, xmax-xmin, 0, 0, color='red')
         ax2.quiver(0, ymin, 0, 0, ymax-ymin, 0, color='green')
         ax2.quiver(0, 0, zmin, 0, 0, zmax-zmin, color='blue')
@@ -1024,6 +970,7 @@ class sineexcitation(experiment):
         """
         print("Done")
         return fig2,ax2
+
 
     def calculatetanloguephaseref1freq(
         self,
@@ -1602,7 +1549,7 @@ if __name__ == "__main__":
     plt.rc('font', family='serif')
     #plt.rc('text', usetex=True)
     plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
-    PLTSCALFACTOR = 0.5
+    PLTSCALFACTOR = 1.5
     SMALL_SIZE = 12 * PLTSCALFACTOR
     MEDIUM_SIZE = 16 * PLTSCALFACTOR
     BIGGER_SIZE = 18 * PLTSCALFACTOR
@@ -1695,7 +1642,8 @@ if __name__ == "__main__":
         mpdata['uniquexfreqs'] = unicefreqs
 
         i = np.arange(numofexperiemnts)
-        results=process_map(processdata, i, max_workers=15)
+        i = np.arange(7)
+        results=process_map(processdata, i, max_workers=7)
         freqs = np.zeros(numofexperiemnts)
         ex_freqs = np.zeros(numofexperiemnts)
         mag = np.zeros(numofexperiemnts)
@@ -1731,13 +1679,18 @@ if __name__ == "__main__":
         #results[15].plotsinefitParams(meanPhase=True)
 
         fig,ax=results[3].orbitViewFit(equalScale=False,z_ang=0)
+
         for i in range(4):
             results[3+(i+1)*17*5].orbitViewFit(fig=fig,ax=ax,equalScale=False)
         fig2,ax2=results[3].orbitViewFit(equalScale=True,z_ang=0)
         for i in range(4):
             results[3+(i+1)*17*5].orbitViewFit(fig=fig2,ax=ax2,equalScale=True)
         print("Done")
-
+        z_angs=np.array([0,45,135,290,200])/180*np.pi
+        fig2,ax2=results[3].orbitViewFit(equalScale=True,z_ang=z_angs[0])
+        for i in range(4):
+            results[3+(i+1)*17*5].orbitViewFit(fig=fig2,ax=ax2,equalScale=False,z_ang=z_angs[i+1])
+        print("Done")
     if is3DPrcoessing:
         manager = multiprocessing.Manager()
         mpdata = manager.dict()
