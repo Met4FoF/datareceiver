@@ -37,7 +37,10 @@ def saveImagePickle(name,fig,axs,axs2=None):
     root = tk.Tk()
     root.withdraw()
 
-    file_path = filedialog.asksaveasfilename(filetypes=filetypes)
+    file_path = filedialog.asksaveasfilename(title=saveDict['Name'],initialfile=saveDict['Name'],filetypes=filetypes)
+    if len(file_path)== 0:
+        print("no path given skipping")
+        return
     saveDict['file_name']=os.path.basename(file_path)
     with open(file_path, 'wb') as handle:
         pickled = pickle.dumps(saveDict)
@@ -45,6 +48,7 @@ def saveImagePickle(name,fig,axs,axs2=None):
         print('Compression Ratio = '+str((len(compressed)/len(pickled))*100)+' %')
         handle.write(compressed)
         handle.flush()
+    return
 
 
 if __name__=="__main__":

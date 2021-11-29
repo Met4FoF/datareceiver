@@ -1205,7 +1205,7 @@ class Sensor:
 
 
 class HDF5Dumper:
-    def __init__(self, dscp, file, hdfffilelock, chunksize=2048,correcttimeglitches=True):
+    def __init__(self, dscp, file, hdfffilelock, chunksize=2048,correcttimeglitches=True,ignoreMissmatchErrors=True):
         self.dscp=dscp
         self.hdflock = hdfffilelock
         self.pushlock = threading.Lock()
@@ -1269,56 +1269,96 @@ class HDF5Dumper:
                         not self.Datasets[groupname].attrs["Unit"]
                         == self.hieracy[groupname]["UNIT"]
                     ):
-                        raise RuntimeError(
-                            "Unit missmatch !"
-                            + self.Datasets[groupname].attrs["Unit"]
-                            + " "
-                            + self.hieracy[groupname]["UNIT"]
-                        )
+                        if ignoreMissmatchErrors:
+                            raise RuntimeWarning(
+                                "Unit missmatch !"
+                                + self.Datasets[groupname].attrs["Unit"]
+                                + " "
+                                + self.hieracy[groupname]["UNIT"]
+                            )
+                        else:
+                            raise RuntimeError(
+                                "Unit missmatch !"
+                                + self.Datasets[groupname].attrs["Unit"]
+                                + " "
+                                + self.hieracy[groupname]["UNIT"]
+                            )
 
                     if not (
                         self.Datasets[groupname].attrs["Physical_quantity"]
                         == self.hieracy[groupname]["PHYSICAL_QUANTITY"]
                     ).all():
-                        raise RuntimeError(
-                            "Physical_quantity missmatch !"
-                            + self.Datasets[groupname].attrs["Physical_quantity"]
-                            + " "
-                            + self.hieracy[groupname]["PHYSICAL_QUANTITY"]
-                        )
+                        if ignoreMissmatchErrors:
+                            raise RuntimeWarning(
+                                "Physical_quantity missmatch !"
+                                + self.Datasets[groupname].attrs["Physical_quantity"]
+                                + " "
+                                + self.hieracy[groupname]["PHYSICAL_QUANTITY"]
+                            )
+                        else:
+                            raise RuntimeError(
+                                "Physical_quantity missmatch !"
+                                + self.Datasets[groupname].attrs["Physical_quantity"]
+                                + " "
+                                + self.hieracy[groupname]["PHYSICAL_QUANTITY"]
+                            )
 
                     if not (
                         self.Datasets[groupname].attrs["Resolution"]
                         == self.hieracy[groupname]["RESOLUTION"]
                     ).all():
-                        raise RuntimeError(
-                            "Resolution  missmatch !"
-                            + self.Datasets[groupname].attrs["Resolution"]
-                            + " "
-                            + self.hieracy[groupname]["RESOLUTION"]
-                        )
+                        if ignoreMissmatchErrors:
+                            raise RuntimeWarning(
+                                "Resolution  missmatch !"
+                                + self.Datasets[groupname].attrs["Resolution"]
+                                + " "
+                                + self.hieracy[groupname]["RESOLUTION"]
+                            )
+                        else:
+                            raise RuntimeError(
+                                "Resolution  missmatch !"
+                                + self.Datasets[groupname].attrs["Resolution"]
+                                + " "
+                                + self.hieracy[groupname]["RESOLUTION"]
+                            )
 
                     if not (
                         self.Datasets[groupname].attrs["Max_scale"]
                         == self.hieracy[groupname]["MAX_SCALE"]
                     ).all():
-                        raise RuntimeError(
-                            "Max scale missmatch !"
-                            + self.Datasets[groupname].attrs["Max_scale"]
-                            + " "
-                            + self.hieracy[groupname]["MAX_SCALE"]
-                        )
+                        if ignoreMissmatchErrors:
+                            raise RuntimeWarning(
+                                "Max scale missmatch !"
+                                + self.Datasets[groupname].attrs["Max_scale"]
+                                + " "
+                                + self.hieracy[groupname]["MAX_SCALE"]
+                            )
+                        else:
+                            raise RuntimeError(
+                                "Max scale missmatch !"
+                                + self.Datasets[groupname].attrs["Max_scale"]
+                                + " "
+                                + self.hieracy[groupname]["MAX_SCALE"]
+                            )
 
                     if not (
                         self.Datasets[groupname].attrs["Min_scale"]
                         == self.hieracy[groupname]["MIN_SCALE"]
                     ).all():
-                        raise RuntimeError(
-                            "Min scale missmatch !"
-                            + self.Datasets[groupname].attrs["Min_scale"]
-                            + " "
-                            + self.hieracy[groupname]["MIN_SCALE"]
-                        )
+                        if ignoreMissmatchErrors:
+                            raise RuntimeWarning(
+                                "Min scale missmatch !"
+                                + self.Datasets[groupname].attrs["Min_scale"]
+                                + " "
+                                + self.hieracy[groupname]["MIN_SCALE"]
+                            )
+                        else:
+                            raise RuntimeError(
+                                "Min scale missmatch !"
+                                + self.Datasets[groupname].attrs["Min_scale"]
+                                + " "
+                                + self.hieracy[groupname]["MIN_SCALE"]
+                            )
             except KeyError:
                 self.group = self.f.create_group(
                     "RAWDATA/" + hex(dscp.ID) + "_" + dscp.SensorName.replace(" ", "_")
@@ -1382,7 +1422,7 @@ class HDF5Dumper:
                 self.Datasets["Absolutetime_uncertainty"].attrs["Max_scale"] = np.exp2(
                     32
                 )
-                self.Datasets["Absolutetime_uncertainty"].attrs["Min_scale"] = 0
+                self.Datasets["Absolutetime_uncertainty"].attrs["Min_scale"] = 0.0
 
                 self.Datasets["Sample_number"] = self.group.create_dataset(
                     "Sample_number",
