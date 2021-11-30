@@ -41,6 +41,9 @@ from scipy.spatial.transform import Rotation as R
 import figPickel as fp
 
 askForFigSave=True
+#defaultPlotSelection={'numRows':2,'qunatiesToPlot':['Voltage','Acceleration','Temperature']}
+defaultPlotSelection={'numRows':1,'qunatiesToPlot':['Voltage','Acceleration']}
+#defaultPlotSelection=None
 def ufloattouncerval(ufloat):
     result = np.empty([1], dtype=uncerval)
     result["value"] = ufloat.n
@@ -458,7 +461,7 @@ class experiment:
                 self.runtimeData[name][dataset] = {}
         #print("EX base class Init done")
 
-    def plotall(self, absolutetime=False,plotSpecific={'numRows':2,'qunatiesToPlot':['Voltage','Acceleration','Temperature']}):
+    def plotall(self, absolutetime=False,plotSpecific=defaultPlotSelection):
         cols = len(self.met4fofdatafile.sensordatasets)  # one colum for every sensor
         datasetspersensor = []
         for sensors in self.met4fofdatafile.sensordatasets:
@@ -480,7 +483,7 @@ class experiment:
                 size="large",
                 ha="right",
                 va="center",
-                rotation=90,
+                rotation=85,
             )
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
                 if not dataset in plotSpecific['qunatiesToPlot']:
@@ -677,7 +680,7 @@ class sineexcitation(experiment):
         #mappedDeltaAngle = np.arctan2(np.sin(deltaAng),
         #                              np.cos(deltaAng))  # map angle differences to +- 180°
         times=sineparams[:,3]
-        coef = np.polyfit(times, deltaAng, 1) #so fit dphi /dt
+        coef = np.polyfit(times, np.unwrap(deltaAng), 1) #so fit dphi /dt
         deltaF=coef[0]/(np.pi*2)
         return deltaF
 
@@ -747,7 +750,7 @@ class sineexcitation(experiment):
         else:
             return
 
-    def plotsinefit(self, absolutetime=False,DsetUsedForFreqCalculation=['Acceleration'],plotSpecific={'numRows':2,'qunatiesToPlot':['Voltage','Acceleration','Temperature']}):
+    def plotsinefit(self, absolutetime=False,DsetUsedForFreqCalculation=['Acceleration'],plotSpecific=defaultPlotSelection):
         cols = len(self.met4fofdatafile.sensordatasets)  # one colum for every sensor
         datasetspersensor = []
         for sensors in self.met4fofdatafile.sensordatasets:
@@ -770,7 +773,7 @@ class sineexcitation(experiment):
                 size="large",
                 ha="right",
                 va="center",
-                rotation=90,
+                rotation=85,
             )
 
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
@@ -826,7 +829,7 @@ class sineexcitation(experiment):
             fp.saveImagePickle(name,fig,axs,None)
         return fig,axs
 
-    def plotsinefitParams(self,phiDiff=False,meanMag=False,meanPhase=False,DsetUsedForFreqCalculation=['Acceleration'],useDegs=True,plotDC=True,plotSpecific={'numRows':2,'qunatiesToPlot':['Voltage','Acceleration','Temperature']}):
+    def plotsinefitParams(self,phiDiff=False,meanMag=False,meanPhase=False,DsetUsedForFreqCalculation=['Acceleration'],useDegs=True,plotDC=True,plotSpecific=defaultPlotSelection):
         plotGrid=True
         if meanMag or meanPhase:
             plotGrid=False
@@ -838,7 +841,9 @@ class sineexcitation(experiment):
         if plotSpecific is not None:
             rows=plotSpecific['numRows']
         fig, axs = plt.subplots(cols, rows, sharex="all")
+        axs=axs.reshape([cols, rows,])
         axs2=np.zeros_like(axs)
+        axs2=axs2.reshape([cols, rows, ])
         icol = 0
         fitFtreqs=np.zeros(0)
         for sensor in self.met4fofdatafile.sensordatasets:
@@ -852,13 +857,11 @@ class sineexcitation(experiment):
                 size="large",
                 ha="right",
                 va="center",
-                rotation=90,
+                rotation=85,
             )
 
             for dataset in self.met4fofdatafile.sensordatasets[sensor]:
-                if not dataset in plotSpecific['qunatiesToPlot']:
-                    pass
-                else:
+                if dataset in plotSpecific['qunatiesToPlot'] or plotSpecific is None:
                     dsetattrs = self.datafile[self.dataGroupName + sensor + "/" + dataset].attrs
                     title=dataset.replace("_", " ")
                     axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs["Unit"]))
@@ -895,6 +898,8 @@ class sineexcitation(experiment):
                             r,
                             label=pLabel,
                             ls="dotted",
+                            lw=LINE_WIDTH,
+                            alpha=PLOT_APLPHA
                         )
                         philabel=r'$\varphi$ ' + sinelabel
                         if phiDiff:
@@ -904,9 +909,11 @@ class sineexcitation(experiment):
                             phi=phi/np.pi*180
                         ax2.plot(
                             times,
-                            phi,
+                            np.unwrap(phi),
                             label=philabel,
                             color=p[0].get_color(),
+                            lw=LINE_WIDTH,
+                            alpha=PLOT_APLPHA
                             )
                         if plotDC:
                             dcLabel = str(r'\textbf{DC} ' + sinelabel)
@@ -916,6 +923,8 @@ class sineexcitation(experiment):
                                 label=dcLabel,
                                 color=p[0].get_color(),
                                 ls="dashed",
+                                lw=LINE_WIDTH,
+                                alpha=PLOT_APLPHA
                             )
                         if meanMag or meanPhase:
                             sinPOpts = self.data[sensor][dataset]["SinPOpt"]
@@ -933,6 +942,8 @@ class sineexcitation(experiment):
                                 label=r'mean $|$' + sinelabel+'$|$',
                                 color=p[0].get_color(),
                                 ls="dotted",
+                                lw=LINE_WIDTH,
+                                alpha=PLOT_APLPHA
                             )
                             axs[icol, irow].fill_between(
                                 times,
@@ -941,7 +952,8 @@ class sineexcitation(experiment):
                                 label=r'$2 \sigma |$'+sinelabel+'$|$',
                                 color=p[0].get_color(),
                                 alpha=0.5,
-                                ls = "dotted"
+                                ls = "dotted",
+                                lw=LINE_WIDTH,
                             )
                         if meanPhase:
                             if useDegs:
@@ -952,6 +964,7 @@ class sineexcitation(experiment):
                                 optphi * np.ones(times.size),
                                 label=r'mean $\varphi$' + sinelabel,
                                 color=p[0].get_color(),
+                                alpha=PLOT_APLPHA
                             )
                             ax2.fill_between(
                                 times,
@@ -962,10 +975,16 @@ class sineexcitation(experiment):
                                 alpha=0.25
                             )
                     axs[icol, irow].legend(loc='lower left')
+                    ax2.legend(loc='upper right')
+                    # Re-arrange legends to last axis see https://github.com/matplotlib/matplotlib/issues/3706
+                    all_axes = [axs[icol, irow],ax2]
+                    for axis in all_axes:
+                        legend = axis.get_legend()
+                        if legend is not None:
+                            legend.remove()
+                            all_axes[-1].add_artist(legend)
                     if plotGrid:
                         axs[icol, irow].grid()
-                    ax2.legend(loc='upper right')
-                    if plotGrid:
                         ax2.grid(color='darkblue')
                     irow = irow + 1
             icol = icol + 1
@@ -1634,10 +1653,12 @@ def processdata(i):
     #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
     #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
     axisfreqs = mpdata["uniquexfreqs"]
-
-    experiment.do3paramsinefits( axisfreqs, periods=10, sensorsToFit=[mpdata['ADCName']], datasetsToFit=['Voltage'])
+    experiment.do3paramsinefits(axisfreqs, periods=10)
+    experiment.do3paramsinefits(axisfreqs, periods=10, sensorsToFit=[mpdata['ADCName']], datasetsToFit=['Voltage'])
+    experiment.plotsinefitParams()
     deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope(mpdata['ADCName'],'Voltage',mpdata['AnalogrefChannel'])
     experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
+    experiment.plotsinefitParams()
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
@@ -1661,35 +1682,39 @@ if __name__ == "__main__":
     plt.rc('font', family='serif')
     plt.rc('text', usetex=True)
     plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
-    PLTSCALFACTOR = 1.3
+    PLTSCALFACTOR = 2.3
+    LEGEND_SIZE = 9 * PLTSCALFACTOR
     SMALL_SIZE = 12 * PLTSCALFACTOR
     MEDIUM_SIZE = 16 * PLTSCALFACTOR
     BIGGER_SIZE = 18 * PLTSCALFACTOR
+    LINE_WIDTH=PLTSCALFACTOR*1.5
+    PLOT_APLPHA=0.75
 
     plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
     plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
     plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
     plt.rc("xtick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
     plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
-    plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
-    plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
+    plt.rc("legend", fontsize=LEGEND_SIZE)  # legend fontsize
+    plt.rc("figure", titlesize=BIGGER_SIZE)
+    plt.rc('lines',linewidth=LINE_WIDTH)# fontsize of the figure title
 
     is1DPrcoessing = False
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    #DataSettype = 'CEM1D'
-    #leadSensorname = '0xbccb0000_MPU_9250'
-    #hdffilename = r"/home/benedikt/data/IMUPTBCEM/CEM/MPU9250CEM.hdf5"
+    DataSettype = 'CEM1D'
+    leadSensorname = '0xbccb0000_MPU_9250'
+    hdffilename = r"/home/benedikt/data/IMUPTBCEM/CEM/MPU9250CEM.hdf5"
     #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280CEM.hdf5"
     #leadSensorname = '0xbccb0000_BMA_280'
     #is1DPrcoessing=True
 
     #PTB Filename and sensor Name
-    DataSettype = 'PTB1D'
-    hdffilename = r"/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
+    #DataSettype = 'PTB1D'
+    #hdffilename = r"/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
     #hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
-    leadSensorname = '0x1fe40000_MPU_9250'
+    #leadSensorname = '0x1fe40000_MPU_9250'
 
     #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280PTB.hdf5"
     #leadSensorname = '0x1fe40000_BMA_280'
@@ -1752,8 +1777,10 @@ if __name__ == "__main__":
             raise ValueError(" Unkowen Key use 'PTB1D' or 'CEM1D'") #TODO use dict and dickt keys
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
-        i=np.arange(numofexperiemnts)
-        results=process_map(processdata, i, max_workers=15)
+        #i=np.arange(numofexperiemnts)
+        #results=process_map(processdata, i, max_workers=1)
+        i = np.array(18)
+        results = np.array(processdata(i))
         freqs = np.zeros(numofexperiemnts)
         ex_freqs = np.zeros(numofexperiemnts)
         mag = np.zeros(numofexperiemnts)
@@ -1780,9 +1807,9 @@ if __name__ == "__main__":
         TF=getRAWTFFromExperiemnts(datafile['/EXPERIMENTS/Sine excitation'],leadSensorname)
         test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
         test.hdffile.flush()
-        results[10].plotall()
-        results[10].plotsinefit()
-        results[10].plotsinefitParams()
+        results[0].plotall()
+        results[0].plotsinefit()
+        results[0].plotsinefitParams()
         plotRAWTFUncerComps(datafile, sensorName=leadSensorname,
                             title='Uncertainty of the Phase components PTB measurments', startIDX=0, stopIDX=17, zoom=5)
         plotRAWTFUncerComps(datafile,type='Mag', sensorName=leadSensorname,
