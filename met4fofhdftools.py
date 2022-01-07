@@ -1101,14 +1101,14 @@ if __name__ == "__main__":
     # parse spektra reference files
     #cemref=spektraprptohdfref(reffilenames)
     """
-    hdffilename='/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5'
-    folder = r"/home/benedikt/data/IMUPTBCEM/PTB/"
+    hdffilename='/home/benedikt/tmp/test.hdf5'
+    folder = r"/home/benedikt/tmp"
     dumpfilenames = findfilesmatchingstr(folder, r".dump")  # input file name
     for dumpfilename in dumpfilenames:
-        if dumpfilename.find("MPU_9250") != -1:
-            adddumptohdf(dumpfilename, hdffilename, extractadcdata=True,correcttimeglitches=True)
-        if dumpfilename.find("BMA_280") != -1:
-            adddumptohdf(dumpfilename, hdffilename, extractadcdata=True,correcttimeglitches=True)
+        #if dumpfilename.find("MPU_9250") != -1:
+        adddumptohdf(dumpfilename, hdffilename, extractadcdata=False,correcttimeglitches=True,chunksize=128)
+        #if dumpfilename.find("BMA_280") != -1:
+        #    adddumptohdf(dumpfilename, hdffilename, extractadcdata=True,correcttimeglitches=True)
         # if dumpfilename.find("MS5837") != -1:
         #    adddumptohdf(dumpfilename, hdffilename, correcttimeglitches=False)
         #    print("skipping MS5837 data")

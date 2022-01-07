@@ -1305,8 +1305,8 @@ class HDF5Dumper:
                             )
 
                     if not (
-                        self.Datasets[groupname].attrs["Resolution"]
-                        == self.hieracy[groupname]["RESOLUTION"]
+                        np.nan_to_num(self.Datasets[groupname].attrs["Resolution"])
+                        == np.nan_to_num(self.hieracy[groupname]["RESOLUTION"])
                     ).all():
                         if ignoreMissmatchErrors:
                             raise RuntimeWarning(
@@ -1324,8 +1324,8 @@ class HDF5Dumper:
                             )
 
                     if not (
-                        self.Datasets[groupname].attrs["Max_scale"]
-                        == self.hieracy[groupname]["MAX_SCALE"]
+                        np.nan_to_num(self.Datasets[groupname].attrs["Max_scale"])
+                        == np.nan_to_num(self.hieracy[groupname]["MAX_SCALE"])
                     ).all():
                         if ignoreMissmatchErrors:
                             raise RuntimeWarning(
@@ -1343,8 +1343,8 @@ class HDF5Dumper:
                             )
 
                     if not (
-                        self.Datasets[groupname].attrs["Min_scale"]
-                        == self.hieracy[groupname]["MIN_SCALE"]
+                        np.nan_to_num(self.Datasets[groupname].attrs["Min_scale"])
+                        == np.nan_to_num(self.hieracy[groupname]["MIN_SCALE"])
                     ).all():
                         if ignoreMissmatchErrors:
                             raise RuntimeWarning(
@@ -1483,12 +1483,14 @@ class HDF5Dumper:
                 if deltat<-2.5e8:
                     deltains=np.rint((deltat)/1e9)
                     self.timeoffset=self.timeoffset-deltains
-                    warnings.warn("Time difference is negative at IDX"+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+"nanoseconds "+str(deltains)+" in seconds "+str(self.timeoffset)+'accumulated deltat in seconds',category=RuntimeWarning)
+                    warnings.warn("Time difference is negative in Sensor "+self.dscp.SensorName+' ID '+hex(self.dscp.ID)+" at IDX "+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+" ns "+str(deltains)+" in seconds "+str(self.timeoffset)+' accumulated deltat in s',UserWarning)
                 if deltat > 2.5e8:
-                    deltains=np.rint((deltat)/1e9)
-                    self.timeoffset = self.timeoffset-deltains
-                    warnings.warn("Time difference is large positive at IDX"+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+"nanoseconds "+str(deltains)+" in seconds "+str(self.timeoffset)+'accumulated deltat in seconds. Accumulated deltat will be set to 0')
-                    self.timeoffset=0
+                    if self.timeoffset<0:
+                        deltains=np.rint((deltat)/1e9)
+                        self.timeoffset = self.timeoffset-deltains
+                        if self.timeoffset!=0:
+                            warnings.warn("Time difference is large positive in Sensor "+self.dscp.SensorName+' ID '+hex(self.dscp.ID)+"at IDX "+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+" ns "+str(deltains)+" in seconds "+str(self.timeoffset)+' accumulated deltat in seconds. Accumulated deltat will be set to 0',UserWarning)
+                        self.timeoffset=0
             self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
             self.buffer[:, self.msgbufferd] = np.array(
                 [
@@ -1518,9 +1520,9 @@ class HDF5Dumper:
             self.ticks_buffer[self.msgbufferd] = message.time_ticks
             self.msgbufferd = self.msgbufferd + 1
             if self.msgbufferd == self.chunksize:
-                print(hex(self.dscp.ID)+"waiting for lock "+str(self.hdflock))
+                #print(hex(self.dscp.ID)+"waiting for lock "+str(self.hdflock))
                 with self.hdflock:
-                    print(hex(self.dscp.ID)+"Aquired lock " + str(self.hdflock))
+                    #print(hex(self.dscp.ID)+"Aquired lock " + str(self.hdflock))
                     startIDX = self.chunksize * self.chunkswritten
                     #print("Start index is " + str(startIDX))
                     self.Datasets["Absolutetime"].resize([1, startIDX + self.chunksize])
