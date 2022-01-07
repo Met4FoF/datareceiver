@@ -1264,6 +1264,7 @@ class HDF5Dumper:
                     self.Datasets["Absolutetime"].shape[1] / self.chunksize
                 )
                 for groupname in self.hieracy:
+                    #TODO add loop over dict with error mesaages for unmatched parirs this will save at least 50 lines code and will be way better readable
                     self.Datasets[groupname] = self.group[groupname]
                     if (
                         not self.Datasets[groupname].attrs["Unit"]
@@ -1310,16 +1311,16 @@ class HDF5Dumper:
                         if ignoreMissmatchErrors:
                             raise RuntimeWarning(
                                 "Resolution  missmatch !"
-                                + self.Datasets[groupname].attrs["Resolution"]
+                                + str(self.Datasets[groupname].attrs["Resolution"])
                                 + " "
-                                + self.hieracy[groupname]["RESOLUTION"]
+                                + str(self.hieracy[groupname]["RESOLUTION"])
                             )
                         else:
                             raise RuntimeError(
                                 "Resolution  missmatch !"
-                                + self.Datasets[groupname].attrs["Resolution"]
+                                + str(self.Datasets[groupname].attrs["Resolution"])
                                 + " "
-                                + self.hieracy[groupname]["RESOLUTION"]
+                                + str(self.hieracy[groupname]["RESOLUTION"])
                             )
 
                     if not (
@@ -1329,16 +1330,16 @@ class HDF5Dumper:
                         if ignoreMissmatchErrors:
                             raise RuntimeWarning(
                                 "Max scale missmatch !"
-                                + self.Datasets[groupname].attrs["Max_scale"]
+                                + str(self.Datasets[groupname].attrs["Max_scale"])
                                 + " "
-                                + self.hieracy[groupname]["MAX_SCALE"]
+                                + str(self.hieracy[groupname]["MAX_SCALE"])
                             )
                         else:
                             raise RuntimeError(
                                 "Max scale missmatch !"
-                                + self.Datasets[groupname].attrs["Max_scale"]
+                                + str(self.Datasets[groupname].attrs["Max_scale"])
                                 + " "
-                                + self.hieracy[groupname]["MAX_SCALE"]
+                                + str(self.hieracy[groupname]["MAX_SCALE"])
                             )
 
                     if not (
@@ -1348,16 +1349,16 @@ class HDF5Dumper:
                         if ignoreMissmatchErrors:
                             raise RuntimeWarning(
                                 "Min scale missmatch !"
-                                + self.Datasets[groupname].attrs["Min_scale"]
+                                + str(self.Datasets[groupname].attrs["Min_scale"])
                                 + " "
-                                + self.hieracy[groupname]["MIN_SCALE"]
+                                + str(self.hieracy[groupname]["MIN_SCALE"])
                             )
                         else:
                             raise RuntimeError(
                                 "Min scale missmatch !"
-                                + self.Datasets[groupname].attrs["Min_scale"]
+                                + str(self.Datasets[groupname].attrs["Min_scale"])
                                 + " "
-                                + self.hieracy[groupname]["MIN_SCALE"]
+                                + str(self.hieracy[groupname]["MIN_SCALE"])
                             )
             except KeyError:
                 self.group = self.f.create_group(
