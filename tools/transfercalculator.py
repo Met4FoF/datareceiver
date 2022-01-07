@@ -647,8 +647,6 @@ class sineexcitation(experiment):
                     nomalized = Complex / abs(Complex)#all vectors ar normalized
                     radialCord = np.sum(nomalized)/nomalized.size #all vectors are added to have one vector pointing in the direction of the mean value
                     deltaAng=np.angle(nomalized)-np.angle(radialCord)#differences of the angles this value can be bigger than -180 -- 180 deg
-                    mappedDeltaAngle = np.arctan2(np.sin(deltaAng),
-                                                  np.cos(deltaAng))  # map angle differences to +- 180°
                     self.data[sensor][dataset]["SinPOpt"][i, :] = [
                         lengthMean,
                         np.mean(DC),
@@ -674,14 +672,14 @@ class sineexcitation(experiment):
         Complex = sineparams[:, 1] + 1j * sineparams[:, 0]
         nomalized = Complex / abs(Complex)  # all vectors ar normalized
         radialCord = np.sum(
-            nomalized) / nomalized.size  # all vectors are added to have one vector pointing in the direction of the mean value
+            nomalized) / abs(np.sum(
+            nomalized))  # all vectors are added to have one vector pointing in the direction of the mean value
         deltaAng = np.angle(nomalized) - np.angle(
             radialCord)  # differences of the angles this value can be bigger than -180 -- 180 deg
-        #mappedDeltaAngle = np.arctan2(np.sin(deltaAng),
+        # mappedDeltaAngle = np.arctan2(np.sin(deltaAng),
         #                              np.cos(deltaAng))  # map angle differences to +- 180°
-        times=sineparams[:,3]
-        coef = np.polyfit(times, np.unwrap(deltaAng), 1) #so fit dphi /dt
-        deltaF=coef[0]/(np.pi*2)
+        coef = np.polyfit(times, np.unwrap(deltaAng), 1)  # so fit dphi /dt
+        deltaF = coef[0] / (np.pi * 2)
         return deltaF
 
     def plotXYsine(
@@ -831,8 +829,8 @@ class sineexcitation(experiment):
 
     def plotsinefitParams(self,phiDiff=False,meanMag=False,meanPhase=False,DsetUsedForFreqCalculation=['Acceleration'],useDegs=True,plotDC=True,plotSpecific=defaultPlotSelection):
         plotGrid=True
-        if meanMag or meanPhase:
-            plotGrid=False
+        #if meanMag or meanPhase:
+        #    plotGrid=False
         cols = len(self.met4fofdatafile.sensordatasets)  # one colum for every sensor
         datasetspersensor = []
         for sensors in self.met4fofdatafile.sensordatasets:
@@ -958,13 +956,14 @@ class sineexcitation(experiment):
                         if meanPhase:
                             if useDegs:
                                 optphi=optphi/np.pi*180
-
+                                stdphi=stdphi/np.pi*180
                             ax2.plot(
                                 times,
                                 optphi * np.ones(times.size),
                                 label=r'mean $\varphi$' + sinelabel,
                                 color=p[0].get_color(),
-                                alpha=PLOT_APLPHA
+                                alpha=PLOT_APLPHA,
+                                ls='dashdot'
                             )
                             ax2.fill_between(
                                 times,
@@ -1658,7 +1657,7 @@ def processdata(i):
     experiment.plotsinefitParams()
     deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope(mpdata['ADCName'],'Voltage',mpdata['AnalogrefChannel'])
     experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
-    experiment.plotsinefitParams()
+    experiment.plotsinefitParams(meanPhase=True)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
@@ -1970,3 +1969,26 @@ if __name__ == "__main__":
     #datafile.flush()
     #datafile.close()
 
+def meanValueOfPolarData(ABCwt):
+    DC = ABCwt[:, 2]
+    Complex = ABCwt[:, 1] + 1j * ABCwt[:, 0]
+    Freq = ABCwt[3]
+    lengthMean = np.mean(abs(Complex))
+    nomalized = Complex / abs(Complex)  # normalize vectors
+    radialCord = np.sum(nomalized) / abs(np.sum(nomalized))  # all vectors are added to have one vector pointing in the direction of the mean value
+    deltaAng = np.angle(nomalized) - np.angle(radialCord)# differences of the angles this value can be bigger than -180 -- 180 deg
+    deltaAng=np.arctan2(np.sin(deltaAng), np.cos(deltaAng)) # map to -pi -->+pi with atan2
+    meanValues = [lengthMean,
+        np.mean(DC),
+        np.mean(Freq),
+        np.angle(radialCord),
+    ]
+    coVarData = np.stack((
+        abs(Complex) - lengthMean,  # subtracting mean, just for safty this should'nt change anything here
+        DC,
+        Freq,
+        deltaAng, # atan2 mapping is needed to deal with discontinuity at +-pi
+        ABCwt[:, 4]),  # variance against time is intresting to see reidual phase due to frequency mismatch
+        axis=0
+    )
+    return meanValues,coVarData
