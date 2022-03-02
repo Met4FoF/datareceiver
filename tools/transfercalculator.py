@@ -44,6 +44,8 @@ askForFigSave=True
 #defaultPlotSelection={'numRows':2,'qunatiesToPlot':['Voltage','Acceleration','Temperature']}
 defaultPlotSelection={'numRows':1,'qunatiesToPlot':['Voltage','Acceleration']}
 #defaultPlotSelection=None
+
+UNITPrefix='/' #'in'
 def ufloattouncerval(ufloat):
     result = np.empty([1], dtype=uncerval)
     result["value"] = ufloat.n
@@ -205,8 +207,8 @@ class hdfmet4fofdatafile:
 
             yQuant=str(r'\\'.join(self.hdffile[datahdfpath].attrs['Physical_quantity']))
             yUnit = str(self.hdffile[datahdfpath].attrs['Unit'])
-            plotLabels['y']=r"Magnitude of\\ "+yQuant+r"\\ in "+getplotableunitstring(yUnit,Latex=True)
-            plotLabels['x'] = "Relative time in s"
+            plotLabels['y']=r"Magnitude of\\ "+yQuant+r'\\ '+UNITPrefix+getplotableunitstring(yUnit,Latex=True)
+            plotLabels['x'] = 'Relative time '+UNITPrefix+' s'
             plotLabels['title'] = "Blockweise STD "+str(datahdfpath).replace("/"," ").replace('_', ' ')+" treshold "+str(treshold)+' blocks in row '+str(blocksinrow)+' blocksize '+str(blocksize)
         tmpTime = np.squeeze(self.hdffile[timehdfpath])  # fetch data from hdffile
         mag = np.linalg.norm(tmpData, axis=0)
@@ -499,9 +501,9 @@ class experiment:
                     # print(dsetattrs.keys())
                     axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs["Unit"]))
                     if not absolutetime:
-                        axs[icol, irow].set_xlabel(r'\textbf{Relative time in s}')
+                        axs[icol, irow].set_xlabel(r'\textbf{Relative time '+UNITPrefix+' s}')
                     else:
-                        axs[icol, irow].set_xlabel(r'\textbf{Unixtime in s}')
+                        axs[icol, irow].set_xlabel(r'\textbf{Unixtime '+UNITPrefix+' s}')
                     axs[icol, irow].set_title(r'\textbf{'+dataset.replace("_", " ")+'}')
                     for i in np.arange(
                         self.datafile[self.dataGroupName + sensor + "/" + dataset].shape[0]
@@ -790,9 +792,9 @@ class sineexcitation(experiment):
                     # print(dsetattrs.keys())
                     axs[icol, irow].set_ylabel(r'\textbf{'+getplotableunitstring(dsetattrs["Unit"])+'}')
                     if not absolutetime:
-                        axs[icol, irow].set_xlabel(r'\textbf{Relative time in s}')
+                        axs[icol, irow].set_xlabel(r'\textbf{Relative time '+UNITPrefix+' s}')
                     else:
-                        axs[icol, irow].set_xlabel(r'\textbf{Unixtime in s}')
+                        axs[icol, irow].set_xlabel(r'\textbf{Unixtime '+UNITPrefix+' s}')
                     axs[icol, irow].set_title(r'\textbf{'+dataset.replace("_", " ")+'}')
                     for i in np.arange(
                         self.datafile[self.dataGroupName + sensor + "/" + dataset].shape[0]
@@ -865,7 +867,7 @@ class sineexcitation(experiment):
                     dsetattrs = self.datafile[self.dataGroupName + sensor + "/" + dataset].attrs
                     title=dataset.replace("_", " ")
                     axs[icol, irow].set_ylabel(getplotableunitstring(dsetattrs["Unit"]))
-                    axs[icol, irow].set_xlabel(r'\textbf{Relative time in s}')
+                    axs[icol, irow].set_xlabel(r'\textbf{Relative time'+UNITPrefix+'s}')
                     axs[icol, irow].set_title(r'\textbf{'+title+'}')
                     axs[icol, irow].yaxis.set_tick_params(rotation=70)
                     axs[icol, irow].ticklabel_format(style='sci', scilimits=(-2, 1), axis='y')
@@ -873,10 +875,10 @@ class sineexcitation(experiment):
                     ax2.yaxis.set_tick_params(rotation=70)
                     ax2.tick_params(axis='y', colors='darkblue')
                     if useDegs:
-                        ax2.set_ylabel(r'$\varphi$ in $^\circ$', color='darkblue')
+                        ax2.set_ylabel(r'$\varphi$ '+UNITPrefix+' $^\circ$', color='darkblue')
                         ax2.ticklabel_format(style='plain', axis='y')
                     else:
-                        ax2.set_ylabel(r'$\varphi$ in rad',color='darkblue')
+                        ax2.set_ylabel(r'$\varphi$ '+UNITPrefix+' rad',color='darkblue')
                         ax2.ticklabel_format(style='sci', scilimits=(-2, 1), axis='y')
                     ax2.yaxis.set_label_coords(1.07, 0.9)
                     for i in np.arange(
@@ -1056,9 +1058,9 @@ class sineexcitation(experiment):
         #ax2.plot(posxyz[0],posxyz[1], posxyz[2],label=label)
         ax2.plot(posRot[0], posRot[1], posRot[2], label=label)
         #ax2.plot(poswAngxyz[0], poswAngxyz[1], poswAngxyz[2])
-        ax2.set_xlabel(r'\textbf{X Pos in '+unitStr[0]+'}', labelpad=30, color='r')
-        ax2.set_ylabel(r'\textbf{Y Pos in '+unitStr[1]+'}', labelpad=30, color='g')
-        ax2.set_zlabel(r'\textbf{Z Pos in '+unitStr[2]+'}', labelpad=30, color='b')
+        ax2.set_xlabel(r'\textbf{X Pos '+UNITPrefix+' '+unitStr[0]+'}', labelpad=30, color='r')
+        ax2.set_ylabel(r'\textbf{Y Pos '+UNITPrefix+' '+unitStr[1]+'}', labelpad=30, color='g')
+        ax2.set_zlabel(r'\textbf{Z Pos '+UNITPrefix+' '+unitStr[2]+'}', labelpad=30, color='b')
         if equalScale:
             plotLimt = 1.05 * np.max(abs(posxyz))
             ax2.set_xlim3d(-plotLimt, plotLimt)
@@ -1579,17 +1581,17 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     if lang=='EN':
         ax.set_xlabel(r'\textbf{Excitation frequency} \textbf{in Hz}')
     elif lang=='DE':
-        ax.set_xlabel(r'\textbf{Anregungsfrequenz in Hz}')
+        ax.set_xlabel(r'\textbf{Anregungsfrequenz'+UNITPrefix+'Hz}')
     if type == 'Phase':
         if lang=='EN':
-            ax.set_ylabel(r'\textbf{Type A components of}'+'\n' +r'\textbf{phase in $^\circ$}')
+            ax.set_ylabel(r'\textbf{Type A components of}'+'\n' +r'\textbf{phase'+UNITPrefix+'$^\circ$}')
         elif lang=='DE':
-            ax.set_ylabel(r'\textbf{Phasenkomponenten Typ A in $^\circ$}')
+            ax.set_ylabel(r'\textbf{Phasenkomponenten Typ A '+UNITPrefix+' $^\circ$}')
     if type == 'Mag':
         if lang== 'EN':
-            ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude in \%}')
+            ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude '+UNITPrefix+' \%}')
         elif lang=='DE':
-            ax.set_ylabel(r'\textbf{Magnitudenkomponenten Typ A in \%}')
+            ax.set_ylabel(r'\textbf{Magnitudenkomponenten Typ A  \%}')
     ax.grid()
     if title!=None and title != '':
             ax.set_title(r'\textbf{'+title+'}')
