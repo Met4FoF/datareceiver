@@ -5,8 +5,13 @@ from multiprocessing import Pool
 from tqdm.contrib.concurrent import process_map
 from matplotlib import cm
 from scipy.optimize import curve_fit
+from scipy.signal import correlate
+from scipy.signal import correlation_lags
 import h5py as h5py
 
+
+# importing copy module
+import copy
 def gaus(x,a,sigma):
     x0=0
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
@@ -55,21 +60,94 @@ class realWordJitterGen:
         idx=np.random.randint(self.dataPoints-(length+1))
         return self.deviationFromNominal[idx:idx+length]
 
-dataFile = h5py.File('/home/benedikt/Downloads/jitter_recording.hfd5','r')
-sensorName='0xe0040100_BMA_280'
-jitterGen=realWordJitterGen(dataFile,sensorName)
+    def plotAkf(self,sampleFreq=1000):
+        fig,ax=plt.subplots()
+        tmp=copy.deepcopy(self.deviationFromNominal[:4194304])
+        akf = correlate(tmp, tmp, mode='full')
+        akf =akf/np.max(akf)
+
+        gausnoise=np.random.normal(scale=43e-9,size=tmp.size)
+        gausnoise=gausnoise/np.max(gausnoise)
+        akf_gausNoise = correlate (gausnoise,gausnoise, mode='full')
+        akf_gausNoise=akf_gausNoise/np.max(akf_gausNoise)
+        deltaT=1/sampleFreq
+        lag=correlation_lags(tmp.size,tmp.size)*deltaT
+        ax.plot(lag,akf,label=r'\textbf{\textbf{Aufgeizeichneter \textit{Jitter}}}')
+        ax.plot(lag, akf_gausNoise, label=r'\textbf{Nomalverteilter Jitter} $\sigma = 43~\mathrm{ns}$')
+        ax.set_xlabel(r'\textbf{Zeitverschiebungen} $\tau$ \textbf{in } s')
+        ax.set_ylabel(r'\textbf{Autokorrelations Funktion} $AKF$ \textbf{in } R.U s')
+        ax.grid()
+        fig.show()
+
+    def plotFFT(self,sampleFreq=1000,plotPhase=True,fftlength=262144):
+        def abs2(x):
+            return x.real ** 2 + x.imag ** 2
+        nnumOFSlices=int(np.floor(self.deviationFromNominal.shape[0]/262144))
+        if plotPhase:
+            fig,axs=plt.subplots(2,sharex=True)
+        else:
+            fig, ax = plt.subplots()
+            axs=np.array([ax])
+        axs[0].set_yscale('log')
+        freqs = np.fft.rfftfreq(fftlength, d=1/sampleFreq)
+        scale = 2.0 / (fftlength*fftlength)
+        quantNoise=np.random.uniform(size=fftlength)*1/(108e6)*1e9
+        quantNoise=quantNoise-(1/54e6)*1e9
+        gausnoise=np.random.uniform(size=fftlength)*(43)
+        gausnoise=gausnoise-(43)/2
+        fft_gausNoise = np.fft.rfft(gausnoise)
+        fft_QuantNoise = np.fft.rfft(quantNoise)
+        sliceFFTResultsAbsSqared=np.zeros([nnumOFSlices,freqs.size])
+        for i in range(nnumOFSlices):
+            tmp=copy.deepcopy(self.deviationFromNominal[(fftlength*i):(fftlength+fftlength*i)])*1e9
+            fftresult = np.fft.rfft(tmp)
+            sliceFFTResultsAbsSqared[i]=abs2(fftresult)*scale
+            if i==0:
+                axs[0].plot(freqs,abs2(fftresult)* scale,alpha=1/nnumOFSlices,label=r'\textbf{Aufgeizeichneter \textit{Jitter}}',color='tab:blue')
+                if plotPhase:
+                    axs[1].plot(freqs,np.unwrap(np.angle(fftresult)) / np.pi,label=r'\textbf{\textbf{Aufgeizeichneter \textit{Jitter}}}',color='tab:blue')
+            else:
+                axs[0].plot(freqs,abs2(fftresult)*scale,alpha=1/nnumOFSlices,color='tab:blue')
+                if plotPhase:
+                    axs[1].plot(freqs,np.unwrap(np.angle(fftresult)) / np.pi,color='tab:blue')
+        axs[0].plot(freqs, np.mean(sliceFFTResultsAbsSqared,axis=0),
+                    label=r'\textbf{Mittelwert aufgeizeichneter \textit{Jitter}}', color='tab:blue')
+        axs[0].plot(freqs, np.ones(freqs.size) * np.mean(abs2(fft_QuantNoise)*scale),label=r'\textbf{Gleich verteiltes Quantisierungs Rauschen Interval '+"%.2f" % ((1/108e6)*1e9)+' ns }',color='tab:orange')
+        axs[0].plot(freqs, np.ones(freqs.size) * np.mean(abs2(fft_gausNoise)*scale),label=r'\textbf{Nomalverteilter Jitter} $\sigma = 43~\mathrm{ns}$',color='tab:red')
+
+        axs[0].set_ylabel(r'\textbf{$Jitter~PSD$ in $\frac{{\mathrm{ns}}^2}{\mathrm{Hz}}$')
+        axs[0].grid()
+        axs[0].legend()
+        if plotPhase:
+
+            axs[1].set_ylabel(r'\textbf{\textit{unwrapped} Phase}\\ $\varphi$ \textbf{in} rad')
+            axs[1].plot(freqs,np.unwrap(np.angle(fft_gausNoise)),label=r'\textbf{Gleich verteiltes Quantisierungs Rauschen Interval '+"%.2f" % ((1/108e6)*1e9)+' ns }',color='tab:orange')
+            axs[1].plot( freqs,np.unwrap(np.angle(fft_QuantNoise)),
+                    label=r'\textbf{Nomalverteiltes Rauschen} $\sigma = 43~\mathrm{ns}$',color='tab:red')
+            axs[1].legend()
+            axs[1].set_xlabel(r'\textbf{Frequenz $f$ in Hz}')
+            axs[1].grid()
+        else:
+            axs[0].set_xlabel(r'\textbf{Frequenz $f$ in Hz}')
+        fig.show()
 
 
-def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=0.1,jitterGen=jitterGen):
+
+
+dataFile = h5py.File('/home/benedikt/Downloads/jitter_recording.hfd5', 'r')
+sensorName = '0xe0040100_BMA_280'
+jitterGen = realWordJitterGen(dataFile, sensorName)
+
+def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=0.1,jitterGen=jitterGen,A0=1,phi0=0):
     originalTimpoints=np.linspace(0,lengthInS,num=int(fs*lengthInS))
-    Signal=np.sin(originalTimpoints*np.pi*2*freq)
+    Signal=A0*np.sin(originalTimpoints*np.pi*2*freq+phi0)
     if t_jitter >=0:
         jitter=np.random.normal(scale=t_jitter, size=Signal.size)
     else:
         jitter=jitterGen.getrandomDeviations(Signal.size)
     timeWJitter=originalTimpoints+jitter
     fitparams=st.threeparsinefit(Signal,timeWJitter,freq)
-    return st.phase(fitparams),st.amplitude(fitparams)
+    return st.phase(fitparams)-phi0,st.amplitude(fitparams)/A0
 
 def getmuAndSTdForFreq(testparams,numOfruns=100):
     freq=testparams[0]
@@ -82,17 +160,21 @@ def getmuAndSTdForFreq(testparams,numOfruns=100):
     return np.std(FitPhases),np.mean(FitPhases),np.std(FitMags),np.mean(FitMags)
 
 
+
 if __name__ == "__main__":
 
-    jitterGen.plotDeviation()
+    #jitterGen.plotDeviation()
+    jitterGen.plotAkf()
+    #jitterGen.plotFFT()
+    #jitterGen.plotFFT(plotPhase=False)
     freqPoints=200
-    ampPoints=13
-    nsPreAmpStep=10
+    ampPoints=8
+    nsPreAmpStep=20
     lengthInS=10
     freqs=np.zeros(freqPoints*ampPoints)
     noiseLevel=np.zeros(freqPoints*ampPoints)
     for i in range(ampPoints):
-        tmpFreqs=np.logspace(1.00,7.0,freqPoints)
+        tmpFreqs=np.logspace(1.00,4.0,freqPoints)
         freqToNear=(tmpFreqs % 1000) < 5
         freqToNear+=(tmpFreqs % 500) < 5
         freqToAdd=10*freqToNear
@@ -102,17 +184,18 @@ if __name__ == "__main__":
         noiseLevel[i * freqPoints:(i + 1) * freqPoints] = tmpNoiseLevel
     length=np.ones(freqs.size)*lengthInS
     testparams=np.array([freqs,noiseLevel,length]).transpose()
+
     results=process_map(getmuAndSTdForFreq, testparams, max_workers=7)
     results=np.array(results)
     bw=np.ones(ampPoints)
-    fig1,ax=plt.subplots(2)
+    fig1,ax=plt.subplots(2,sharex=True)
     fig1.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = "+str(lengthInS)+' s}')
     for i in range(ampPoints):
         tmpFreqs=freqs[i * freqPoints: (i + 1) * freqPoints]
         if i==0:
-            label=r"\textbf{Reale Zeitabweichungen}"
+            label=r"\textbf{Realer \textit{Jitter}}"
         else:
-            label=r"\textbf{Jitter = " + str((i-1) * nsPreAmpStep) + " ns}"
+            label=r"\textbf{\textit{Jitter} = " + str((i-1) * nsPreAmpStep) + " ns}"
         ax[0].plot(tmpFreqs,
                    200*results[i * freqPoints: (i + 1) * freqPoints,2],
                    label=label)
@@ -133,18 +216,18 @@ if __name__ == "__main__":
     ax[1].legend(ncol=4)
     ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax[0].set_ylabel(r"$2\sigma(\hat{A})$ \textbf{in \%}")
-    ax[1].set_ylabel(r"$\overline{\hat{A}}$ \textbf{in R.U.}")
+    ax[1].set_ylabel(r"$\frac{\overline{\hat{A}}}{A_{soll}}$ \textbf{in R.U.}")
     ax[0].grid(True)
     ax[1].grid(True)
     fig1.show()
 
-    fig, ax = plt.subplots(2)
+    fig, ax = plt.subplots(2,sharex=True)
     fig.suptitle(r"\textbf{SampleRate = 1 kHz Dauer = " + str(lengthInS) + ' s}')
     for i in range(ampPoints):
         if i==0:
-            label=r"\textbf{Reale Zeitabweichungen}"
+            label=r"\textbf{Realer \textit{Jitter}}"
         else:
-            label=r"\textbf{Jitter = " + str((i-1) * nsPreAmpStep) + " ns}"
+            label=r"\textbf{\textit{Jitter} = " + str((i-1) * nsPreAmpStep) + " ns}"
         tmpFreqs = freqs[i * freqPoints: (i + 1) * freqPoints]
         sigmaPhase = results[i * freqPoints: (i + 1) * freqPoints, 0]
         dataPlot = ax[0].plot(tmpFreqs,
@@ -153,33 +236,33 @@ if __name__ == "__main__":
         ax[1].plot(tmpFreqs,
                    results[i * freqPoints: (i + 1) * freqPoints, 1] / np.pi * 180,
                    label=label)
-        """
-        if i != 0:
-            popt, pcov = curve_fit(logGisticPICaped, tmpFreqs, sigmaPhase, p0=[0.001, bw[i],np.pi])
-            ax[0].plot(tmpFreqs, logGisticPICaped(tmpFreqs, popt[0], popt[1], popt[2]) / (np.pi * 180),
-                       label=r"\textbf{ Fit Bandbreite = }" + "{:.2f}".format(abs(popt[1]) / 1e6) + " MHz",
-                       color=dataPlot[-1].get_color(), ls='--')
-            bw[i] = popt[1]
-            print('______' + str(i * nsPreAmpStep) + ' ns ___________')
-            print(popt)
-            print(popt[1] / (i * nsPreAmpStep * 10e-9) * (i * nsPreAmpStep * 10e-9))
-            print('_____________________________________________')
-        """
+        
+        #if i != 0:
+        #    popt, pcov = curve_fit(logGisticPICaped, tmpFreqs, sigmaPhase, p0=[0.001, bw[i],np.pi])
+        #    ax[0].plot(tmpFreqs, logGisticPICaped(tmpFreqs, popt[0], popt[1], popt[2]) / (np.pi * 180),
+        #               label=r"\textbf{ Fit Bandbreite = }" + "{:.2f}".format(abs(popt[1]) / 1e6) + " MHz",
+        #               color=dataPlot[-1].get_color(), ls='--')
+        #    bw[i] = popt[1]
+        #    print('______' + str(i * nsPreAmpStep) + ' ns ___________')
+        #    print(popt)
+        #    print(popt[1] / (i * nsPreAmpStep * 10e-9) * (i * nsPreAmpStep * 10e-9))
+        #    print('_____________________________________________')
+        
     ax[0].legend(ncol=4)
     ax[1].legend(ncol=4)
     ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax[0].set_ylabel(r"$2\sigma \varphi$ \textbf{in} $^\circ$")
-    ax[1].set_ylabel(r"$\overline{\varphi}$ \textbf{in} $^\circ$")
+    ax[1].set_ylabel(r"$\overline{\varphi}-\varphi_{soll}$ \textbf{in} $^\circ$")
     ax[0].grid(True)
     ax[1].grid(True)
     fig.show()
-    """
+    
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, projection='3d')
     surf=ax2.plot_trisurf(freqs, noiseLevel, results[:, 0],cmap=cm.coolwarm)
     fig2.colorbar(surf, shrink=0.5, aspect=5)
     fig2.show()
-    """
+
     lengthPoints=15
     StartLength=64
     noiseLevelToUse=100*10e-9
@@ -188,7 +271,7 @@ if __name__ == "__main__":
     length = np.ones(freqs.size)
 
     for i in range(lengthPoints):
-        tmpFreqs=np.logspace(1.00,6.0,freqPoints)
+        tmpFreqs=np.logspace(1.00,7.0,freqPoints)
         freqToNear=(tmpFreqs % 1000) < 5
         freqToNear = (tmpFreqs % 1000) > 995
         freqToNear+=(tmpFreqs % 500) < 5
@@ -202,8 +285,8 @@ if __name__ == "__main__":
     testparams=np.array([freqs,noiseLevel,length]).transpose()
     results=process_map(getmuAndSTdForFreq, testparams, max_workers=7)
     results=np.array(results)
-    fig2,ax=plt.subplots(2)
-    fig2.suptitle(r"\textbf{SampleRate = 1 kHz Jitter = 100 ns}")
+    fig2,ax=plt.subplots(2,sharex=True)
+    fig2.suptitle(r"\textbf{SampleRate = 1 kHz | 100 ns  \textit{Jitter}}")
     for i in range(lengthPoints):
         ax[0].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
                    2*results[i * freqPoints: (i + 1) * freqPoints,0]/np.pi*180,
@@ -215,14 +298,14 @@ if __name__ == "__main__":
     ax[1].legend(ncol=4)
     ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax[0].set_ylabel(r"$2\sigma(\varphi)$ \textbf{in} $^\circ$")
-    ax[1].set_ylabel(r"$\overline{\varphi}$ \textbf{in} $^\circ$")
+    ax[1].set_ylabel(r"$\overline{\varphi}-\varphi_{soll}$ \textbf{in} $^\circ$")
     ax[0].grid(True)
     ax[1].grid(True)
 
     fig2.show()
 
-    fig3,ax=plt.subplots(2)
-    fig3.suptitle(r"\textbf{SampleRate = 1 kHz Jitter = 100 ns}")
+    fig3,ax=plt.subplots(2,sharex=True)
+    fig3.suptitle(r"\textbf{SampleRate = 1 kHz | 100 ns \textit{Jitter}}")
     for i in range(lengthPoints):
         ax[0].plot(freqs[i * freqPoints: (i + 1) * freqPoints],
                    2*results[i * freqPoints: (i + 1) * freqPoints,2]*100,
@@ -234,7 +317,7 @@ if __name__ == "__main__":
     ax[1].legend(ncol=2)
     ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax[0].set_ylabel(r"$2\sigma(\hat{A})$ \textbf{in \%}")
-    ax[1].set_ylabel(r"$\overline{\hat{A}}$ \textbf{in A.U.}")
+    ax[1].set_ylabel(r"$\frac{\overline{\hat{A}}}{A_{soll}}$ \textbf{in R.U.}")
     ax[0].grid(True)
     ax[1].grid(True)
     fig3.show()
