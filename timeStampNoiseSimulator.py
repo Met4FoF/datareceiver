@@ -39,7 +39,8 @@ plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
 class realWordJitterGen:
-
+    def __rpr__(self):
+        return str(self.title)+' fs= '+str(self.fs)+' Hz'
     def __init__(self,HDfFile,sensorName,title,nominalfreq=0,offset=[40000,10000]):
         self.datafile=HDfFile
         self.title=title
@@ -55,7 +56,7 @@ class realWordJitterGen:
             self.fs = nominalfreq
         #self.deltaT=self.length/(self.dataPoints-1)
         self.deltaT = 1.0/self.fs
-        print("Sample frequenc is "+str(self.fs)+' Hz')
+        print("Sample frequency is "+str(self.fs)+' Hz')
         self.expectedTime=self.relSampleNumber.astype(np.float128)*self.deltaT
         self.deviationFromNominal=self.timeData-self.expectedTime#calulate deviation from Expected Mean
         self.meandeviationFromNominal=np.mean(self.deviationFromNominal)
@@ -84,24 +85,42 @@ class realWordJitterGen:
 
 
 
-    def plotDeviation(self,fig=None,ax=None,lenghth=None,show=False,lw=1.5):
-        if fig==None and ax==None:
+    def plotDeviation(self,fig=None,axs=None,lengthInS=None,show=False,lw=1.5,correctLinFreqDrift=True):
+        if fig==None and axs==None:
             fig,ax=plt.subplots()
             fig.set_figwidth(12)
             fig.set_figheight(4)
-        if lenghth ==None:
-            ax.plot(self.timeData,self.deviationFromNominal*1e9,label=self.title,lw=lw)
+            ax2 = ax.twinx()# axis for deviation in samples
+            axs=[ax,ax2]
         else:
-            ax.plot(self.timeData[:lenghth], self.deviationFromNominal[:lenghth]*1e9, label=self.title,lw=lw)
+            ax=axs[0]
+            ax2=axs[1]
+        if lengthInS ==None:
+            length=self.timeData.size
+        else:
+            length=int(lengthInS*self.fs)
+
+        if correctLinFreqDrift:
+            tmp=self.deviationFromNominal[:length]
+            correctedTimeDev=tmp-np.arange(length)*(tmp[-1]/length)-tmp[0]
+            correctedTime=self.timeData[:length]-np.arange(length)*(tmp[-1]/length)
+            line=ax.plot(correctedTime, correctedTimeDev * 1e9, label=self.title, lw=lw)
+            ax2.plot(correctedTime, correctedTimeDev/self.deltaT, label=self.title, lw=lw,color=line[0].get_color(),ls='--')
+        else:
+            line=ax.plot(self.timeData[:length], self.deviationFromNominal[:length]*1e9, label=self.title,lw=lw)
+            ax2.plot(self.timeData[:length], self.deviationFromNominal[:length] / self.deltaT, label=self.title, lw=lw, color=line[0].get_color(),ls='--')
         #ax.plot(np.arange(self.interpolatedDeviationFromNominal.size)*self.deltaT,self.interpolatedDeviationFromNominal)
         if show:
             ax.set_xlabel(r"\textbf{Relative time in s}")
             ax.set_ylabel(r"\textbf{Time deviation in ns}")
-            ax.legend()
+            ax2.set_ylabel(r"\textbf{Time deviation in samples}")
+            ax.ticklabel_format(axis='both',style='plain')
+            ax.legend(loc='upper left')
+            ax2.legend(loc='upper right')
             ax.grid()
-            fig.tight_layout()
+            #fig.tight_layout()
             fig.show()
-        return fig,ax
+        return fig,axs
     def getrandomDeviations(self,length,reytryes=1000):
         isContinousDataSliceRetryCount=0
         while isContinousDataSliceRetryCount<reytryes:
@@ -110,6 +129,7 @@ class realWordJitterGen:
                 break
             else:
                 isContinousDataSliceRetryCount+=1
+                print("Hit hole in Data")
 
         return self.deviationFromNominal[idx:idx+length]
 
@@ -188,7 +208,9 @@ class realWordJitterGen:
         fig.tight_layout()
         fig.show()
 
-    def plotPhaseNoise(self,sampleFreq=1000,fftlength=1048576,plotRaw=True,plotQuanatisationNoise=0,fig=None,ax=None,filterWidth=5):
+    def plotPhaseNoise(self,sampleFreq=None,fftlength=1048576,plotRaw=True,plotQuanatisationNoise=0,fig=None,ax=None,filterWidth=5):
+        if sampleFreq==None:
+            sampleFreq=self.fs
         nnumOFSlices=int(np.floor(self.interpolatedDeviationFromNominal.shape[0]/fftlength))
         if fig==None and ax==None:
             fig, ax = plt.subplots()
@@ -216,7 +238,7 @@ class realWordJitterGen:
             fft_QuantNoise = np.fft.rfft(quantNoise)
             p = ax.plot(freqs, 20 * np.log10(gaussian_filter(fft_QuantNoise, filterWidth*10)),
                         label=r'\textbf{Quantisation noise}', )
-        ax.set_ylabel(r'\textbf{Phasenoise in} $\frac{\mathrm{dBc}}{\mathrm{Hz}}$')
+        ax.set_ylabel(r'\textbf{Phase noise in} $\frac{\mathrm{dBc}}{\mathrm{Hz}}$')
         ax.set_xlabel(r'$\frac{{Offset~frequency}}{Signal~frequency}$ \textbf{in} $\frac{\mathrm{Hz}}{\mathrm{Hz}}$')
         ax.grid(True, which="both")
         ax.legend()
@@ -234,6 +256,8 @@ dataFileEXTREF = h5py.File('/home/benedikt/repos/datareceiver/extRev_single_GPS_
 dataFileINTREF = h5py.File('/home/benedikt/repos/datareceiver/intRev_multi_GPS_1KHz_Edges.hfd5','r')
 dataFileMPU9250 = h5py.File('/home/benedikt/tmp/MPU9250PTB_v5.hdf5','r')
 dataFileBMA280 = h5py.File('/home/benedikt/tmp/BMA280PTB.hdf5','r')
+dataFileLSM6DSRX = h5py.File('/home/benedikt/tmp/ST_sensor_test_1667Hz_noTimeGlittCorr.hfd5','r')
+dataFileLSM6DSRX6667Hz= h5py.File('/home/benedikt/tmp/ST_sensor_test_6667Hz_2.hfd5','r')
 """
 timeDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,10000:20000].astype(np.int64)
 ticksDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,10000:20000].astype(np.int64)
@@ -248,14 +272,20 @@ timeDiffDF3=dataFile3['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,1001
 ticksDiffDF3=dataFile3['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,10013:20013].astype(np.int64)-dataFile3['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,12020:22020].astype(np.int64)
 ticksDiffDF2=ticksDiffDF2-np.mean(ticksDiffDF3)
 """
-jitterGen1 = realWordJitterGen(dataFileINTREF, '0x39f50100_STM32_GPIO_Input',"Board 1 int. clock 1000 Hz")#nominalfreq=1000)
+jitterGen1 = realWordJitterGen(dataFileINTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{Board 1 int. clock}")#nominalfreq=1000)
 jitterGen2 = realWordJitterGen(dataFileINTREF, '0x60ad0100_STM32_GPIO_Input',"Board 2 int. clock 1000 Hz")#nominalfreq=1000)
 jitterGen3 = realWordJitterGen(dataFileEXTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{Board 1 ext. clock")# 1000 Hz}")#nominalfreq=1000)
-jitterGen4 = realWordJitterGen(dataFileEXTREF, '0x60ad0100_STM32_GPIO_Input',"Board 2 ext. clock 1000 Hz")#nominalfreq=1000)
+jitterGen4 = realWordJitterGen(dataFileEXTREF, '0x60ad0100_STM32_GPIO_Input',"Board 2 ext. clock")#nominalfreq=1000)
 jitterGenMPU9250 = realWordJitterGen(dataFileMPU9250,'0x1fe40000_MPU_9250',r"\textbf{MPU9250}")# $f_s=$ \textbf{1001.0388019191 Hz}")
 jitterGenBMA280= realWordJitterGen(dataFileBMA280,'0x1fe40000_BMA_280',     r"\textbf{BMA280}")# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
-jitterGensForSimulations=[jitterGenBMA280,jitterGenMPU9250,jitterGen3]#jitterGen1,jitterGen3
+jitterGenLSM6DSRX=realWordJitterGen(dataFileLSM6DSRX,'0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX $f_s$=1.667~kHz}")
+jitterGenLSM6DSRX6667Hz=realWordJitterGen(dataFileLSM6DSRX6667Hz,'0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX $f_s$=6.667~kHz}")
+
+jitterGensForSimulations=[jitterGenBMA280,jitterGenMPU9250,jitterGen3,jitterGenLSM6DSRX,jitterGenLSM6DSRX6667Hz]#jitterGen1,jitterGen3
 def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=0.1,jitterGens=jitterGensForSimulations,A0=1,phi0=0,linearFreqCorrection=True):
+    #TODO change interface
+    if t_jitter <= 0:
+        fs=jitterGens[int(-1*t_jitter)].fs
     originalTimpoints=np.linspace(0,lengthInS,num=int(fs*lengthInS))
     Signal=A0*np.sin(originalTimpoints*np.pi*2*freq+phi0)
     if t_jitter >0:
@@ -299,9 +329,11 @@ def getmuAndSTdForFreq(testparams,numOfruns=1000):
 
 
 if __name__ == "__main__":
+    deviationPlotlength=10
+    figDviation,axDeviation=jitterGen1.plotDeviation(lengthInS=deviationPlotlength,lw=1)
     """
-    figDviation,axDeviation=jitterGen1.plotDeviation(lenghth=150000,lw=1)
-    jitterGen2.plotDeviation(fig=figDviation,ax=axDeviation,lenghth=150000,lw=1)
+    jitterGen2.plotDeviation(fig=figDviation,ax=axDeviation,length=150000,lw=1)
+    
     shorterDsetLength=150000#np.min([jitterGen1.dataPoints,jitterGen2.dataPoints])-1024
 
     axDeviation.plot(jitterGen1.expectedTime[:shorterDsetLength], (
@@ -312,31 +344,37 @@ if __name__ == "__main__":
                 jitterGen3.AbsoluteTime[:shorterDsetLength].astype(np.int64) - jitterGen4.AbsoluteTime[
                                                                                :shorterDsetLength].astype(np.int64)),
                      label="Time difference single GNSS ext. clock",lw=2.5)
-    jitterGen3.plotDeviation(fig=figDviation,ax=axDeviation,lenghth=150000,lw=2.5)
-    jitterGen4.plotDeviation(fig=figDviation, ax=axDeviation,lenghth=150000,show=True,lw=2.5)
-    #jitterGenMPU9250.plotDeviation(fig=figDviation, ax=axDeviation, show=True)
-    #jitterGenBMA280.plotDeviation(fig=figDviation, ax=axDeviation, show=True)
-    figPhaseNoise,axPhaseNoise=jitterGen1.plotPhaseNoise(plotRaw=False)
-    jitterGen4.plotPhaseNoise(fig=figPhaseNoise,ax=axPhaseNoise,plotRaw=False)
-    jitterGenMPU9250.plotPhaseNoise(fig=figPhaseNoise,ax=axPhaseNoise,sampleFreq=1001.0388019190635914,plotRaw=False)
-    jitterGenBMA280.plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, sampleFreq=2064.949985814746488, plotRaw=False)
+    jitterGen3.plotDeviation(fig=figDviation,ax=axDeviation,length=150000,lw=2.5)
+    jitterGen4.plotDeviation(fig=figDviation, ax=axDeviation,length=150000,show=True,lw=2.5)
     """
-    """
-    jitterGen1.plotAkf()
-    #jitterGen.plotFFT()
-    jitterGen1.plotFFT(plotPhase=False)
-    """
+    jitterGenMPU9250.plotDeviation(fig=figDviation, axs=axDeviation,lengthInS=deviationPlotlength)
+    jitterGenBMA280.plotDeviation(fig=figDviation, axs=axDeviation,lengthInS=deviationPlotlength, show=True)
+    jitterGenLSM6DSRX.plotDeviation(fig=figDviation, axs=axDeviation,lengthInS=deviationPlotlength, show=True)
+    jitterGenLSM6DSRX6667Hz.plotDeviation(fig=figDviation, axs=axDeviation,lengthInS=deviationPlotlength, show=True)
 
+    figPhaseNoise,axPhaseNoise=jitterGen1.plotPhaseNoise(plotRaw=False)
+    #jitterGen4.plotPhaseNoise(fig=figPhaseNoise,ax=axPhaseNoise,plotRaw=False)
+    jitterGenMPU9250.plotPhaseNoise(fig=figPhaseNoise,ax=axPhaseNoise,plotRaw=False)
+    jitterGenBMA280.plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, plotRaw=False)
+    jitterGenLSM6DSRX.plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, plotRaw=False)
+    jitterGenLSM6DSRX6667Hz.plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, plotRaw=False)
+    """
+    """
+    #jitterGen1.plotAkf()
+    #jitterGen.plotFFT()
+    #jitterGen1.plotFFT(plotPhase=False)
+
+    #jitterGen1.plotPhaseNoise(plotRaw=False)
     freqPoints=50
     ampPoints=0
     SimuPoints =     ampPoints+len(jitterGensForSimulations)
-    nsPreAmpStep=25
+    nsPreAmpStep=20
     lengthInS=10
     freqs=np.zeros(freqPoints * SimuPoints)
     noiseLevel=np.zeros(freqPoints * SimuPoints)
     runNoiselevel=np.append(np.flip(np.arange(len(jitterGensForSimulations)) - (len(jitterGensForSimulations)-1)), np.array(np.arange(SimuPoints - 2) + 1) * nsPreAmpStep * 10e-9)
     for i in range(SimuPoints):
-        tmpFreqs=np.linspace(0.10,1000,freqPoints)
+        tmpFreqs=np.linspace(0.1,1000,freqPoints)
         freqToNear=(tmpFreqs % 1000) < 5
         freqToNear+=(tmpFreqs % 500) < 5
         freqToAdd=10*freqToNear
@@ -352,7 +390,6 @@ if __name__ == "__main__":
     bw=np.ones(SimuPoints)
 
 
-    fig1,ax=plt.subplots(2,sharex=True)
     fig1, ax = plt.subplots()
     fig1.set_figwidth(12)
     fig1.set_figheight(4)
@@ -361,7 +398,7 @@ if __name__ == "__main__":
     plotErrors=True
     for i in range(SimuPoints):
         tmpFreqs=freqs[i * freqPoints: (i + 1) * freqPoints]
-        if i<=len(jitterGensForSimulations):
+        if i<=(len(jitterGensForSimulations)-1):
             label = jitterGensForSimulations[i].title
         else:
             label=r"\textbf{\textit{simu.} $2\sigma= " + str(2*((i-1) * nsPreAmpStep)) + "$ ns}"
@@ -419,7 +456,7 @@ if __name__ == "__main__":
     fig4.set_figheight(4)
     #fig4.suptitle(r"\textbf{Samplerate = 1 kHz ; duration = " + str(lengthInS) + ' s}')
     for i in range(SimuPoints):
-        if i<=len(jitterGensForSimulations):
+        if i<=(len(jitterGensForSimulations)-1):
             label = jitterGensForSimulations[i].title
         else:
             label=r"\textbf{\textit{simu.} $2\sigma= " + str(2*((i-1) * nsPreAmpStep)) + "$ ns}"
