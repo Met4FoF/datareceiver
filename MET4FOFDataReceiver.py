@@ -1205,7 +1205,7 @@ class Sensor:
 
 
 class HDF5Dumper:
-    def __init__(self, dscp, file, hdfffilelock, chunksize=2048,correcttimeglitches=True,ignoreMissmatchErrors=True):
+    def __init__(self, dscp, file, hdfffilelock, chunksize=2048,correcttimeglitches=False,ignoreMissmatchErrors=True):
         self.dscp=dscp
         self.hdflock = hdfffilelock
         self.pushlock = threading.Lock()
