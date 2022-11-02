@@ -40,12 +40,12 @@ import scipy
 from scipy.spatial.transform import Rotation as R
 import figPickel as fp
 
-askForFigSave=True
+askForFigSave=False
 #defaultPlotSelection={'numRows':2,'qunatiesToPlot':['Voltage','Acceleration','Temperature']}
 defaultPlotSelection={'numRows':1,'qunatiesToPlot':['Voltage','Acceleration']}
 #defaultPlotSelection=None
 
-UNITPrefix='/' #'in'
+UNITPrefix='$~$/$~$' #'in'
 def ufloattouncerval(ufloat):
     result = np.empty([1], dtype=uncerval)
     result["value"] = ufloat.n
@@ -680,6 +680,7 @@ class sineexcitation(experiment):
             radialCord)  # differences of the angles this value can be bigger than -180 -- 180 deg
         # mappedDeltaAngle = np.arctan2(np.sin(deltaAng),
         #                              np.cos(deltaAng))  # map angle differences to +- 180°
+        times = sineparams[:, 3]
         coef = np.polyfit(times, np.unwrap(deltaAng), 1)  # so fit dphi /dt
         deltaF = coef[0] / (np.pi * 2)
         return deltaF
@@ -1578,7 +1579,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
         boldFreqlabels.append(r'\textbf{' + str(freq) + '}')
     ax.set_xticklabels(boldFreqlabels, rotation=0)
     if lang=='EN':
-        ax.set_xlabel(r'\textbf{Excitation frequency} \textbf{in Hz}')
+        ax.set_xlabel(r'\textbf{Excitation frequency '+UNITPrefix+r'Hz}')
     elif lang=='DE':
         ax.set_xlabel(r'\textbf{Anregungsfrequenz'+UNITPrefix+'Hz}')
     if type == 'Phase':
@@ -1656,10 +1657,10 @@ def processdata(i):
     axisfreqs = mpdata["uniquexfreqs"]
     experiment.do3paramsinefits(axisfreqs, periods=10)
     experiment.do3paramsinefits(axisfreqs, periods=10, sensorsToFit=[mpdata['ADCName']], datasetsToFit=['Voltage'])
-    experiment.plotsinefitParams()
+    #experiment.plotsinefitParams()
     deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope(mpdata['ADCName'],'Voltage',mpdata['AnalogrefChannel'])
     experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
-    experiment.plotsinefitParams(meanPhase=True)
+    #experiment.plotsinefitParams(meanPhase=True)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
     sys.stdout.flush()
@@ -1679,7 +1680,21 @@ def processdata(i):
 
 
 if __name__ == "__main__":
-
+    hdffilename = r"/home/benedikt/Downloads/gps_drift_jitter_correlation_8MHZ_int_ref.hfd5"
+    datafile = h5py.File(hdffilename, "r+")
+    datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Sample_number'].shape
+    board1SN = datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Sample_number'][0, :]
+    board1SNDelta=board1SN-board1SN[0]
+    board1Times = datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0, :]
+    board1TimesDelta=board1Times-board1Times[0]
+    b1DifFromCount = board1TimesDelta - 1e6 * board1SNDelta
+    board2SN = datafile['RAWDATA/0x60ad0100_STM32_GPIO_Input/Sample_number'][0, :]
+    board2SNDelta = board2SN - board2SN[0]
+    board2Times = datafile['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0, :]
+    board2TimesDelta = board2Times - board2Times[0]
+    b2DifFromCount=board2TimesDelta -1e6*board2SNDelta
+    plt.plot(b1DifFromCount[:-10000])
+    plt.plot(b2DifFromCount[:-10000])
     plt.rc('font', family='serif')
     plt.rc('text', usetex=True)
     plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
@@ -1778,10 +1793,10 @@ if __name__ == "__main__":
             raise ValueError(" Unkowen Key use 'PTB1D' or 'CEM1D'") #TODO use dict and dickt keys
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
-        #i=np.arange(numofexperiemnts)
-        #results=process_map(processdata, i, max_workers=1)
-        i = np.array(18)
-        results = np.array(processdata(i))
+        i=np.arange(numofexperiemnts)
+        results=process_map(processdata, i, max_workers=15)
+        #i = np.array(18)
+        #results = np.array(processdata(i))
         freqs = np.zeros(numofexperiemnts)
         ex_freqs = np.zeros(numofexperiemnts)
         mag = np.zeros(numofexperiemnts)
@@ -1808,9 +1823,9 @@ if __name__ == "__main__":
         TF=getRAWTFFromExperiemnts(datafile['/EXPERIMENTS/Sine excitation'],leadSensorname)
         test.addrawtftohdffromexpreiments(datafile["EXPERIMENTS/Sine excitation"], leadSensorname)
         test.hdffile.flush()
-        results[0].plotall()
-        results[0].plotsinefit()
-        results[0].plotsinefitParams()
+        #results[0].plotall()
+        #results[0].plotsinefit()
+        #results[0].plotsinefitParams()
         plotRAWTFUncerComps(datafile, sensorName=leadSensorname,
                             title='Uncertainty of the Phase components PTB measurments', startIDX=0, stopIDX=17, zoom=5)
         plotRAWTFUncerComps(datafile,type='Mag', sensorName=leadSensorname,

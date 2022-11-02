@@ -4,7 +4,7 @@
 import h5py as h5py
 import numpy as np
 import matplotlib.pyplot as plt
-
+from matplotlib.ticker import AutoMinorLocator
 from uncertainties import unumpy, ufloat
 from uncertainties.umath import *  # sin(), etc.
 
@@ -221,7 +221,7 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
 
 
 
-def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[10,5,5,5,5,5],repName=['Ref','225~$^\circ$ 0.00 mm','~45~~$^\circ$ 1.25 mm','135 $^\circ$ 1.50 mm','290~$^\circ$ 1.93 mm','200~$^\circ$ 1.70 mm'],lang='EN'):
+def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[5,5,5,5,5],repName=['225~$^\circ$ 0.00 mm','~45~~$^\circ$ 1.25 mm','135 $^\circ$ 1.50 mm','290~$^\circ$ 1.93 mm','200~$^\circ$ 1.70 mm'],lang='EN'):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][0:numofexpPerLoop]
     phaseUncerData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['uncertainty']
     phaseValData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['value']
@@ -378,13 +378,13 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
 
         labels.append(TfDictKey)
         i=i+1
-    ampMean, ampUncer = generateWigthedMeanFromArrays(ampsArray, stdAmpWigthArray)
-    phaseMean, phaseUncer = generateWigthedMeanFromArrays(phaseMeanArray, stdPhaseWightArray)
+    ampMean, ampUncer = generateWigthedMeanFromArrays(ampsArray[:2,:], stdAmpWigthArray[:2,:])
+    phaseMean, phaseUncer = generateWigthedMeanFromArrays(phaseMeanArray[:2,:], stdPhaseWightArray[:2,:])
 
     fig,ax=plt.subplots(2, sharex=True)
     for TFIDX in range(numOfTfs):
-        ax[0].errorbar(freqs*(1+0.002*(TFIDX +1)), ampsArray[TFIDX,:],   yerr=2 * stdAmpWigthArray[TFIDX, :], label=labels[TFIDX],fmt='o')
-        ax[1].errorbar(freqs*(1+0.002*(TFIDX +1)), phaseMeanArray[TFIDX,:]/np.pi*180, yerr=(2 * stdPhaseWightArray[TFIDX, :])/np.pi*180, label=labels[TFIDX],fmt='o')
+        ax[0].errorbar(freqs*(1+0.002*(TFIDX +1)), ampsArray[TFIDX,:],   yerr=2 * stdAmpWigthArray[TFIDX, :], label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8)
+        ax[1].errorbar(freqs*(1+0.002*(TFIDX +1)), phaseMeanArray[TFIDX,:]/np.pi*180, yerr=(2 * stdPhaseWightArray[TFIDX, :])/np.pi*180, label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8)
     if lang=='EN':
         ax[1].set_xlabel(r"\textbf{Frequency in Hz}")
     if lang=='DE':
@@ -394,17 +394,21 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
     ax[1].set_ylabel(r"$\varphi(\omega)$ \textbf{in} $^\circ$")
     ax[0].legend(ncol=3)
     ax[1].legend(ncol=3)
-    ax[0].grid()
-    ax[1].grid()
     ax[0].grid(axis='x',which = 'minor', linestyle = '--')
     ax[1].grid(axis='x',which='minor', linestyle='--')
+    ax[0].grid(axis='y',which = 'minor', linestyle = '--')
+    ax[1].grid(axis='y',which='minor', linestyle='--')
+    ax[0].yaxis.set_minor_locator(AutoMinorLocator(4))
+    ax[1].yaxis.set_minor_locator(AutoMinorLocator(4))
+    ax[0].grid(lw=PLTSCALFACTOR*0.66)
+    ax[1].grid(lw=PLTSCALFACTOR*0.66)
     ax[0].set_title(r"\textbf{Übertragungsfunktion "+titleExpansion+'}')
     fig.show()
 
     fig2,ax2=plt.subplots(2, sharex=True)
     for TFIDX in range(numOfTfs):
-        ax2[0].errorbar(freqs*(1+0.002*(TFIDX +1)), ampsArray[TFIDX,:]-ampMean,   yerr=2 * stdAmpWigthArray[TFIDX, :], label=labels[TFIDX],fmt='o')
-        ax2[1].errorbar(freqs*(1+0.002*(TFIDX +1)), (phaseMeanArray[TFIDX,:]-phaseMean)/np.pi*180, yerr=(2 * stdPhaseWightArray[TFIDX, :])/np.pi*180, label=labels[TFIDX],fmt='o')
+        ax2[0].errorbar(freqs*(1+0.002*(TFIDX +1)), ampsArray[TFIDX,:]-ampMean,   yerr=2 * stdAmpWigthArray[TFIDX, :], label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8)
+        ax2[1].errorbar(freqs*(1+0.002*(TFIDX +1)), (phaseMeanArray[TFIDX,:]-phaseMean)/np.pi*180, yerr=(2 * stdPhaseWightArray[TFIDX, :])/np.pi*180, label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8)
     if lang=='EN':
         ax2[1].set_xlabel(r"\textbf{Frequency in Hz}")
     if lang=='DE':
@@ -414,8 +418,14 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
     ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ in $^\circ$")
     ax2[0].legend(ncol=3)
     ax2[1].legend(ncol=3)
-    ax2[0].grid()
-    ax2[1].grid()
+    ax2[0].grid(axis='x',which = 'minor', linestyle = '--')
+    ax2[1].grid(axis='x',which='minor', linestyle='--')
+    ax2[0].grid(axis='y',which = 'minor', linestyle = '--')
+    ax2[1].grid(axis='y',which='minor', linestyle='--')
+    ax2[0].yaxis.set_minor_locator(AutoMinorLocator(4))
+    ax2[1].yaxis.set_minor_locator(AutoMinorLocator(4))
+    ax2[0].grid(lw=PLTSCALFACTOR*0.66)
+    ax2[1].grid(lw=PLTSCALFACTOR*0.66)
     ax2[0].set_title(r"\textbf{Abweichung vom gewichteten Mittel der Übertragungsfunktionen " + titleExpansion + '}')
     fig2.show()
 
@@ -423,8 +433,7 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
 
 if __name__ == "__main__":
     #hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
-    #leadSensorname = '0x1fe40000_MPU_9250'
-    """
+    leadSensorname = '0x1fe40000_MPU_9250'
     CEMhdffilename = r"/home/benedikt/data/IMUPTBCEM/MPU9250CEM_v5.hdf5"
     CEMSensorname = '0xbccb0000_MPU_9250'
     CEMdatafile = h5py.File(CEMhdffilename, "r")
@@ -449,13 +458,14 @@ if __name__ == "__main__":
                'sensorName':PTBSensorname,
                'phaseOffset':0}
     
-    #plotMeanTfsOneFile(datafile, sensorName=leadSensorname,lang='DE')
+    plotMeanTfsOneFile(PTBPlattendatafile, sensorName=leadSensorname,lang='DE')
     #testFreqsMean,phaseMean, stdPhaseWight,ampMean,stdAmpWigth=generateTFFromRawData(datafile, sensorName=leadSensorname,style='CEM')
-    TFDict={'CEM':CEMTFDIct,'PTB':PTBTFDIct,'PTB verschiedene Winkel': PTBPlattenDIct}
+    TFDict={'PTB verschiedene Winkel': PTBPlattenDIct,'CEM':CEMTFDIct,'PTB erste Messung':PTBTFDIct,}
     
 
     plotTFCOmparison(TFDict,uncerType='typeA',titleExpansion='MPU9250 Unsicherheit TypA')
     plotTFCOmparison(TFDict,uncerType='CMC',titleExpansion='MPU9250 Unsicherheit CMC')
+
     """
     PTBSensorname = '0x1fe40000_BMA_280'
     CEMSensorname = '0xbccb0000_BMA_280'
@@ -474,3 +484,4 @@ if __name__ == "__main__":
     TFDict = {'CEM': CEMBMADict, 'PTB': PTBBMADict}
     plotTFCOmparison(TFDict,uncerType='typeA',titleExpansion='BMA280 Unsicherheit TypA')
     plotTFCOmparison(TFDict,uncerType='CMC',titleExpansion='BMA280 Unsicherheit CMC')
+    """
