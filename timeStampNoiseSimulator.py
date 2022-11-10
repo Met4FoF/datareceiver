@@ -9,8 +9,10 @@ from scipy.optimize import curve_fit
 from scipy.signal import correlate
 from scipy.signal import correlation_lags
 from scipy.ndimage import gaussian_filter
+import uncertainties
 import h5py as h5py
 import functools
+#import allantools
 
 # importing copy module
 import copy
@@ -33,8 +35,8 @@ def align_yaxis(ax1, v1, ax2, v2):
     ax2.set_ylim(miny+dy, maxy+dy)
 
 plt.rc('font', family='serif')
-plt.rc('text', usetex=True)
-plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
+#plt.rc('text', usetex=True)
+#plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
 PLTSCALFACTOR = 1.5
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 16 * PLTSCALFACTOR
@@ -72,6 +74,7 @@ class realWordJitterGen:
             self.fs =  (self.relSampleNumber[-1].astype(self.floatType))/self.timeData[-1].astype(self.floatType)  # calculate smaple freq
         else:
             self.fs = nominalfreq
+        self.fs_std=np.NaN
         #self.deltaT=self.length/(self.dataPoints-1)
         self.deltaT = 1.0/self.fs
         print("Sample frequency is "+str(self.fs)+' Hz')
@@ -251,7 +254,7 @@ class realWordJitterGen:
         fig.tight_layout()
         fig.show()
 
-    def plotPhaseNoise(self,sampleFreq=None,fftlength=1048576,plotRaw=True,plotQuanatisationNoise=0,fig=None,ax=None,filterWidth=5,show=False):
+    def plotPhaseNoise(self,sampleFreq=None,samplefreqCorr='local',fftlength=1048576,plotRaw=False,fig=None,ax=None,filterWidth=1,show=True,plotTimeDevs=True):
         if sampleFreq==None:
             sampleFreq=self.fs
         nnumOFSlices=int(np.floor(self.interpolatedDeviationFromNominal.shape[0]/fftlength))
@@ -260,27 +263,42 @@ class realWordJitterGen:
             fig.set_figwidth(12)
             fig.set_figheight(4)
             #fig.subplots_adjust(bottom=0.15)
+        if plotTimeDevs:
+            figTimeDev,axTimeDev=plt.subplots()
         #ax.set_yscale('log')
         freqs = np.fft.rfftfreq(fftlength, d=1/sampleFreq)
         sliceFFTResultsAbs=np.zeros([nnumOFSlices,freqs.size])
+        correctedFreqs=np.zeros(nnumOFSlices)
         for i in range(nnumOFSlices):
             print("FFT "+str(i/nnumOFSlices*100)+"% done")
-            tmp=(copy.deepcopy(self.interpolatedDeviationFromNominal[(fftlength*i):(fftlength+fftlength*i)])+np.arange(fftlength)*1/sampleFreq).astype(self.floatType)
-            simuSin=np.sin(tmp*sampleFreq*2*np.pi)
-            fftresult = np.fft.rfft(simuSin)
-            sliceFFTResultsAbs[i]=abs(fftresult)/(2*fftlength)
-
+            tmp=(copy.deepcopy(self.interpolatedDeviationFromNominal[(fftlength*i):(fftlength+fftlength*i)]))#+np.arange(fftlength)*1/sampleFreq).astype(self.floatType)
+            if samplefreqCorr=='local':
+                idx = np.arange(tmp.size)*self.deltaT
+                slopeDeltaT, offset = np.polyfit(idx, tmp.astype(np.float64), 1)
+                DeltaFreq=slopeDeltaT/self.deltaT
+                correctedTimes=tmp-(np.arange(tmp.size)*(self.deltaT))*slopeDeltaT-offset
+                correcedFreq=sampleFreq + DeltaFreq
+                simuSin=np.sin(correctedTimes*(correcedFreq)*2*np.pi)
+                fftresult = np.fft.rfft(simuSin)
+                sliceFFTResultsAbs[i]=abs(fftresult)/(2*fftlength)
+                if plotTimeDevs:
+                    axTimeDev.plot(correctedTimes,label=r'\textbf{'+self.title+' Slice'+str(i)+'}')
+                correctedFreqs[i]=correcedFreq
+            else:
+                simuSin=np.sin(tmp*sampleFreq*2*np.pi)
+                fftresult = np.fft.rfft(simuSin)
+                sliceFFTResultsAbs[i]=abs(fftresult)/(2*fftlength)
+                if plotTimeDevs:
+                    axTimeDev.plot(tmp)
+        if samplefreqCorr=='local':
+            self.fs=np.mean(correctedFreqs)
+            self.fs_std=np.std(correctedFreqs)
+        sampleFrequFloat=uncertainties.ufloat(self.fs,self.fs_std*2)
         p=ax.plot(freqs/(sampleFreq), 20*np.log10(gaussian_filter(np.mean(sliceFFTResultsAbs,axis=0),filterWidth)),
-                    label=r'\textbf{'+self.title+'}', )
+                    label=r'\textbf{'+self.title+' $f_s$ {:.1u}'.format(sampleFrequFloat)+' Hz }', )
         if plotRaw:
             for i in range(nnumOFSlices):
-                ax.plot(freqs/(sampleFreq),20*np.log10(sliceFFTResultsAbs[i]),alpha=1/nnumOFSlices,label=r'\textbf{'+self.title+'}',color=p[0].get_color())
-        if plotQuanatisationNoise!=0:
-            quantNoise = np.random.uniform(size=fftlength) * plotQuanatisationNoise
-            quantNoise = quantNoise - plotQuanatisationNoise/2
-            fft_QuantNoise = np.fft.rfft(quantNoise)
-            p = ax.plot(freqs, 20 * np.log10(gaussian_filter(fft_QuantNoise, filterWidth*10)),
-                        label=r'\textbf{Quantisation noise}', )
+                ax.plot(freqs/(sampleFreq),20*np.log10(sliceFFTResultsAbs[i]),alpha=1/nnumOFSlices,color=p[0].get_color())#label=r'\textbf{'+self.title+'}'
         if show:
             ax.set_ylabel(r'\textbf{Phase noise in} $\frac{\mathrm{dBc}}{\mathrm{Hz}}$')
             ax.set_xlabel(r'$\frac{{Offset~frequency}}{Signal~frequency}$ \textbf{in} $\frac{\mathrm{Hz}}{\mathrm{Hz}}$')
@@ -289,7 +307,23 @@ class realWordJitterGen:
             #ax.set_ylim([-220,0])
             fig.tight_layout()
             fig.show()
+        if plotTimeDevs:
+            axTimeDev.set_ylabel(r'\textbf{Time Deviation from Nominal in ns}$')
+            axTimeDev.set_xlabel(r'\textbf{Releative time from slice start in s}')
+            axTimeDev.legend()
+            figTimeDev.show()
         return fig,ax
+
+    """
+    def plotAllanDev(self):
+        fig,ax=plt.subplots()
+        phaseDevInrad=self.interpolatedDeviationFromNominal/self.deltaT*2*np.pi
+        observationLength=self.expectedTime[-1]
+        taus=np.logspace(0, np.log10(observationLength/5), 100)#100 points logspaced until 1/5 observation length
+        (t2, ad, ade, adn) = allantools.oadev(phaseDevInrad, rate=self.fs, data_type="phase", taus=taus)
+        ax.loglog(t2, ad)
+        fig.show()
+    """
 
 
 
@@ -373,44 +407,56 @@ if __name__ == "__main__":
     jitterGensForSimulations=[]
 
     jitterGen1 = realWordJitterGen(dataFileINTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{Board 1 int. clock}")#nominalfreq=1000)
+    jitterGen1.plotAllanDev()
     jitterGensForSimulations.append(jitterGen1)
+
+
     """
     jitterGen2 = realWordJitterGen(dataFileINTREF, '0x60ad0100_STM32_GPIO_Input',"Board 2 int. clock 1000 Hz")#nominalfreq=1000)
+    jitterGensForSimulations.append(jitterGen2)
+    """
+
+    """
     jitterGen3 = realWordJitterGen(dataFileEXTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{Board 1 ext. clock")# 1000 Hz}")#nominalfreq=1000)
+    jitterGensForSimulations.append(jitterGen3)
+    """
+
+
     jitterGen4 = realWordJitterGen(dataFileEXTREF, '0x60ad0100_STM32_GPIO_Input',"Board 2 ext. clock")#nominalfreq=1000)
-    
+    jitterGensForSimulations.append(jitterGen4)
+
     jitterGenMPU9250 = realWordJitterGen(dataFileMPU9250,'0x1fe40000_MPU_9250',r"\textbf{MPU9250}")# $f_s=$ \textbf{1001.0388019191 Hz}")
     jitterGensForSimulations.append(jitterGenMPU9250)
 
     jitterGenBMA280= realWordJitterGen(dataFileBMA280,'0x1fe40000_BMA_280',     r"\textbf{BMA280}")# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
     jitterGensForSimulations.append(jitterGenBMA280)
-
+    
     jitterGenLSM6DSRX = realWordJitterGen(dataFileLSM6DSRX, '0x60ad0000_LSM6DSRX', r"\textbf{LSM6DSRX $f_s$=1.667~kHz}")
     jitterGensForSimulations.append(jitterGenLSM6DSRX)
+    
+
     """
     jitterGenLSM6DSRXPolled2KHz = realWordJitterGen(dataFileLSM6DSRX, '0x60ad0000_LSM6DSRX', r"\textbf{LSM6DSRX polled}", pollingFreq=2000.0)
     jitterGensForSimulations.append(jitterGenLSM6DSRXPolled2KHz)
-
+    """
     jitterGenLSM6DSRXLongTerm = realWordJitterGen(dataFileLSM6DSRXlongTerm, '0x60ad0000_LSM6DSRX', r"\textbf{LSM6DSRX long observation time}")
     jitterGensForSimulations.append(jitterGenLSM6DSRXLongTerm)
 
-    """
     jitterGenLSM6DSRX6667Hz=realWordJitterGen(dataFileLSM6DSRX6667Hz,'0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX $f_s$=6.667~kHz}")
     jitterGensForSimulations.append(jitterGenLSM6DSRX6667Hz)
 
-    """
+
     deviationPlotlength=100
     figDviation,axDeviation=jitterGensForSimulations[0].plotDeviation(lengthInS=deviationPlotlength,lw=1)
     figDviationUnCorr, axDeviationUnCorr = jitterGensForSimulations[0].plotDeviation(lengthInS=deviationPlotlength, lw=1,correctLinFreqDrift=False)
-    figPhaseNoise, axPhaseNoise = jitterGensForSimulations[0].plotPhaseNoise(plotRaw=True)
+    figPhaseNoise, axPhaseNoise = jitterGensForSimulations[0].plotPhaseNoise()
     show=False
     for i in range(len(jitterGensForSimulations)-1):
         if i==len(jitterGensForSimulations)-2:
             show=True #show only on last loop iteration
-        jitterGensForSimulations[i+1].plotDeviation(fig=figDviation, axs=axDeviation, lengthInS=deviationPlotlength,show=show)
-        jitterGensForSimulations[i+1].plotDeviation(fig=figDviationUnCorr, axs=axDeviationUnCorr, lengthInS=deviationPlotlength,
-                                                  show=show,correctLinFreqDrift=False)
-        jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, plotRaw=True,show=show)
+        #jitterGensForSimulations[i+1].plotDeviation(fig=figDviation, axs=axDeviation, lengthInS=deviationPlotlength,show=show)
+        #jitterGensForSimulations[i+1].plotDeviation(fig=figDviationUnCorr, axs=axDeviationUnCorr, lengthInS=deviationPlotlength,show=show,correctLinFreqDrift=False)
+        jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise,show=show)
     """
     jitterGen2.plotDeviation(fig=figDviation,ax=axDeviation,length=150000,lw=1)
     
