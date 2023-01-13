@@ -431,6 +431,7 @@ if __name__ == "__main__":
     jitterGen1 = realWordJitterGen(dataFileINTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{Board 1 int. clock}")#nominalfreq=1000)
     #jitterGen1.plotAllanDev()
     jitterGensForSimulations.append(jitterGen1)
+    """
 
 
     jitterGen2 = realWordJitterGen(dataFileINTREF, '0x60ad0100_STM32_GPIO_Input',r"\textbf{Board 2 int. clock}",offset=[0,5000000])#nominalfreq=1000)
