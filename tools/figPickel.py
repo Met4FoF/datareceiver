@@ -6,13 +6,13 @@ import tkinter as tk
 from tkinter import filedialog
 import bz2
 
-figPickleVersion=0.1
+figPickleVersion="0.2.0"
 filetypes=[("Comressed pickled Image Dict", ".cpid")]
 
 
 plt.rc('font', family='serif')
 plt.rc('text', usetex=True)
-plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
+plt.rcParams['text.latex.preamble'] = r'\usepackage{sfmath} \boldmath'
 PLTSCALFACTOR = 1.5
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 16 * PLTSCALFACTOR
@@ -26,14 +26,12 @@ plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-def saveImagePickle(name,fig,axs,axs2=None):
-    saveDict={'Name':name,
+def saveImagePickle(name,fig,axs):
+    saveDict={'Name':name.replace(' ','_'),
               'fig':fig,
               'axs':axs,
               'matplotlib_version':matplotlib.__version__,
               'figPickleVersion':figPickleVersion}
-    if not axs2 is None:
-        saveDict['axs2']=axs2
     root = tk.Tk()
     root.withdraw()
 
@@ -56,15 +54,9 @@ if __name__=="__main__":
     root.withdraw()
     file_path = filedialog.askopenfilename(filetypes=filetypes)
     with bz2.open(file_path, 'rb') as handle:
-
         figDict = pickle.load(handle)
-
     fig=figDict['fig']
     axs=figDict['axs']
-    try:
-        axs2=figDict['axs2']
-    except KeyError:
-        pass
     if     figDict['matplotlib_version']!=matplotlib.__version__:
         raise RuntimeWarning("File was Save mit Matplotlib Version "+str(figDict['matplotlib_version'])+'this Veiwer uses Version '+str(matplotlib.__version__))
     figDict['fig'].show()

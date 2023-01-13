@@ -10,7 +10,7 @@ from uncertainties.umath import *  # sin(), etc.
 
 plt.rc('font', family='serif')
 plt.rc('text', usetex=True)
-plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
+plt.rcParams['text.latex.preamble'] = r'\usepackage{sfmath} \boldmath'
 PLTSCALFACTOR = 2
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 16 * PLTSCALFACTOR
