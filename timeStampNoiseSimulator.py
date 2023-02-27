@@ -323,6 +323,8 @@ class realWordJitterGen:
             p=ax.plot((freqs/(sampleFreq))*signalFreq, 10*np.log10(gaussian_filter(psdMean,filterWidth)),
                     label=r'\textbf{'+self.title+' $f_s$ {:.1u}'.format(sampleFrequFloat)+' Hz }',lw=lw)
         else:
+            psdMean=np.mean((sliceFFTResultsAbs ** 2) * (1 / (sampleFreq * fftlength)),axis=0)
+            psdMean[1:-1]=psdMean[1:-1]*2
             p=ax.plot((freqs/(sampleFreq))*signalFreq, gaussian_filter(np.mean((sliceFFTResultsAbs)/fftlength,axis=0),filterWidth),
                     label=r'\textbf{'+self.title+' $f_s$ {:.1u}'.format(sampleFrequFloat)+' Hz }',lw=lw)
 
@@ -354,7 +356,7 @@ class realWordJitterGen:
 
         if show:
             if unit !='dBc':
-                ax.set_ylabel(r'\textbf{Phase noise amplitude in A.U.')
+                ax.set_ylabel(r'\textbf{Phase noise power density in $\frac{\mathrm{A.U.}^2}{\mathrm{Hz}}$')
             else:
                 ax.set_ylabel(r'\textbf{Phase noise power density in} $\frac{\mathrm{dBC}}{\mathrm{Hz}}$')
             if signalFreq!=1.0:
@@ -513,7 +515,7 @@ if __name__ == "__main__":
     #figDviation,axDeviation=jitterGensForSimulations[0].plotDeviation(lengthInS=deviationPlotlength)
     #figDviationFull, axDeviationFull = jitterGensForSimulations[0].plotDeviation()
     #figDviationUnCorr, axDeviationUnCorr = jitterGensForSimulations[0].plotDeviation(lengthInS=deviationPlotlength,correctLinFreqDrift=False)
-    figPhaseNoise, axPhaseNoise = jitterGensForSimulations[0].plotPhaseNoise(unit='dBc',signalFreq=500.0)
+    figPhaseNoise, axPhaseNoise = jitterGensForSimulations[0].plotPhaseNoise(unit='A.U.',signalFreq=500.0)
     #figAllan, axAllan = jitterGensForSimulations[0].plotAllanDev()
     show=False
     for i in range(len(jitterGensForSimulations)-1):
@@ -524,9 +526,9 @@ if __name__ == "__main__":
         #jitterGensForSimulations[i+1].plotDeviation(fig=figDviation, axs=axDeviation, lengthInS=deviationPlotlength,show=show)
         #jitterGensForSimulations[i+1].plotDeviation(fig=figDviationUnCorr, axs=axDeviationUnCorr, lengthInS=deviationPlotlength,show=show,correctLinFreqDrift=False)
         if show==False:
-            jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise,show=show,unit='dBc',signalFreq=500.0)#
+            jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise,show=show,unit='A.U.',signalFreq=500.0)#
         else:
-            jitterGensForSimulations[i + 1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, show=show,unit='dBc', signalFreq=500.0,plotSincSensForLength={'length':[1,10,100],'maxFreq':2.5})#,
+            jitterGensForSimulations[i + 1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, show=show,unit='A.U.', signalFreq=500.0,plotSincSensForLength={'length':[1,10,100],'maxFreq':2.5})#,
 
     if askforFigPickelSave:
         saveImagePickle("Deviations with linear Correction",figDviation,axDeviation)
