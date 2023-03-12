@@ -1,0 +1,75 @@
+syntax = "proto2";
+import "nanopb.proto";
+
+message DataMessage {
+  required uint32 id = 1;               //32 Bit ID of the sensor
+  required uint32 sample_number = 2;    //32 Inger number of samples sent
+  required uint32 unix_time = 3;        //Measurement data timestamp unix seconds
+  required uint32 unix_time_nsecs = 4;  //Measurement data timestamp nanosecond fraction
+  required uint32 time_uncertainty = 5; //uncertainty of time stamp in nanoseconds
+  required float Data_01 =6;            //Data of 1st channel as float number
+  optional float Data_02 =7;            //Data of 2nd channel as float number
+  optional float Data_03 =8;            //Data of 3rd channel as float number
+  optional float Data_04 =9;            //Data of 4th channel as float number
+  optional float Data_05 =10;           //Data of 5th channel as float number
+  optional float Data_06 =11;           //Data of 6th channel as float number
+  optional float Data_07 =12;           //Data of 7th channel as float number
+  optional float Data_08 =13;           //Data of 8th channel as float number
+  optional float Data_09 =14;           //Data of 9th channel as float number
+  optional float Data_10 =15;           //Data of 10th channel as float number
+  optional float Data_11 =16;           //Data of 11th channel as float number
+  optional float Data_12 =17;           //Data of 12th channel as float number
+  optional float Data_13 =18;           //Data of 13th channel as float number
+  optional float Data_14 =19;           //Data of 14th channel as float number
+  optional float Data_15 =20;           //Data of 15th channel as float number
+  optional float Data_16 =21;           //Data of 16th channel as float number
+  optional uint64 time_ticks=22;		 //Raw timestamp of the input capture counter
+}
+
+message DescriptionMessage {
+  required uint32 id = 1;                                   //32 Bit ID of the sensor     [0x1FE40100]
+  required string Sensor_name = 2 [(nanopb).max_size = 40]; //Name of the Sensor          [MPU 9250]
+  enum  DESCRIPTION_TYPE{
+  PHYSICAL_QUANTITY = 0;                                   //Sting fields describe the unit of the measured values
+  UNIT = 1;                                                //Sting fields describe the unit of the measured values in DSI Format https://gitlab1.ptb.de/d-ptb/d-si/xsd-d-si
+  UNCERTAINTY_TYPE = 2;                                    // RESERVED
+  RESOLUTION = 3;                                          // Float field contains the number of steps between Min and Max Value eg [256] for an 8 bit Sensor or [1024] for an 10 bit sensor
+  MIN_SCALE = 4;                                           // Float field contains the maximal possible value for an data channel
+  MAX_SCALE = 5;                                           // Float field contains the minmal possible value for an data channel
+  HIERARCHY = 6;                                           // string field contains information about hircala strctur of data se examples
+  }
+  required DESCRIPTION_TYPE Description_Type =3;
+  optional string str_Data_01 =4 [(nanopb).max_size = 40];
+  optional string str_Data_02 =5 [(nanopb).max_size = 40];
+  optional string str_Data_03 =6 [(nanopb).max_size = 40];
+  optional string str_Data_04 =7 [(nanopb).max_size = 40];
+  optional string str_Data_05 =8 [(nanopb).max_size = 40];
+  optional string str_Data_06 =9 [(nanopb).max_size = 40];
+  optional string str_Data_07 =10 [(nanopb).max_size = 40];
+  optional string str_Data_08 =11 [(nanopb).max_size = 40];
+  optional string str_Data_09 =12 [(nanopb).max_size = 40];
+  optional string str_Data_10 =13 [(nanopb).max_size = 40];
+  optional string str_Data_11 =14 [(nanopb).max_size = 40];
+  optional string str_Data_12 =15 [(nanopb).max_size = 40];
+  optional string str_Data_13 =16 [(nanopb).max_size = 40];
+  optional string str_Data_14 =17 [(nanopb).max_size = 40];
+  optional string str_Data_15 =18 [(nanopb).max_size = 40];
+  optional string str_Data_16 =19 [(nanopb).max_size = 40];
+  optional float f_Data_01 =20;
+  optional float f_Data_02 =21;
+  optional float f_Data_03 =22;
+  optional float f_Data_04 =23;
+  optional float f_Data_05 =24;
+  optional float f_Data_06 =25;
+  optional float f_Data_07 =26;
+  optional float f_Data_08 =27;
+  optional float f_Data_09 =28;
+  optional float f_Data_10 =29;
+  optional float f_Data_11 =30;
+  optional float f_Data_12 =31;
+  optional float f_Data_13 =32;
+  optional float f_Data_14 =33;
+  optional float f_Data_15 =34;
+  optional float f_Data_16 =35;
+  required bool has_time_ticks =36;		// has 64bit raw timestamp or not
+}
