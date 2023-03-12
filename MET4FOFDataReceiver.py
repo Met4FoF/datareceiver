@@ -28,6 +28,7 @@ import h5py
 # for live plotting
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas
 
 # proptobuff message encoding
 from google.protobuf.internal.encoder import _VarintBytes
@@ -37,6 +38,17 @@ CURR_DIR = os.path.dirname(os.path.abspath(__file__))
 print(CURR_DIR)
 sys.path.append(CURR_DIR)
 import messages_pb2
+
+import pandas as pd
+from bokeh.server.server import Server
+from bokeh.models import TabPanel, Tabs,FileInput, Dropdown,ColumnDataSource, Ellipse, DataTable,TableColumn,Div,Spacer,NumericInput,RadioGroup,Button,TextAreaInput,MultiChoice,CheckboxGroup,PreText,HTMLTemplateFormatter
+from bokeh.layouts import column,row
+from bokeh.plotting import curdoc,figure, show
+from tornado.ioloop import IOLoop
+from bokeh.application.handlers import FunctionHandler
+from bokeh.application import Application
+from bokeh.server.server import Server
+import logging
 
 # matplotlib.use('Qt5Agg')
 
@@ -295,6 +307,7 @@ class DataReceiver:
         None.
 
         """
+        self.stop()
         self.socket.close()
 
     def StartDumpingAllSensorsASCII(
@@ -556,7 +569,7 @@ class SensorDescription:
         return self.Channels[key]
 
     def __repr__(self):
-        return "Descripton of" + self.SensorName + hex(self.ID)
+        return "Descripton of " + self.SensorName + hex(self.ID)
 
     def asDict(self):
         """
@@ -575,6 +588,15 @@ class SensorDescription:
                 {self.Channels[key]["CHID"]: self.Channels[key].Description}
             )
         return ReturnDict
+
+    def asDataFrame(self):
+        pdSeries=[]
+        for key in self.Channels:
+                pdSeries.append(pd.Series(self.Channels[key].Description,name=self.Channels[key].Description["CHID"]))
+        df=pandas.DataFrame(pdSeries)
+        print(df)
+        return df
+
 
     def getUnits(self):
         units = {}
@@ -1575,7 +1597,6 @@ class HDF5Dumper:
                     self.ticks_buffer.fill(np.NaN)
                     self.buffer[0:4,:]=np.zeros([4,self.chunksize])
 
-
     def wirteRemainingToHDF(self):
         warnings.warn('WARNING will generate zeros in the end of the data file if callback is active there will be an gap in the file ')
         with self.hdflock:
@@ -1654,11 +1675,68 @@ def stopdumpingallsensorshdf(dumperlist, dumpfile):
     #for dumper in dumperlist:
     #    print(str(dumper))
 
+class page:
+    def __init__(self,DR):
+        self.DR=DR
+        self.page=column(Div(text="""<h2 style="color:#1f77b4";>This is a test</h2> """,height=14))
+        for sensorID in self.DR.AllSensors:
+            df=DR.AllSensors[sensorID].Description.asDataFrame()
+            source = ColumnDataSource(df)
+
+            vars = list(df.columns)
+            columns = [TableColumn(field=Ci, title=Ci) for Ci in vars]  # bokeh columns
+            data_table = DataTable(source=source,columns=columns, width=1600,height=50*df.shape[0])
+            self.page.children.append(data_table)
+def make_doc(doc):
+        LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
+        file_handler = logging.FileHandler(filename='./bokeh.log', mode='w')
+        file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        logger = logging.getLogger(__name__)
+        logger.addHandler(file_handler)
+        logger.setLevel(logging.DEBUG)
+
+        logger.info('This is Datareceiver Viewer ...')
+        hostname = socket.gethostname()
+        IPAddr = socket.gethostbyname(hostname)
+        logger.info("Opening Bokeh application on http://" + str(hostname) + ":5003/")
+        logger.info("Opening Bokeh application on http://" + str(IPAddr) + ":5003/")
+        myPage = page(DR)
+        doc.add_root(myPage.page)
+        doc.title = "DR view"
+        #doc.add_periodic_callback(myPage.p_callback, 500)
+        print("Done")
+
+
 
 
 if __name__ == "__main__":
-    DR = DataReceiver("192.168.0.200", 7654)
-    #time.sleep(10)
+    try:
+        DR = DataReceiver("192.168.0.200", 7654)
+        bokehPort=5010
+        time.sleep(8)
+        io_loop = IOLoop.current()
+        bokeh_app = Application(FunctionHandler(make_doc))
+        server = Server(
+            {"/": bokeh_app},  # list of Bokeh applications
+            io_loop=io_loop,  # Tornado IOLoop
+            http_server_kwargs={'max_buffer_size': 900000000},
+            websocket_max_message_size=500000000,
+            port=bokehPort,
+            allow_websocket_origin=['*']
+        )
+
+        # start timers and services and immediately return
+        server.start()
+        hostname = socket.gethostname()
+        IPAddr = socket.gethostbyname(hostname)
+        print("Opening Bokeh application on http://" + str(hostname) + ":" + str(bokehPort) + "/")
+        print("Opening Bokeh application on http://" + str(IPAddr) + ":" + str(bokehPort) + "/")
+        io_loop.add_callback(server.show, "/")
+        io_loop.start()
+    finally:
+        server.stop()
+        io_loop.stop()
+        del DR
     #dumperlist,file=startdumpingallsensorshdf("tetratest_2.hfd5")
     #time.sleep(15)
     #stopdumpingallsensorshdf(dumperlist,file)
