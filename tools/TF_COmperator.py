@@ -5,37 +5,48 @@ import h5py as h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
+import os
 from uncertainties import unumpy, ufloat
 from uncertainties.umath import *  # sin(), etc.
 
+LANG='DE'
+if LANG=='DE':
+    import locale
+#locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    locale.setlocale(locale.LC_NUMERIC,"de_DE.utf8")
+    locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    plt.rcParams['text.latex.preamble'] = r'\usepackage{icomma}\usepackage{amsmath}\boldmath' # remove nasty Space behind comma in de_DE.utf8 locale https://stackoverflow.com/questions/50657326/matplotlib-locale-de-de-latex-space-btw-decimal-separator-and-number
+    plt.rcParams['axes.formatter.use_locale'] = True
 plt.rc('font', family='serif')
 plt.rc('text', usetex=True)
-plt.rcParams['text.latex.preamble'] = r'\usepackage{sfmath} \boldmath'
-PLTSCALFACTOR = 2
+plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
+plt.rc("figure", dpi=300)
+PLTSCALFACTOR = 1.66
 SMALL_SIZE = 12 * PLTSCALFACTOR
 MEDIUM_SIZE = 16 * PLTSCALFACTOR
 BIGGER_SIZE = 18 * PLTSCALFACTOR
-
-plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
-plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
+plt.rc("font", size=SMALL_SIZE)
+plt.rc("font", weight='bold') # controls default text sizes
+plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
 plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-plt.rc("xtick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
-plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
-
-
+figSaveCounter = 0
+SAVEFOLDER = './tf_images'
+SHOW=False
 def generateWigthedMeanFromArrays(values,uncers):
     mean = np.average(values, weights=1 / (uncers ** 2), axis=0)
     valMinusMean = values - np.tile(mean, (values.shape[0], 1))
     std=np.sqrt(np.average(valMinusMean**2,weights=1 / (uncers ** 2),axis=0))
     return mean,std
 
-def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False,lang='EN',zoomPlotPos=[0.3,0.5,0.2,0.2]):
+def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False,lang=LANG,zoomPlotPos=[0.2, 0.65, 0.2, 0.2]):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
     phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_SNYNC_Phase','DUT_Phase']#,
-    ampGroupNames=['DUT_amplitude','Excitation_amplitude','Magnitude']
+    ampGroupNames=['Magnitude','DUT_amplitude','Excitation_amplitude']
     labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
                 'SSU_ADC_Phase':r'$2u(\varphi_{ADC_{DAU}}(\omega))$',
                 'REF_Phase':r'$2\sigma(\varphi_\mathrm{ACS}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
@@ -86,20 +97,22 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             uncersToPlot[ampGN]=(ampUncerData/ampValData)*100
     idxs=np.arange(freqs.size)
     fig,ax=plt.subplots()
-    fig.set_size_inches(20, 10)
     i=0
     for uncerKey in uncersToPlot.keys():
         ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],width=1/(len(uncersToPlot.keys())+1),label=labels[uncerKey],alpha=alphas[uncerKey],hatch=hatches[uncerKey])
         i+=+1
     ax.set_xticks(idxs)
     boldFreqlabels = []
+    if lang=='DE':
+        locale.setlocale(locale.LC_NUMERIC, "de_DE.utf8")
+        locale.setlocale(locale.LC_ALL, "de_DE.utf8")
     for freq in freqs:
-        boldFreqlabels.append(r'\textbf{' + str(freq) + '}')
+        boldFreqlabels.append(r'$'+locale.format('%g',freq) +'$')
     ax.set_xticklabels(boldFreqlabels, rotation=0)
     if lang=='EN':
-        ax.set_xlabel(r'\textbf{Excitation frequency} \textbf{in Hz}')
+        ax.set_xlabel(r'\textbf{Excitation frequency} $\omega$ \textbf{in Hz}')
     elif lang=='DE':
-        ax.set_xlabel(r'\textbf{Anregungsfrequenz in Hz}')
+        ax.set_xlabel(r'\textbf{Anregungsfrequenz $\omega$ in Hz}')
     if type == 'Phase':
         if lang=='EN':
             ax.set_ylabel(r'\textbf{Type A components of}'+'\n' +r'\textbf{phase in $^\circ$}')
@@ -135,11 +148,16 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             elif lang=='DE':
                 ax2.set_xlabel(r'\textbf{Frequenz ' + str(freqs[zoom]) + ' Hz}')
             #ax2.set_ylabel(r'$^\circ$')
-    ax.legend()
-    fig.savefig('tmp.png', dpi=200)
-    fig.show()
+    ax.legend(loc='upper right')
+    if LANG=='DE':
+        locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2)+'_'+str(type)+'_uncerComps.png'), dpi=300,bbox_inches='tight')
+    fig.savefig( os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_'+str(type)+'_uncerComps.pdf'), dpi=300,bbox_inches='tight')
+    globals()['figSaveCounter']+=1
+    if SHOW:
+        fig.show()
 
-def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[10,5,5,5,5,5],repName=['Ref','225~$^\circ$ 0.00 mm','~45~~$^\circ$ 1.25 mm','135 $^\circ$ 1.50 mm','290~$^\circ$ 1.93 mm','200~$^\circ$ 1.70 mm'],lang='EN'):
+def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[10,5,5,5,5,5],repName=['$255^\circ$','$45^\circ$','$135^\circ$','$290^\circ$','$200^\circ$'],lang=LANG):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][0:numofexpPerLoop]
     phaseUncerData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['uncertainty']
     phaseValData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['value']
@@ -162,8 +180,8 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
         ampSTD = np.std(ampData, axis=0)
         phaseMean = np.mean(phaseData, axis=0)
         phaseSTD = np.std(phaseData, axis=0)
-        ax[0].errorbar(freqs*(1+0.002*(loopIDX+1)), ampMean,   yerr=2 * ampSTD, label=repName[loopIDX],fmt='o')
-        ax[1].errorbar(freqs*(1+0.002*(loopIDX+1)), phaseMean/np.pi*180, yerr=(2 * phaseSTD)/np.pi*180, label=repName[loopIDX],fmt='o')
+        ax[0].errorbar(freqs*(1+0.002*(loopIDX+1)), ampMean,   yerr=2 * ampSTD, label=r"\textbf{"+repName[loopIDX]+"}",fmt='o')
+        ax[1].errorbar(freqs*(1+0.002*(loopIDX+1)), phaseMean/np.pi*180, yerr=(2 * phaseSTD)/np.pi*180, label=r"\textbf{"+repName[loopIDX]+"}",fmt='o')
         loopsProcessed+=loopsInThisBlock
         overallAmpMeanData[loopIDX,:]=ampMean
         overallPhaseMeanData[loopIDX,:]=phaseMean
@@ -180,9 +198,13 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
     ax[1].grid()
     ax[0].grid(axis='x',which = 'minor', linestyle = '--')
     ax[1].grid(axis='x',which='minor', linestyle='--')
-    fig.show()
-
-
+    if LANG=='DE':
+        locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    fig.savefig(os.path.join(SAVEFOLDER,str(int(figSaveCounter)).zfill(2)+'_meanTF1.png'), dpi=300,bbox_inches='tight')
+    fig.savefig( os.path.join(SAVEFOLDER,str(int(figSaveCounter)).zfill(2)+'_meanTF1.pdf'), dpi=300,bbox_inches='tight')
+    figSaveCounter+=1
+    if SHOW:
+        fig.show()
     overallAmpMean=np.mean(overallAmpMeanData,axis=0)
     overallPhaseMean = np.mean(overallPhaseMeanData,axis=0)
     fig2,ax2=plt.subplots(2, sharex=True)
@@ -202,7 +224,7 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
         ampSTD = np.std(ampData, axis=0)
         phaseMean = np.mean(phaseData, axis=0)
         phaseSTD = np.std(phaseData, axis=0)
-        ax2[0].errorbar(freqs*(1+0.002*(loopIDX+1)), (ampMean-overallAmpMean),   yerr=2 * ampSTD, label=repName[loopIDX],fmt='o')
+        ax2[0].errorbar(freqs*(1+0.002*(loopIDX+1)), (ampMean-overallAmpMean)*100,   yerr=2 * ampSTD*100, label=repName[loopIDX],fmt='o')
         ax2[1].errorbar(freqs*(1+0.002*(loopIDX+1)), (phaseMean-overallPhaseMean)/np.pi*180, yerr=(2 * phaseSTD)/np.pi*180, label=repName[loopIDX],fmt='o')
         loopsProcessed+=loopsInThisBlock
     if lang=='EN':
@@ -210,18 +232,24 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
     if lang=='DE':
         ax2[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax2[0].set_xscale('log')
-    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S|}$  in $\frac{\mathrm{m s}^-2}{\mathrm{m s}^-2}$")
-    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ in $^\circ$")
+    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S|}$ \textbf{in \%}")
+    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
     ax2[0].legend(ncol=3)
     ax2[1].legend(ncol=3)
     ax2[0].grid()
     ax2[1].grid()
-    fig2.show()
+    if LANG=='DE':
+        locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    fig2.savefig(os.path.join(SAVEFOLDER,str(int(figSaveCounter)).zfill(2)+'_meanTF2.png'), dpi=300,bbox_inches='tight')
+    fig2.savefig( os.path.join(SAVEFOLDER,str(int(figSaveCounter)).zfill(2)+'_meanTF2.pdf'), dpi=300,bbox_inches='tight')
+    figSaveCounter+=1
+    if SHOW:
+        fig2.show()
     print("test")
 
 
 
-def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[5,5,5,5,5],repName=['225~$^\circ$ 0.00 mm','~45~~$^\circ$ 1.25 mm','135 $^\circ$ 1.50 mm','290~$^\circ$ 1.93 mm','200~$^\circ$ 1.70 mm'],lang='EN'):
+def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[5,5,5,5,5],repName=['$255^\circ$','$45^\circ$','$135^\circ$','$290^\circ$','$200^\circ$'],lang=LANG,difFills=None):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][0:numofexpPerLoop]
     phaseUncerData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['uncertainty']
     phaseValData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['value']
@@ -244,8 +272,8 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
         ampSTD = np.std(ampData, axis=0)
         phaseMean = np.mean(phaseData, axis=0)
         phaseSTD = np.std(phaseData, axis=0)
-        ax[0].errorbar(freqs*(1+0.002*(loopIDX+1)), ampMean,   yerr=2 * ampSTD, label=repName[loopIDX],fmt='o')
-        ax[1].errorbar(freqs*(1+0.002*(loopIDX+1)), phaseMean/np.pi*180, yerr=(2 * phaseSTD)/np.pi*180, label=repName[loopIDX],fmt='o')
+        ax[0].errorbar(freqs*(1+0.002*(loopIDX+1)), ampMean,   yerr=2 * ampSTD, label=r"\textbf{"+repName[loopIDX]+r"}",fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6)
+        ax[1].errorbar(freqs*(1+0.002*(loopIDX+1)), phaseMean/np.pi*180, yerr=(2 * phaseSTD)/np.pi*180, label=r"\textbf{"+repName[loopIDX]+"}",fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6)
         loopsProcessed+=loopsInThisBlock
         overallAmpMeanData[loopIDX,:]=ampMean
         overallPhaseMeanData[loopIDX,:]=phaseMean
@@ -262,7 +290,14 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
     ax[1].grid()
     ax[0].grid(axis='x',which = 'minor', linestyle = '--')
     ax[1].grid(axis='x',which='minor', linestyle='--')
-    fig.show()
+    imagename=str(int(globals()['figSaveCounter'])).zfill(2)+'_meanTFOneFile1'
+    if LANG=='DE':
+        locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    fig.savefig(os.path.join(SAVEFOLDER,imagename+'.png'), dpi=300,bbox_inches='tight')
+    fig.savefig(os.path.join(SAVEFOLDER, imagename + '.pdf'), dpi=300,bbox_inches='tight')
+    globals()['figSaveCounter']+=1
+    if SHOW:
+        fig.show()
 
 
     overallAmpMean=np.mean(overallAmpMeanData,axis=0)
@@ -284,21 +319,40 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
         ampSTD = np.std(ampData, axis=0)
         phaseMean = np.mean(phaseData, axis=0)
         phaseSTD = np.std(phaseData, axis=0)
-        ax2[0].errorbar(freqs*(1+0.002*(loopIDX+1)), (ampMean-overallAmpMean),   yerr=2 * ampSTD, label=repName[loopIDX],fmt='o')
-        ax2[1].errorbar(freqs*(1+0.002*(loopIDX+1)), (phaseMean-overallPhaseMean)/np.pi*180, yerr=(2 * phaseSTD)/np.pi*180, label=repName[loopIDX],fmt='o')
+        ax2[0].errorbar(freqs*(1+0.002*(loopIDX+1)), (ampMean-overallAmpMean)*100,   yerr=2 * ampSTD*100, label=r"\textbf{"+repName[loopIDX]+"}",fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6)
+        ax2[1].errorbar(freqs*(1+0.002*(loopIDX+1)), (phaseMean-overallPhaseMean)/np.pi*180, yerr=(2 * phaseSTD)/np.pi*180, label=r"\textbf{"+repName[loopIDX]+"}",fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6)
         loopsProcessed+=loopsInThisBlock
     if lang=='EN':
         ax2[1].set_xlabel(r"\textbf{Frequency in Hz}")
     if lang=='DE':
         ax2[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+    if difFills!=None:
+        if lang == 'EN':
+            ax2[0].fill_between(freqs, -difFills[0], difFills[0],label=r"\textbf{CMC uncer.}",alpha=0.33)
+            ax2[1].fill_between(freqs, -difFills[1], difFills[1],label=r"\textbf{CMC uncer.}",alpha=0.33)
+        if lang == 'DE':
+            ax2[0].fill_between(freqs, -difFills[0], difFills[0],label=r"\textbf{CMC Unsicherheit}",alpha=0.33)
+            ax2[1].fill_between(freqs, -difFills[1], difFills[1],label=r"\textbf{CMC Unsicherheit}",alpha=0.33)
     ax2[0].set_xscale('log')
-    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S|}$  in $\frac{\mathrm{m s}^-2}{\mathrm{m s}^-2}$")
-    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ in $^\circ$")
+    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S(\omega)|}$  \textbf{in \%}")
+    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
     ax2[0].legend(ncol=3)
     ax2[1].legend(ncol=3)
-    ax2[0].grid()
-    ax2[1].grid()
-    fig2.show()
+    ax2[0].grid(axis='x',which = 'minor', linestyle = '--')
+    ax2[1].grid(axis='x',which='minor', linestyle='--')
+    ax2[0].grid(axis='y',which = 'minor', linestyle = '--')
+    ax2[1].grid(axis='y',which='minor', linestyle='--')
+    ax2[0].yaxis.set_minor_locator(AutoMinorLocator(4))
+    ax2[1].yaxis.set_minor_locator(AutoMinorLocator(4))
+    ax2[0].grid(lw=PLTSCALFACTOR*0.66)
+    ax2[1].grid(lw=PLTSCALFACTOR*0.66)
+    if LANG=='DE':
+        locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    fig2.savefig(os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_meanTFOneFile2.png'), dpi=300,bbox_inches='tight')
+    fig2.savefig( os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_meanTFOneFile2.pdf'), dpi=300,bbox_inches='tight')
+    globals()['figSaveCounter']+=1
+    if SHOW:
+        fig2.show()
     print("test")
 
 def generateTFFromRawData(datafile,style='PTB',sensorName='0xbccb0000_MPU_9250'):
@@ -348,7 +402,7 @@ def generateTFFromRawData(datafile,style='PTB',sensorName='0xbccb0000_MPU_9250')
 
 
 
-def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
+def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test',excludeFromMean=[]):
     numOfTfs=len(dict.keys())
     i=0
     for TfDictKey in dict:
@@ -358,6 +412,9 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
         freqs=testFreqsMean
         if i ==0:
             labels = []
+            colors= []
+            usedTFSIDX=[]
+            labelExpansion = []
             ampsArray=np.zeros([numOfTfs,ampMean.size])
             stdAmpWigthArray=np.zeros([numOfTfs,stdAmpWigth.size])
             phaseMeanArray=np.zeros([numOfTfs,phaseMean.size])
@@ -377,14 +434,24 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
                 stdAmpWigthArray[i, :] = (0.4/100*ampMean)/2
 
         labels.append(TfDictKey)
+        colors.append(TfDictEntry['color'])
+        if not TfDictKey in excludeFromMean:
+            usedTFSIDX.append(True)
+            labelExpansion.append('')
+        else:
+            usedTFSIDX.append(False)
+            if lang =='DE':
+                labelExpansion.append(r'$^\ast$')
+            if lang =='EN':
+                labelExpansion.append(r'$^\ast$')
         i=i+1
-    ampMean, ampUncer = generateWigthedMeanFromArrays(ampsArray[:2,:], stdAmpWigthArray[:2,:])
-    phaseMean, phaseUncer = generateWigthedMeanFromArrays(phaseMeanArray[:2,:], stdPhaseWightArray[:2,:])
+    ampMean, ampUncer = generateWigthedMeanFromArrays(ampsArray[usedTFSIDX,:], stdAmpWigthArray[usedTFSIDX,:])
+    phaseMean, phaseUncer = generateWigthedMeanFromArrays(phaseMeanArray[usedTFSIDX,:], stdPhaseWightArray[usedTFSIDX,:])
 
     fig,ax=plt.subplots(2, sharex=True)
     for TFIDX in range(numOfTfs):
-        ax[0].errorbar(freqs*(1+0.002*(TFIDX +1)), ampsArray[TFIDX,:],   yerr=2 * stdAmpWigthArray[TFIDX, :], label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8)
-        ax[1].errorbar(freqs*(1+0.002*(TFIDX +1)), phaseMeanArray[TFIDX,:]/np.pi*180, yerr=(2 * stdPhaseWightArray[TFIDX, :])/np.pi*180, label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8)
+        ax[0].errorbar(freqs*(1+0.002*(TFIDX +1)), ampsArray[TFIDX,:],   yerr=2 * stdAmpWigthArray[TFIDX, :], label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8,color=colors[TFIDX])
+        ax[1].errorbar(freqs*(1+0.002*(TFIDX +1)), phaseMeanArray[TFIDX,:]/np.pi*180, yerr=(2 * stdPhaseWightArray[TFIDX, :])/np.pi*180, label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8,color=colors[TFIDX])
     if lang=='EN':
         ax[1].set_xlabel(r"\textbf{Frequency in Hz}")
     if lang=='DE':
@@ -402,20 +469,31 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
     ax[1].yaxis.set_minor_locator(AutoMinorLocator(4))
     ax[0].grid(lw=PLTSCALFACTOR*0.66)
     ax[1].grid(lw=PLTSCALFACTOR*0.66)
-    ax[0].set_title(r"\textbf{Übertragungsfunktion "+titleExpansion+'}')
-    fig.show()
+    ax[0].set_title(r"\textbf{ÜF "+titleExpansion+'}')
+    if LANG=='DE':
+        locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    fig.savefig(os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_TFComparison1.png'), dpi=300,bbox_inches='tight')
+    fig.savefig( os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_TFComparison1.pdf'), dpi=300,bbox_inches='tight')
+    globals()['figSaveCounter']+=1
+    if SHOW:
+        fig.show()
 
     fig2,ax2=plt.subplots(2, sharex=True)
     for TFIDX in range(numOfTfs):
-        ax2[0].errorbar(freqs*(1+0.002*(TFIDX +1)), ampsArray[TFIDX,:]-ampMean,   yerr=2 * stdAmpWigthArray[TFIDX, :], label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8)
-        ax2[1].errorbar(freqs*(1+0.002*(TFIDX +1)), (phaseMeanArray[TFIDX,:]-phaseMean)/np.pi*180, yerr=(2 * stdPhaseWightArray[TFIDX, :])/np.pi*180, label=labels[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8)
+        ax2[0].errorbar(freqs*(1+0.002*(TFIDX +1)), (ampsArray[TFIDX,:]-ampMean)*100,   yerr=2 * stdAmpWigthArray[TFIDX, :]*100, label=labels[TFIDX]+labelExpansion[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8,color=colors[TFIDX])
+        ax2[1].errorbar(freqs*(1+0.002*(TFIDX +1)), (phaseMeanArray[TFIDX,:]-phaseMean)/np.pi*180, yerr=(2 * stdPhaseWightArray[TFIDX, :])/np.pi*180, label=labels[TFIDX]+labelExpansion[TFIDX],fmt='o',lw=PLTSCALFACTOR*2,ms=PLTSCALFACTOR*6,alpha=0.8,color=colors[TFIDX])
     if lang=='EN':
         ax2[1].set_xlabel(r"\textbf{Frequency in Hz}")
     if lang=='DE':
         ax2[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax2[0].set_xscale('log')
-    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S|}$  in $\frac{\mathrm{m s}^-2}{\mathrm{m s}^-2}$")
-    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ in $^\circ$")
+    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S(\omega)|}$  \textbf{in \%}")
+    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
+    if not all(usedTFSIDX):
+        if lang=='DE':
+            ax2[0].set_xlabel(r"$^\ast$ Nicht für das gewichtet Mittel verwendet")
+        if lang=='EN':
+            ax2[0].set_xlabel(r"$^\ast$ Not used for weighted mean")
     ax2[0].legend(ncol=3)
     ax2[1].legend(ncol=3)
     ax2[0].grid(axis='x',which = 'minor', linestyle = '--')
@@ -426,12 +504,20 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test'):
     ax2[1].yaxis.set_minor_locator(AutoMinorLocator(4))
     ax2[0].grid(lw=PLTSCALFACTOR*0.66)
     ax2[1].grid(lw=PLTSCALFACTOR*0.66)
-    ax2[0].set_title(r"\textbf{Abweichung vom gewichteten Mittel der Übertragungsfunktionen " + titleExpansion + '}')
-    fig2.show()
+    ax2[0].set_title(r"\textbf{Abw. vom gewichteten Mittel der ÜF " + titleExpansion + '}')
+    if LANG=='DE':
+        locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    fig2.savefig(os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_TFComparison2.png'), dpi=300,bbox_inches='tight')
+    fig2.savefig( os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_TFComparison2.pdf'), dpi=300,bbox_inches='tight')
+    globals()['figSaveCounter']+=1
+    if SHOW:
+        fig2.show()
 
 
 
 if __name__ == "__main__":
+    locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+
     #hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
     leadSensorname = '0x1fe40000_MPU_9250'
     CEMhdffilename = r"/home/benedikt/data/IMUPTBCEM/MPU9250CEM_v5.hdf5"
@@ -448,24 +534,60 @@ if __name__ == "__main__":
     CEMTFDIct={'style':'CEM',
                'dataFile':CEMdatafile,
                'sensorName':CEMSensorname,
-               'phaseOffset':np.pi}
+               'phaseOffset':np.pi,
+               'color':'tab:orange'}
     PTBTFDIct={'style':'PTB',
                'dataFile':PTBdatafile,
                'sensorName':PTBSensorname,
-               'phaseOffset':0}
+               'phaseOffset':0,
+               'color':'tab:blue'}
     PTBPlattenDIct={'style':'PTB',
                'dataFile':PTBPlattendatafile,
                'sensorName':PTBSensorname,
-               'phaseOffset':0}
-    
-    plotMeanTfsOneFile(PTBPlattendatafile, sensorName=leadSensorname,lang='DE')
+               'phaseOffset':0,
+                    'color':'tab:cyan'}
+
+    #plotMeanTfsOneFile(PTBPlattendatafile, sensorName=leadSensorname, difFills=[0.1,0.2])
     #testFreqsMean,phaseMean, stdPhaseWight,ampMean,stdAmpWigth=generateTFFromRawData(datafile, sensorName=leadSensorname,style='CEM')
-    TFDict={'PTB verschiedene Winkel': PTBPlattenDIct,'CEM':CEMTFDIct,'PTB erste Messung':PTBTFDIct,}
+
+    TFDict={r'\textbf{CEM}':CEMTFDIct,r'\textbf{PTB, erste Messung}':PTBTFDIct}#r'\textbf{PTB, verschiedene Winkel}': PTBPlattenDIct
     
 
     plotTFCOmparison(TFDict,uncerType='typeA',titleExpansion='MPU9250 Unsicherheit TypA')
     plotTFCOmparison(TFDict,uncerType='CMC',titleExpansion='MPU9250 Unsicherheit CMC')
 
+    # testFreqsMean,phaseMean, stdPhaseWight,ampMean,stdAmpWigth=generateTFFromRawData(datafile, sensorName=leadSensorname,style='CEM')
+    TFDict = {r'\textbf{CEM}': CEMTFDIct, r'\textbf{PTB, verschiedene Winkel}': PTBPlattenDIct}  #
+
+    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit TypA')
+    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit CMC')
+    # testFreqsMean,phaseMean, stdPhaseWight,ampMean,stdAmpWigth=generateTFFromRawData(datafile, sensorName=leadSensorname,style='CEM')
+    TFDict = {r'\textbf{CEM}': CEMTFDIct,r'\textbf{PTB, erste Messung}':PTBTFDIct, r'\textbf{PTB, verschiedene Winkel}': PTBPlattenDIct}  #
+
+    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit TypA',excludeFromMean=[r'\textbf{PTB, verschiedene Winkel}'])
+    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit CMC',excludeFromMean=[r'\textbf{PTB, verschiedene Winkel}'])
+
+    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit TypA',excludeFromMean=[r'\textbf{PTB, erste Messung}'])
+    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit CMC',excludeFromMean=[r'\textbf{PTB, erste Messung}'])
+
+    PLTSCALFACTOR = 1.5
+    SMALL_SIZE = 12 * PLTSCALFACTOR
+    MEDIUM_SIZE = 16 * PLTSCALFACTOR
+    BIGGER_SIZE = 18 * PLTSCALFACTOR
+    plt.rc("font", size=SMALL_SIZE)
+    plt.rc("font", weight='bold')  # controls default text sizes
+    plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
+    plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+    plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+    plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+    plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
+    plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+
+    plotRAWTFUncerComps(PTBdatafile, type='Phase', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A unsicherheitskomponenten PTB Messungen Phase', zoom=4, lang=LANG)
+    plotRAWTFUncerComps(PTBdatafile, type='Mag', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A unsicherheitskomponenten PTB Messungen Magnitude', zoom=False, lang=LANG)
+    plotRAWTFUncerComps(CEMdatafile, type='Phase', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A unsicherheitskomponenten CEM Messungen Phase', zoom=4, lang=LANG)
+    plotRAWTFUncerComps(CEMdatafile, type='Mag', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A unsicherheitskomponenten CEM Messungen Magnitude', zoom=False, lang=LANG)
     """
     PTBSensorname = '0x1fe40000_BMA_280'
     CEMSensorname = '0xbccb0000_BMA_280'
