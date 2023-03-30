@@ -9,15 +9,19 @@ import os
 from uncertainties import unumpy, ufloat
 from uncertainties.umath import *  # sin(), etc.
 
+plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
 LANG='DE'
 if LANG=='DE':
     import locale
-#locale.setlocale(locale.LC_ALL,"de_DE.utf8")
     locale.setlocale(locale.LC_NUMERIC,"de_DE.utf8")
     locale.setlocale(locale.LC_ALL,"de_DE.utf8")
     plt.rcParams['text.latex.preamble'] = r'\usepackage{icomma}\usepackage{amsmath}\boldmath' # remove nasty Space behind comma in de_DE.utf8 locale https://stackoverflow.com/questions/50657326/matplotlib-locale-de-de-latex-space-btw-decimal-separator-and-number
     plt.rcParams['axes.formatter.use_locale'] = True
-plt.rc('font', family='serif')
+plt.rcParams['mathtext.fontset'] = 'custom'
+plt.rcParams['mathtext.rm'] = 'NexusProSans'
+plt.rcParams['mathtext.it'] = 'NexusProSans:italic'
+plt.rcParams['mathtext.bf'] = 'NexusProSans:bold'
+plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
 plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
@@ -45,23 +49,25 @@ def generateWigthedMeanFromArrays(values,uncers):
 def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False,lang=LANG,zoomPlotPos=[0.2, 0.65, 0.2, 0.2]):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
-    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_SNYNC_Phase','DUT_Phase']#,
+    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_SNYNC_Phase','DUT_Phase']
     ampGroupNames=['Magnitude','DUT_amplitude','Excitation_amplitude']
+    phaseGroupNamesNestingDict={'Phase':{'REF_Phase':None,'Delta_DUTSNYC_Phase':{'DUT_SNYNC_Phase':None,'DUT_Phase':None}}}#,'SSU_ADC_Phase':None
+    magGroupNamesNestingDict={'Magnitude':{'DUT_amplitude':None,'Excitation_amplitude':None}}
     labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
                 'SSU_ADC_Phase':r'$2u(\varphi_{ADC_{DAU}}(\omega))$',
                 'REF_Phase':r'$2\sigma(\varphi_\mathrm{ACS}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
                 'DUT_Phase':r'$2\sigma(\varphi_{\mathrm{DUT}}(\omega))$',
                 'DUT_SNYNC_Phase':r'$2\sigma(\varphi_{\mathrm{Sync_{DAU}}}(\omega))$',
                 'Phase':r'$u(\varphi(\omega))$',
-                'DUT_amplitude': '$2\sigma(\hat{y}_\mathrm{DUT})$',
-                'Excitation_amplitude': '$2\sigma(\hat{a}_\mathrm{ACS})$',
+                'DUT_amplitude': '$2\sigma(\hat{y}_\mathrm{DUT}(\omega))$',
+                'Excitation_amplitude': '$2\sigma(\hat{a}_\mathrm{ACS}(\omega))$',
                 'Magnitude': '$2\sigma(|S(\omega)|)$'
             }
     alphas={'Delta_DUTSNYC_Phase':1,
                 'SSU_ADC_Phase':1,
                 'REF_Phase':1,
-                'DUT_Phase':0.5,
-                'DUT_SNYNC_Phase':0.5,
+                'DUT_Phase':1,
+                'DUT_SNYNC_Phase':1,
                 'Phase':1,
                 'DUT_amplitude':1,
                 'Excitation_amplitude':1,
@@ -76,6 +82,16 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
                 'DUT_amplitude': '|',
                 'Excitation_amplitude': '-',
                 'Magnitude': '+'
+             }
+    hatches={'Delta_DUTSNYC_Phase':"",
+                'SSU_ADC_Phase':"",
+                'REF_Phase': "",
+                'DUT_Phase':"",
+                'DUT_SNYNC_Phase':"",
+                'Phase':"",
+                'DUT_amplitude': '',
+                'Excitation_amplitude': '',
+                'Magnitude': ''
              }
     if type=='Phase':
         for pGN in phaseGroupNames:
@@ -97,11 +113,43 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             uncersToPlot[ampGN]=(ampUncerData/ampValData)*100
     idxs=np.arange(freqs.size)
     fig,ax=plt.subplots()
+    ax.set_axisbelow(True)
+    ax.grid(axis='y',linestyle='dashed')
     i=0
-    for uncerKey in uncersToPlot.keys():
-        ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],width=1/(len(uncersToPlot.keys())+1),label=labels[uncerKey],alpha=alphas[uncerKey],hatch=hatches[uncerKey])
+    overAllWidth=0.8
+    if type=='Mag':
+        GroupNamesNestingDict=magGroupNamesNestingDict
+    if type=='Phase':
+        GroupNamesNestingDict = phaseGroupNamesNestingDict
+    for comp,uncerKey0 in enumerate(GroupNamesNestingDict.keys()):
+        ax.bar(idxs, uncersToPlot[uncerKey0], align='edge', label=labels[uncerKey0],width=overAllWidth, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0])
+        firstlevelKeyNum=len(GroupNamesNestingDict[uncerKey0].keys())
+        #TODO remove this dirty hacking and replace with propper recursion !!!!
+        if firstlevelKeyNum>0:
+            width=1/(firstlevelKeyNum+2)*overAllWidth
+            offset=1/(firstlevelKeyNum+1)*overAllWidth
+            for comp1,uncerKey1 in enumerate(GroupNamesNestingDict[uncerKey0].keys()):
+                pos1=idxs+offset+width*comp1
+                ax.bar(pos1,uncersToPlot[uncerKey1], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1])
+                try:
+                    secondlevelKeyNum = len(GroupNamesNestingDict[uncerKey0][uncerKey1].keys())
+                    secondwidth = width / (secondlevelKeyNum+ 1)*overAllWidth
+                    secondoffset = 1 / (2*4 * (secondlevelKeyNum+ 1))*overAllWidth
+                    for comp2, uncerKey2 in enumerate(GroupNamesNestingDict[uncerKey0][uncerKey1].keys()):
+                        ax.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2])
+                except AttributeError:
+                    pass # None has no keys we dont ne to go an level deeper
+
+        """
+        uncerKey =list(uncersToPlot.keys())[0]
+        ax.bar(idxs+(1/(len(uncersToPlot.keys())+1))*i,uncersToPlot[uncerKey],align='edge',label=labels[uncerKey],alpha=alphas[uncerKey],hatch=hatches[uncerKey])
         i+=+1
-    ax.set_xticks(idxs)
+        for uncerKey in list(uncersToPlot.keys())[1:4]:
+            print(idxs+(1/(len(uncersToPlot.keys())+1))*i)
+            ax.bar(idxs+(1/(len(uncersToPlot.keys())+1-))*i,uncersToPlot[uncerKey],align='edge',width=1/4,label=labels[uncerKey],alpha=alphas[uncerKey],hatch=hatches[uncerKey],linestyle='--')
+            i+=+1
+        """
+    ax.set_xticks(idxs+overAllWidth/2)
     boldFreqlabels = []
     if lang=='DE':
         locale.setlocale(locale.LC_NUMERIC, "de_DE.utf8")
@@ -123,7 +171,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude in \%}')
         elif lang=='DE':
             ax.set_ylabel(r'\textbf{Magnitudenkomponenten Typ A in \%}')
-    ax.grid()
+
     if title!=None and title != '':
             ax.set_title(r'\textbf{'+title+'}')
     if zoom!=False:
@@ -133,7 +181,38 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
         ax2=fig.add_axes(zoomPlotPos)
         ylim=2*uncersToPlot['SSU_ADC_Phase'][zoom]
         i=0
-        ax2.set_ylim(ylim)
+        ax2.set_ylim([0,ylim])
+        for comp,uncerKey0 in enumerate(phaseGroupNamesNestingDict.keys()):
+            idxs=0
+            ax2.bar(idxs, uncersToPlot[uncerKey0][zoom], align='edge', label=labels[uncerKey0],width=1, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0])
+            firstlevelKeyNum=len(phaseGroupNamesNestingDict[uncerKey0].keys())
+            #TODO remove this dirty hacking and replace with propper recursion !!!!
+            if firstlevelKeyNum>0:
+                width=1/(firstlevelKeyNum+1)
+                offset=1/(2*(firstlevelKeyNum+1))
+                for comp1,uncerKey1 in enumerate(phaseGroupNamesNestingDict[uncerKey0].keys()):
+                    pos1=idxs+offset+width*comp1
+                    ax2.bar(pos1,uncersToPlot[uncerKey1][zoom], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1])
+                    try:
+                        secondlevelKeyNum = len(phaseGroupNamesNestingDict[uncerKey0][uncerKey1].keys())
+                        secondwidth = width / (secondlevelKeyNum+ 1)
+                        secondoffset = 1 / (2*4 * (secondlevelKeyNum+ 1))
+                        for comp2, uncerKey2 in enumerate(phaseGroupNamesNestingDict[uncerKey0][uncerKey1].keys()):
+                            ax2.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2][zoom], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2])
+                    except AttributeError:
+                        pass # None has no keys we dont ne to go an level deeper
+        ax2.ticklabel_format(axis='y', scilimits=[-2, 2])
+        # for major ticks
+        ax2.set_xticks([])
+        # for minor ticks
+        ax2.set_xticks([], minor=True)
+        if lang == 'EN':
+            ax2.set_xlabel(r'\textbf{' + str(freqs[zoom]) + ' Hz}')
+        elif lang == 'DE':
+            ax2.set_xlabel(r'\textbf{' + str(freqs[zoom]) + ' Hz}')
+        # ax2.set_ylabel(r'$^\circ$')
+
+        """
         for uncerKey in uncersToPlot.keys():
             ax2.bar((1/numPlotCOmponents)*i, uncersToPlot[uncerKey][zoom],width=(1/(numPlotCOmponents)), label=labels[uncerKey], alpha=alphas[uncerKey],hatch=hatches[uncerKey])
             i=i+1
@@ -148,6 +227,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             elif lang=='DE':
                 ax2.set_xlabel(r'\textbf{Frequenz ' + str(freqs[zoom]) + ' Hz}')
             #ax2.set_ylabel(r'$^\circ$')
+        """
     ax.legend(loc='upper right')
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL,"de_DE.utf8")
@@ -584,9 +664,9 @@ if __name__ == "__main__":
     plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
-    plotRAWTFUncerComps(PTBdatafile, type='Phase', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A unsicherheitskomponenten PTB Messungen Phase', zoom=4, lang=LANG)
+    plotRAWTFUncerComps(PTBdatafile, type='Phase', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A unsicherheitskomponenten PTB Messungen Phase', zoom=False, lang=LANG)
     plotRAWTFUncerComps(PTBdatafile, type='Mag', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A unsicherheitskomponenten PTB Messungen Magnitude', zoom=False, lang=LANG)
-    plotRAWTFUncerComps(CEMdatafile, type='Phase', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A unsicherheitskomponenten CEM Messungen Phase', zoom=4, lang=LANG)
+    plotRAWTFUncerComps(CEMdatafile, type='Phase', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A unsicherheitskomponenten CEM Messungen Phase', zoom=False, lang=LANG)
     plotRAWTFUncerComps(CEMdatafile, type='Mag', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A unsicherheitskomponenten CEM Messungen Magnitude', zoom=False, lang=LANG)
     """
     PTBSensorname = '0x1fe40000_BMA_280'
