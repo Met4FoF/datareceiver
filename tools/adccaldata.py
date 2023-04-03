@@ -7,22 +7,39 @@ import matplotlib.pyplot as plt
 import logging
 
 
-DPI=160
-plt.rc('font', family='serif')
+tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
+plt.rcParams['axes.prop_cycle'] = plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
+plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
+LANG='DE'
+if LANG=='DE':
+    import locale
+    locale.setlocale(locale.LC_NUMERIC,"de_DE.utf8")
+    locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    plt.rcParams['text.latex.preamble'] = r'\usepackage{icomma}\usepackage{amsmath}\boldmath' # remove nasty Space behind comma in de_DE.utf8 locale https://stackoverflow.com/questions/50657326/matplotlib-locale-de-de-latex-space-btw-decimal-separator-and-number
+    plt.rcParams['axes.formatter.use_locale'] = True
+plt.rcParams['mathtext.fontset'] = 'custom'
+plt.rcParams['mathtext.rm'] = 'NexusProSans'
+plt.rcParams['mathtext.it'] = 'NexusProSans:italic'
+plt.rcParams['mathtext.bf'] = 'NexusProSans:bold'
+plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
-plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
-PLTSCALFACTOR = 3
-SMALL_SIZE = 12 * PLTSCALFACTOR
-MEDIUM_SIZE = 16 * PLTSCALFACTOR
-BIGGER_SIZE = 18 * PLTSCALFACTOR
-
-plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
-plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
+plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
+plt.rc("figure", dpi=300)
+PLTSCALFACTOR = 1.5
+SMALL_SIZE = 9 * PLTSCALFACTOR
+MEDIUM_SIZE = 12 * PLTSCALFACTOR
+BIGGER_SIZE = 15 * PLTSCALFACTOR
+plt.rc("font", weight='bold') # controls default text sizes
+plt.rc("font", size=SMALL_SIZE)
+plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
 plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-plt.rc("xtick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
-plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
+figSaveCounter = 0
+SAVEFOLDER = './tf_images'
+SHOW=False
 def findNearestIDX(array,value):
      idx = (np.abs(array-value)).argmin()
      return idx
@@ -112,7 +129,7 @@ class Met4FOFADCCall:
         TitleExtension="",
         saveFigName=None,
         startStopFreq=None,
-        lang='EN'#'EN' or 'DE'
+        lang=LANG#'EN' or 'DE'
     ):
 
         BoardID = self.metadata["BordID"]
@@ -155,7 +172,7 @@ class Met4FOFADCCall:
             interPolPhaseErrMin[i] = interPolPhase[i] - tmp["PhaseUncer"]
             interPolPhaseErrMax[i] = interPolPhase[i] + tmp["PhaseUncer"]
         if fig == None and ax == [None, None]:
-            Fig, (ax1, ax2) = plt.subplots(2, 1,sharex=True,dpi=DPI)
+            Fig, (ax1, ax2) = plt.subplots(2, 1,sharex=True)
             Fig.set_size_inches(14, 7, forward=True)
         else:
             Fig = fig
@@ -169,14 +186,14 @@ class Met4FOFADCCall:
             lableMeasVals=r"\textbf{Mesured Values"
             axisCapRelMag=r"Relative magnitude $|S|$"
             labelFreq=r"\textbf{Frequency $f$ in Hz"
-            title="\textbf{Transfer function of "+ str(Channel)+ " of Board with ID"+ hex(int(BoardID/65536))+ TitleExtension
+            title=r"\textbf{Transfer function of "+ str(Channel)+ " of Board with ID"+ hex(int(BoardID/65536))+ TitleExtension
         elif 'DE':
             labelInterpol = r"\textbf{Interpoliert}"
             lableMeasVals = r"\textbf{Messwerte}"
-            axisCapRelMag = r"\textbf{Relative Magnitude} $|S|$"
+            axisCapRelMag = r"$|S(\omega)|$"
             labelFreq = r"\textbf{Frequenz }$f$ \textbf{in Hz}"
-            labelPhase = r"\textbf{Phase $\varphi$ in °"
-            title=r"\textbf{Transferfunction  "+ str(Channel)+ " des Boards mit der ID "+ hex(int(BoardID/65536))+'}'+ TitleExtension
+            labelPhase = r"$\varphi(\omega)$ in °"
+            title=r"\textbf{"+str(Channel)+"Transferfunction DAU ID "+ hex(int(BoardID/65536))+'}'+ TitleExtension
         Fig.suptitle(title)
         ax1.plot(XInterPol, interPolAmp,ls='dotted',label=labelInterpol + LabelExtension)
         lastcolor = ax1.get_lines()[-1].get_color()
@@ -195,7 +212,7 @@ class Met4FOFADCCall:
             color=lastcolor,
         )
         ax1.set_ylabel(axisCapRelMag)
-        ax1.grid(True)
+        ax1.grid(linestyle='dashed')
         ax2.plot(
             XInterPol,
             interPolPhase / np.pi * 180,
@@ -222,12 +239,16 @@ class Met4FOFADCCall:
         )
         ax2.set_xlabel(labelFreq)
         ax2.set_ylabel(labelPhase)
-        ax2.grid(True)
-        ax1.legend(numpoints=1, ncol=3)
-        ax2.legend(numpoints=1, ncol=3)
+        ax2.grid(linestyle='dashed')
+        ax1.legend(numpoints=1, ncol=3,loc='lower left')
+        ax2.legend(numpoints=1, ncol=3,loc='lower left')
         if saveFigName!=None:
+            if LANG == 'DE':
+                locale.setlocale(locale.LC_NUMERIC, "de_DE.utf8")
+                locale.setlocale(locale.LC_ALL, "de_DE.utf8")
             Fig.savefig(saveFigName+".svg",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.5)
             Fig.savefig(saveFigName + ".png",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.5)
+            Fig.savefig(saveFigName + ".pdf",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.5)
         Fig.show()
         return Fig, [ax1, ax2]
 
@@ -257,10 +278,10 @@ class Met4FOFADCCall:
             P, PErr = self.getInterPolatedPhase(Channel, freq)
             return {
                 "Frequency": freq,
-                "AmplitudeCoefficent": np.asscalar(A),
-                "AmplitudeCoefficentUncer": np.asscalar(AErr),
-                "Phase": np.asscalar(P),
-                "PhaseUncer": np.asscalar(PErr),
+                "AmplitudeCoefficent": A.item(),
+                "AmplitudeCoefficentUncer": AErr.item(),
+                "Phase": P.item(),
+                "PhaseUncer": PErr.item(),
                 "N": 0,
             }
 
@@ -410,15 +431,19 @@ def jsonsplitterFortestVoltages(jsonFile):
 
 
 if __name__ == "__main__":
+    if LANG == 'DE':
+        import locale
+        locale.setlocale(locale.LC_NUMERIC, "de_DE.utf8")
+        locale.setlocale(locale.LC_ALL, "de_DE.utf8")
     ADCTF19V5 =  Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_19V5_1HZ_1MHZ.json'])
     ADCTF1V95 =  Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_1V95_1HZ_1MHZ.json'])
     ADCTF0V195 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_V195_1HZ_1MHZ.json'])
-    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",
-                                            LabelExtension=r'~0.195~V',lang='DE')
-    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=100, PlotType="log",
-                                   LabelExtension=r'~1.95~V',lang='DE',saveFigName='ADCTF')
-    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=100, PlotType="log",
-                                   LabelExtension=r'~19.5~V', lang='DE', saveFigName='ADCTF')
+    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0.195~V}',lang='DE')
+    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1.95~V}',lang='DE')
+    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19.5~V}', lang='DE', saveFigName='ADCTF1MHz')
+    Fig2, axs2=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0.195~V}',lang='DE',startStopFreq=[10,1000])
+    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1.95~V}',lang='DE',startStopFreq=[10,1000])
+    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig2, ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19.5~V}', lang='DE', saveFigName='ADCTF1KHz',startStopFreq=[10,1000])
 
     #Fig2, axs2=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE',startStopFreq=[1,10000])
     #ADCTF.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=100, PlotType="log",LabelExtension=r'~19.5~V' ,lang='DE',saveFigName='ADCTFZoom',startStopFreq=[1,10000])

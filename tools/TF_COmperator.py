@@ -8,7 +8,8 @@ from matplotlib.ticker import AutoMinorLocator
 import os
 from uncertainties import unumpy, ufloat
 from uncertainties.umath import *  # sin(), etc.
-
+tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
+plt.rcParams['axes.prop_cycle'] = plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
 plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
 LANG='DE'
 if LANG=='DE':
@@ -25,12 +26,12 @@ plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
 plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
-PLTSCALFACTOR = 1.66
-SMALL_SIZE = 12 * PLTSCALFACTOR
-MEDIUM_SIZE = 16 * PLTSCALFACTOR
-BIGGER_SIZE = 18 * PLTSCALFACTOR
-plt.rc("font", size=SMALL_SIZE)
+PLTSCALFACTOR = 1.5
+SMALL_SIZE = 9 * PLTSCALFACTOR
+MEDIUM_SIZE = 12 * PLTSCALFACTOR
+BIGGER_SIZE = 15 * PLTSCALFACTOR
 plt.rc("font", weight='bold') # controls default text sizes
+plt.rc("font", size=SMALL_SIZE)
 plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
 plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
 plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
@@ -52,7 +53,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_SNYNC_Phase','DUT_Phase']
     ampGroupNames=['Magnitude','DUT_amplitude','Excitation_amplitude']
     phaseGroupNamesNestingDict={'Phase':{'REF_Phase':None,'Delta_DUTSNYC_Phase':{'DUT_SNYNC_Phase':None,'DUT_Phase':None}}}#,'SSU_ADC_Phase':None
-    magGroupNamesNestingDict={'Magnitude':{'DUT_amplitude':None,'Excitation_amplitude':None}}
+    magGroupNamesNestingDict={'Magnitude':{'Excitation_amplitude':None,'DUT_amplitude':None}}
     labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
                 'SSU_ADC_Phase':r'$2u(\varphi_{ADC_{DAU}}(\omega))$',
                 'REF_Phase':r'$2\sigma(\varphi_\mathrm{ACS}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
@@ -73,15 +74,15 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
                 'Excitation_amplitude':1,
                 'Magnitude':1
             }
-    hatches={'Delta_DUTSNYC_Phase':"O.",
-                'SSU_ADC_Phase':"|",
-                'REF_Phase': "/",
-                'DUT_Phase':"o",
-                'DUT_SNYNC_Phase':"O",
-                'Phase':"|/o.",
-                'DUT_amplitude': '|',
-                'Excitation_amplitude': '-',
-                'Magnitude': '+'
+    colors={'Delta_DUTSNYC_Phase':(0/255,83/255,74/255),
+                'SSU_ADC_Phase':tubscolors[3],
+                'REF_Phase':tubscolors[1],
+                'DUT_Phase':tubscolors[2],
+                'DUT_SNYNC_Phase':(172/255,193/255,58/255),
+                'Phase':tubscolors[0],
+                'DUT_amplitude': (0/255,83/255,74/255),
+                'Excitation_amplitude': tubscolors[1],
+                'Magnitude': tubscolors[0]
              }
     hatches={'Delta_DUTSNYC_Phase':"",
                 'SSU_ADC_Phase':"",
@@ -122,7 +123,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     if type=='Phase':
         GroupNamesNestingDict = phaseGroupNamesNestingDict
     for comp,uncerKey0 in enumerate(GroupNamesNestingDict.keys()):
-        ax.bar(idxs, uncersToPlot[uncerKey0], align='edge', label=labels[uncerKey0],width=overAllWidth, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0])
+        ax.bar(idxs, uncersToPlot[uncerKey0], align='edge', label=labels[uncerKey0],width=overAllWidth, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0],color=colors[uncerKey0])
         firstlevelKeyNum=len(GroupNamesNestingDict[uncerKey0].keys())
         #TODO remove this dirty hacking and replace with propper recursion !!!!
         if firstlevelKeyNum>0:
@@ -130,13 +131,13 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             offset=1/(firstlevelKeyNum+1)*overAllWidth
             for comp1,uncerKey1 in enumerate(GroupNamesNestingDict[uncerKey0].keys()):
                 pos1=idxs+offset+width*comp1
-                ax.bar(pos1,uncersToPlot[uncerKey1], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1])
+                ax.bar(pos1,uncersToPlot[uncerKey1], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1],color=colors[uncerKey1])
                 try:
                     secondlevelKeyNum = len(GroupNamesNestingDict[uncerKey0][uncerKey1].keys())
                     secondwidth = width / (secondlevelKeyNum+ 1)*overAllWidth
                     secondoffset = 1 / (2*4 * (secondlevelKeyNum+ 1))*overAllWidth
                     for comp2, uncerKey2 in enumerate(GroupNamesNestingDict[uncerKey0][uncerKey1].keys()):
-                        ax.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2])
+                        ax.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2],color=colors[uncerKey2])
                 except AttributeError:
                     pass # None has no keys we dont ne to go an level deeper
 
@@ -155,7 +156,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
         locale.setlocale(locale.LC_NUMERIC, "de_DE.utf8")
         locale.setlocale(locale.LC_ALL, "de_DE.utf8")
     for freq in freqs:
-        boldFreqlabels.append(r'$'+locale.format('%g',freq) +'$')
+        boldFreqlabels.append(r'$'+locale.format_string('%g',freq) +'$')
     ax.set_xticklabels(boldFreqlabels, rotation=0)
     if lang=='EN':
         ax.set_xlabel(r'\textbf{Excitation frequency} $\omega$ \textbf{in Hz}')
@@ -171,7 +172,6 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude in \%}')
         elif lang=='DE':
             ax.set_ylabel(r'\textbf{Magnitudenkomponenten Typ A in \%}')
-
     if title!=None and title != '':
             ax.set_title(r'\textbf{'+title+'}')
     if zoom!=False:
@@ -184,7 +184,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
         ax2.set_ylim([0,ylim])
         for comp,uncerKey0 in enumerate(phaseGroupNamesNestingDict.keys()):
             idxs=0
-            ax2.bar(idxs, uncersToPlot[uncerKey0][zoom], align='edge', label=labels[uncerKey0],width=1, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0])
+            ax2.bar(idxs, uncersToPlot[uncerKey0][zoom], align='edge', label=labels[uncerKey0],width=1, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0],color=colors[uncerKey0])
             firstlevelKeyNum=len(phaseGroupNamesNestingDict[uncerKey0].keys())
             #TODO remove this dirty hacking and replace with propper recursion !!!!
             if firstlevelKeyNum>0:
@@ -192,13 +192,13 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
                 offset=1/(2*(firstlevelKeyNum+1))
                 for comp1,uncerKey1 in enumerate(phaseGroupNamesNestingDict[uncerKey0].keys()):
                     pos1=idxs+offset+width*comp1
-                    ax2.bar(pos1,uncersToPlot[uncerKey1][zoom], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1])
+                    ax2.bar(pos1,uncersToPlot[uncerKey1][zoom], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1],color=colors[uncerKey1])
                     try:
                         secondlevelKeyNum = len(phaseGroupNamesNestingDict[uncerKey0][uncerKey1].keys())
                         secondwidth = width / (secondlevelKeyNum+ 1)
                         secondoffset = 1 / (2*4 * (secondlevelKeyNum+ 1))
                         for comp2, uncerKey2 in enumerate(phaseGroupNamesNestingDict[uncerKey0][uncerKey1].keys()):
-                            ax2.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2][zoom], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2])
+                            ax2.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2][zoom], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2],color=colors[uncerKey2])
                     except AttributeError:
                         pass # None has no keys we dont ne to go an level deeper
         ax2.ticklabel_format(axis='y', scilimits=[-2, 2])
@@ -237,7 +237,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     if SHOW:
         fig.show()
 
-def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[10,5,5,5,5,5],repName=['$255^\circ$','$45^\circ$','$135^\circ$','$290^\circ$','$200^\circ$'],lang=LANG):
+def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[10,5,5,5,5,5],repName=['255$^\circ$','45$^\circ$','135$^\circ$','290$^\circ$','200$^\circ$'],lang=LANG):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][0:numofexpPerLoop]
     phaseUncerData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['uncertainty']
     phaseValData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['value']
@@ -329,7 +329,7 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
 
 
 
-def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[5,5,5,5,5],repName=['$255^\circ$','$45^\circ$','$135^\circ$','$290^\circ$','$200^\circ$'],lang=LANG,difFills=None):
+def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loopsPerRepititon=[5,5,5,5,5],repName=['255$^\circ$','45$^\circ$','135$^\circ$','290$^\circ$','200$^\circ$'],lang=LANG,difFills=None):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][0:numofexpPerLoop]
     phaseUncerData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['uncertainty']
     phaseValData = datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration']['Phase']['value']
@@ -408,11 +408,11 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
         ax2[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     if difFills!=None:
         if lang == 'EN':
-            ax2[0].fill_between(freqs, -difFills[0], difFills[0],label=r"\textbf{CMC uncer.}",alpha=0.33)
-            ax2[1].fill_between(freqs, -difFills[1], difFills[1],label=r"\textbf{CMC uncer.}",alpha=0.33)
+            ax2[0].fill_between(freqs, -difFills[0], difFills[0],label=r"\textbf{CMC uncer.}",alpha=0.2,color='gray')
+            ax2[1].fill_between(freqs, -difFills[1], difFills[1],label=r"\textbf{CMC uncer.}",alpha=0.2,color='gray')
         if lang == 'DE':
-            ax2[0].fill_between(freqs, -difFills[0], difFills[0],label=r"\textbf{CMC Unsicherheit}",alpha=0.33)
-            ax2[1].fill_between(freqs, -difFills[1], difFills[1],label=r"\textbf{CMC Unsicherheit}",alpha=0.33)
+            ax2[0].fill_between(freqs, -difFills[0], difFills[0],label=r"\textbf{CMC Unsicherheit}",alpha=0.2,color='gray')
+            ax2[1].fill_between(freqs, -difFills[1], difFills[1],label=r"\textbf{CMC Unsicherheit}",alpha=0.2,color='gray')
     ax2[0].set_xscale('log')
     ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S(\omega)|}$  \textbf{in \%}")
     ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
@@ -615,59 +615,45 @@ if __name__ == "__main__":
                'dataFile':CEMdatafile,
                'sensorName':CEMSensorname,
                'phaseOffset':np.pi,
-               'color':'tab:orange'}
+               'color':tubscolors[1]}
     PTBTFDIct={'style':'PTB',
                'dataFile':PTBdatafile,
                'sensorName':PTBSensorname,
                'phaseOffset':0,
-               'color':'tab:blue'}
+               'color':tubscolors[0]}
     PTBPlattenDIct={'style':'PTB',
                'dataFile':PTBPlattendatafile,
                'sensorName':PTBSensorname,
                'phaseOffset':0,
-                    'color':'tab:cyan'}
+                'color':tubscolors[4]}
 
-    #plotMeanTfsOneFile(PTBPlattendatafile, sensorName=leadSensorname, difFills=[0.1,0.2])
+    plotMeanTfsOneFile(PTBPlattendatafile, sensorName=leadSensorname, difFills=[0.1,0.2])
     #testFreqsMean,phaseMean, stdPhaseWight,ampMean,stdAmpWigth=generateTFFromRawData(datafile, sensorName=leadSensorname,style='CEM')
 
     TFDict={r'\textbf{CEM}':CEMTFDIct,r'\textbf{PTB, erste Messung}':PTBTFDIct}#r'\textbf{PTB, verschiedene Winkel}': PTBPlattenDIct
     
 
-    plotTFCOmparison(TFDict,uncerType='typeA',titleExpansion='MPU9250 Unsicherheit TypA')
-    plotTFCOmparison(TFDict,uncerType='CMC',titleExpansion='MPU9250 Unsicherheit CMC')
+    plotTFCOmparison(TFDict,uncerType='typeA',titleExpansion='MPU9250 Unsicherheit, TypA')
+    plotTFCOmparison(TFDict,uncerType='CMC',titleExpansion='MPU9250 Unsicherheit, CMC')
 
     # testFreqsMean,phaseMean, stdPhaseWight,ampMean,stdAmpWigth=generateTFFromRawData(datafile, sensorName=leadSensorname,style='CEM')
     TFDict = {r'\textbf{CEM}': CEMTFDIct, r'\textbf{PTB, verschiedene Winkel}': PTBPlattenDIct}  #
 
-    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit TypA')
-    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit CMC')
+    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit, TypA')
+    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit, CMC')
     # testFreqsMean,phaseMean, stdPhaseWight,ampMean,stdAmpWigth=generateTFFromRawData(datafile, sensorName=leadSensorname,style='CEM')
     TFDict = {r'\textbf{CEM}': CEMTFDIct,r'\textbf{PTB, erste Messung}':PTBTFDIct, r'\textbf{PTB, verschiedene Winkel}': PTBPlattenDIct}  #
 
-    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit TypA',excludeFromMean=[r'\textbf{PTB, verschiedene Winkel}'])
-    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit CMC',excludeFromMean=[r'\textbf{PTB, verschiedene Winkel}'])
+    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit, TypA',excludeFromMean=[r'\textbf{PTB, verschiedene Winkel}'])
+    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit, CMC',excludeFromMean=[r'\textbf{PTB, verschiedene Winkel}'])
 
-    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit TypA',excludeFromMean=[r'\textbf{PTB, erste Messung}'])
-    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit CMC',excludeFromMean=[r'\textbf{PTB, erste Messung}'])
+    plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit, TypA',excludeFromMean=[r'\textbf{PTB, erste Messung}'])
+    plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit, CMC',excludeFromMean=[r'\textbf{PTB, erste Messung}'])
 
-    PLTSCALFACTOR = 1.5
-    SMALL_SIZE = 12 * PLTSCALFACTOR
-    MEDIUM_SIZE = 16 * PLTSCALFACTOR
-    BIGGER_SIZE = 18 * PLTSCALFACTOR
-    plt.rc("font", size=SMALL_SIZE)
-    plt.rc("font", weight='bold')  # controls default text sizes
-    plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
-    plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-    plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-    plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-    plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
-    plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
-
-
-    plotRAWTFUncerComps(PTBdatafile, type='Phase', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A unsicherheitskomponenten PTB Messungen Phase', zoom=False, lang=LANG)
-    plotRAWTFUncerComps(PTBdatafile, type='Mag', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A unsicherheitskomponenten PTB Messungen Magnitude', zoom=False, lang=LANG)
-    plotRAWTFUncerComps(CEMdatafile, type='Phase', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A unsicherheitskomponenten CEM Messungen Phase', zoom=False, lang=LANG)
-    plotRAWTFUncerComps(CEMdatafile, type='Mag', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A unsicherheitskomponenten CEM Messungen Magnitude', zoom=False, lang=LANG)
+    plotRAWTFUncerComps(PTBdatafile, type='Phase', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A Unsicherheitskomponenten PTB Messungen, Phase', zoom=False, lang=LANG)
+    plotRAWTFUncerComps(PTBdatafile, type='Mag', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A Unsicherheitskomponenten PTB Messungen, Magnitude', zoom=False, lang=LANG)
+    plotRAWTFUncerComps(CEMdatafile, type='Phase', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A Unsicherheitskomponenten CEM Messungen, Phase', zoom=False, lang=LANG)
+    plotRAWTFUncerComps(CEMdatafile, type='Mag', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A Unsicherheitskomponenten CEM Messungen, Magnitude', zoom=False, lang=LANG)
     """
     PTBSensorname = '0x1fe40000_BMA_280'
     CEMSensorname = '0xbccb0000_BMA_280'
