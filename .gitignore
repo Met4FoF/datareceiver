@@ -10,3 +10,5 @@ tools/tmp/
 *.png
 
 *.svg
+
+bokeh.log

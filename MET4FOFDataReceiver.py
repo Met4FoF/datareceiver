@@ -1676,17 +1676,32 @@ def stopdumpingallsensorshdf(dumperlist, dumpfile):
     #    print(str(dumper))
 
 class page:
+    class SensorBokehWidget:
+        def __init__(self, page, DR, sensorID):
+            self.page = page
+            self.DR = DR
+            self.sensorID = sensorID
+            self.sensor = self.DR.AllSensors[self.sensorID]
+            self.descriptionDF = self.sensor.Description.asDataFrame()
+            source = ColumnDataSource(self.descriptionDF)
+            vars = list(self.descriptionDF.columns)
+            columns = [TableColumn(field=Ci, title=Ci) for Ci in vars]  # bokeh columns
+            self.data_table = DataTable(source=source, columns=columns, width=1800,
+                                        height=30 * self.descriptionDF.shape[0])
+            self.widget = column(Div(text="""<h2 style="color:#1f77b4";>Sensor """ + str(
+                DR.AllSensors[sensorID].Description.SensorName) + """</h2> """, height=14), Spacer(height=14),
+                                 self.data_table)
+            print("Init Done")
     def __init__(self,DR):
         self.DR=DR
         self.page=column(Div(text="""<h2 style="color:#1f77b4";>This is a test</h2> """,height=14))
+        self.bokehSensorWidgets=[]
+        print("Creating Sensor Widgets")
         for sensorID in self.DR.AllSensors:
-            df=DR.AllSensors[sensorID].Description.asDataFrame()
-            source = ColumnDataSource(df)
+            print("ID"+str(sensorID))
+            self.bokehSensorWidgets.append(self.SensorBokehWidget(self,self.DR,sensorID))
+            self.page.children.append(self.bokehSensorWidgets[-1].widget)
 
-            vars = list(df.columns)
-            columns = [TableColumn(field=Ci, title=Ci) for Ci in vars]  # bokeh columns
-            data_table = DataTable(source=source,columns=columns, width=1600,height=50*df.shape[0])
-            self.page.children.append(data_table)
 def make_doc(doc):
         LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
         file_handler = logging.FileHandler(filename='./bokeh.log', mode='w')
@@ -1737,6 +1752,7 @@ if __name__ == "__main__":
         server.stop()
         io_loop.stop()
         del DR
+        del bokeh_app
     #dumperlist,file=startdumpingallsensorshdf("tetratest_2.hfd5")
     #time.sleep(15)
     #stopdumpingallsensorshdf(dumperlist,file)
