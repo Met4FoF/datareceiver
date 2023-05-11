@@ -1516,7 +1516,7 @@ def copyHFDatrrs(source, dest):
 def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False,lang='EN',zoomPlotPos=[0.2,0.6,0.2,0.2]):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
-    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase',]#'DUT_SNYNC_Phase','DUT_Phase'
+    phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_SNYNC_Phase','DUT_Phase']
     ampGroupNames=['DUT_amplitude','Excitation_amplitude','Magnitude']
     labels={    'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
                 'SSU_ADC_Phase':r'$2u(\varphi_{ADC_{DAU}}(\omega))$',
@@ -1603,7 +1603,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             ax2=fig.add_axes(zoomPlotPos)
             ylim=2*uncersToPlot['SSU_ADC_Phase'][zoom]
             i=0
-            ax2.set_ylim(ylim)
+            ax2.set_ylim([0,ylim])
             for uncerKey in uncersToPlot.keys():
                 ax2.bar((1/numPlotCOmponents)*i, uncersToPlot[uncerKey][zoom],width=(1/(numPlotCOmponents)), label=labels[uncerKey], alpha=alphas[uncerKey],hatch=hatches[uncerKey])
                 i=i+1
@@ -1623,13 +1623,21 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     if type== 'Phase':
         if askForFigSave:
             name = title.replace(' ','_')
-            fp.saveImagePickle(name, fig,np.array([ax]),np.array([ax2]))
-        return fig,np.array([ax]),np.array([ax2])
+            if zoom != False:
+                fp.saveImagePickle(name, fig,np.array([ax]),np.array([ax2]))
+                return fig, np.array([ax]), np.array([ax2])
+            else:
+                fp.saveImagePickle(name, fig, np.array([ax]))
+                return fig,np.array([ax])
     else:
         if askForFigSave:
             name = title.replace(' ', '_')
-            fp.saveImagePickle(name, fig, np.array([ax]), np.array([ax2]))
-        return fig, np.array([ax]), np.array([None])
+            if zoom != False:
+                fp.saveImagePickle(name, fig, np.array([ax]), np.array([ax2]))
+                return fig, np.array([ax]), np.array([ax2])
+            else:
+                fp.saveImagePickle(name, fig, np.array([ax]))
+                return fig, np.array([ax])
 
 
 def processdata(i):
@@ -1680,8 +1688,13 @@ def processdata(i):
 
 
 if __name__ == "__main__":
-    hdffilename = r"/home/benedikt/Downloads/gps_drift_jitter_correlation_8MHZ_int_ref.hfd5"
+    hdffilename = r"/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
     datafile = h5py.File(hdffilename, "r+")
+    plotRAWTFUncerComps(datafile, type='Phase', sensorName='0x1fe40000_MPU_9250', startIDX=0, stopIDX=17, title='Uncertainty of the phases components PTB measurments', zoom=2, lang='EN', zoomPlotPos=[0.2, 0.6, 0.2, 0.2])
+
+
+
+
     datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Sample_number'].shape
     board1SN = datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Sample_number'][0, :]
     board1SNDelta=board1SN-board1SN[0]
