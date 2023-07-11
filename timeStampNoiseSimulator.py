@@ -518,6 +518,7 @@ if __name__ == "__main__":
     dataFileBMA280 = h5py.File(os.path.join(pathPrefix, 'BMA280PTB.hdf5'), 'r')
     dataFileLSM6DSRX1667Hz_9 = h5py.File(os.path.join(pathPrefix, 'LSM6DSRX_1667HZ_09.hdf5'), 'r')
     dataFileLSM6DSRX6667Hz = h5py.File(os.path.join(pathPrefix,'ST_sensor_test_6667Hz_2.hfd5'), 'r')
+    dataFileADXL355 = h5py.File(os.path.join(pathPrefix, 'ST_sensor_test_6667Hz_2.hfd5'), 'r')
     """
     timeDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,10000:20000].astype(np.int64)
     ticksDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,10000:20000].astype(np.int64)
