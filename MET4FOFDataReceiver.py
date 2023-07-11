@@ -49,7 +49,7 @@ from bokeh.application.handlers import FunctionHandler
 from bokeh.application import Application
 from bokeh.server.server import Server
 import logging
-
+from hdf_sensor_data_file_format.src.HDF5DataFiles import *
 # matplotlib.use('Qt5Agg')
 
 
@@ -1225,428 +1225,7 @@ class Sensor:
         self.DumpfileProto.write(_VarintBytes(size))
         self.DumpfileProto.write(message.SerializeToString())
 
-class NewHDF5Dumper:
-    def __init__(self, dscp, file,soruceGroupName, hdfffilelock, bufferLen=2048, correcttimeglitches=True, ignoreMissmatchErrors=True):
-        self.dscp=dscp
-        self.hdflock = hdfffilelock
-        self.pushlock = threading.Lock()
-        self.dataframindexoffset = 4
-        self.bufferLen = bufferLen
-        self.buffer = np.zeros([16, self.bufferLen])
-        self.time_buffer = np.zeros([4, self.bufferLen], dtype=np.uint64)
-        self.ticks_buffer = np.zeros(self.bufferLen, dtype=np.uint64)
-        self.chunkswritten = 0
-        self.msgbufferd = 0
-        self.lastdatatime=0
-        self.timeoffset = 0
-        self.uncerpenaltyfortimeerrorns=10000
-        self.hieracy = dscp.gethieracyasdict()
-        self.startimewritten = False
-        self.correcttimeglitches=correcttimeglitches
-        if isinstance(file, str):
-            self.f = h5py.File(file, "a")
-        elif isinstance(file, h5py._hl.files.File):
-            self.f = file
-        else:
-            raise TypeError(
-                "file needs to be either str or h5py._hl.files.File not "
-                + str(type(file))
-            )
-        self.Datasets = {}
-        # chreate self.groups
-        with self.hdflock:
-            try:
-                self.group = self.f[
-                    "RAWDATA/" + hex(dscp.ID) + "_" + dscp.SensorName.replace(" ", "_")
-                ]
-                warnings.warn(
-                    "GROUP RAWDATA/"
-                    + hex(dscp.ID)
-                    + "_"
-                    + dscp.SensorName.replace(" ", "_")
-                    + " existed allready !"
-                )
 
-                self.Datasets["Absolutetime"] = self.group["Absolutetime"]
-                self.Datasets["Absolutetime_uncertainty"] = self.group[
-                    "Absolutetime_uncertainty"
-                ]
-                if(self.dscp.has_time_ticks):
-                    self.Datasets["Time_ticks"] = self.group["Time_ticks"]
-                self.Datasets["Sample_number"] = self.group["Sample_number"]
-                if (self.Datasets["Absolutetime"].shape[1] / self.bufferLen) / int(
-                    self.Datasets["Absolutetime"].shape[1] / self.bufferLen
-                ) != 1:
-                    warnings.warn(
-                        "CHECK Chunksize Actual datasize is not an multiple of the chunksize set",
-                        RuntimeWarning,
-                    )
-                self.chunkswritten = int(
-                    self.Datasets["Absolutetime"].shape[1] / self.bufferLen
-                )
-                for groupname in self.hieracy:
-                    #TODO add loop over dict with error mesaages for unmatched parirs this will save at least 50 lines code and will be way better readable
-                    self.Datasets[groupname] = self.group[groupname]
-                    if (
-                        not self.Datasets[groupname].attrs["Unit"]
-                        == self.hieracy[groupname]["UNIT"]
-                    ):
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Unit missmatch !"
-                                + self.Datasets[groupname].attrs["Unit"]
-                                + " "
-                                + self.hieracy[groupname]["UNIT"]
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Unit missmatch !"
-                                + self.Datasets[groupname].attrs["Unit"]
-                                + " "
-                                + self.hieracy[groupname]["UNIT"]
-                            )
-
-                    if not (
-                        self.Datasets[groupname].attrs["Physical_quantity"]
-                        == self.hieracy[groupname]["PHYSICAL_QUANTITY"]
-                    ).all():
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Physical_quantity missmatch !"
-                                + self.Datasets[groupname].attrs["Physical_quantity"]
-                                + " "
-                                + self.hieracy[groupname]["PHYSICAL_QUANTITY"]
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Physical_quantity missmatch !"
-                                + self.Datasets[groupname].attrs["Physical_quantity"]
-                                + " "
-                                + self.hieracy[groupname]["PHYSICAL_QUANTITY"]
-                            )
-
-                    if not (
-                        np.nan_to_num(self.Datasets[groupname].attrs["Resolution"])
-                        == np.nan_to_num(self.hieracy[groupname]["RESOLUTION"])
-                    ).all():
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Resolution  missmatch !"
-                                + str(self.Datasets[groupname].attrs["Resolution"])
-                                + " "
-                                + str(self.hieracy[groupname]["RESOLUTION"])
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Resolution  missmatch !"
-                                + str(self.Datasets[groupname].attrs["Resolution"])
-                                + " "
-                                + str(self.hieracy[groupname]["RESOLUTION"])
-                            )
-
-                    if not (
-                        np.nan_to_num(self.Datasets[groupname].attrs["Max_scale"])
-                        == np.nan_to_num(self.hieracy[groupname]["MAX_SCALE"])
-                    ).all():
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Max scale missmatch !"
-                                + str(self.Datasets[groupname].attrs["Max_scale"])
-                                + " "
-                                + str(self.hieracy[groupname]["MAX_SCALE"])
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Max scale missmatch !"
-                                + str(self.Datasets[groupname].attrs["Max_scale"])
-                                + " "
-                                + str(self.hieracy[groupname]["MAX_SCALE"])
-                            )
-
-                    if not (
-                        np.nan_to_num(self.Datasets[groupname].attrs["Min_scale"])
-                        == np.nan_to_num(self.hieracy[groupname]["MIN_SCALE"])
-                    ).all():
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Min scale missmatch !"
-                                + str(self.Datasets[groupname].attrs["Min_scale"])
-                                + " "
-                                + str(self.hieracy[groupname]["MIN_SCALE"])
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Min scale missmatch !"
-                                + str(self.Datasets[groupname].attrs["Min_scale"])
-                                + " "
-                                + str(self.hieracy[groupname]["MIN_SCALE"])
-                            )
-            except KeyError:
-                self.group = self.f.create_group(
-                    "RAWDATA/" + hex(dscp.ID) + "_" + dscp.SensorName.replace(" ", "_")
-                )
-                self.group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
-                self.group.attrs["Sensor_name"] = dscp.SensorName
-                self.group.attrs["Sensor_ID"] = dscp.ID
-                self.group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
-                self.group.attrs["Data_point_number"]=0
-                if (self.dscp.has_time_ticks):
-                    self.Datasets["Time_Ticks"] = self.group.create_dataset(
-                        "Time_Ticks",
-                        ([1, bufferLen]),
-                        maxshape=(1, None),
-                        dtype="uint64",
-                        compression="gzip",
-                        shuffle=True,
-                    )
-                    self.Datasets["Time_Ticks"]
-                    self.Datasets["Time_Ticks"].attrs["Unit"] = "\\one"
-                    self.Datasets["Time_Ticks"].attrs[
-                        "Physical_quantity"
-                    ] = "CPU Ticks since System Start"
-                    self.Datasets["Time_Ticks"].attrs["Resolution"] = np.exp2(64)
-                    self.Datasets["Time_Ticks"].attrs["Max_scale"] = np.exp2(64)
-                    self.Datasets["Time_Ticks"].attrs["Min_scale"] = 0
-
-                self.Datasets["Absolutetime"] = self.group.create_dataset(
-                    "Absolutetime",
-                    ([1, bufferLen]),
-                    maxshape=(1, None),
-                    dtype="uint64",
-                    compression="gzip",
-                    shuffle=True,
-                )
-                self.Datasets["Absolutetime"].make_scale("Absoluitetime")
-                self.Datasets["Absolutetime"].attrs["Unit"] = "\\nano\\seconds"
-                self.Datasets["Absolutetime"].attrs[
-                    "Physical_quantity"
-                ] = "Uinix_time_in_nanoseconds"
-                self.Datasets["Absolutetime"].attrs["Resolution"] = np.exp2(64)
-                self.Datasets["Absolutetime"].attrs["Max_scale"] = np.exp2(64)
-                self.Datasets["Absolutetime"].attrs["Min_scale"] = 0
-                self.Datasets["Absolutetime_uncertainty"] = self.group.create_dataset(
-                    "Absolutetime_uncertainty",
-                    ([1, bufferLen]),
-                    maxshape=(1, None),
-                    dtype="uint32",
-                    compression="gzip",
-                    shuffle=True,
-                )
-                self.Datasets["Absolutetime_uncertainty"].attrs[
-                    "Unit"
-                ] = "\\nano\\seconds"
-                self.Datasets["Absolutetime_uncertainty"].attrs[
-                    "Physical_quantity"
-                ] = "Uinix_time_uncertainty_in_nanosconds"
-                self.Datasets["Absolutetime_uncertainty"].attrs["Resolution"] = np.exp2(
-                    32
-                )
-                self.Datasets["Absolutetime_uncertainty"].attrs["Max_scale"] = np.exp2(
-                    32
-                )
-                self.Datasets["Absolutetime_uncertainty"].attrs["Min_scale"] = 0.0
-
-                self.Datasets["Sample_number"] = self.group.create_dataset(
-                    "Sample_number",
-                    ([1, bufferLen]),
-                    maxshape=(1, None),
-                    dtype="uint32",
-                    compression="gzip",
-                    shuffle=True,
-                )
-                self.Datasets["Sample_number"].attrs["Unit"] = "\\one"
-                self.Datasets["Sample_number"].attrs[
-                    "Physical_quantity"
-                ] = "Sample_number"
-                self.Datasets["Sample_number"].attrs["Resolution"] = np.exp2(32)
-                self.Datasets["Sample_number"].attrs["Max_scale"] = np.exp2(32)
-                self.Datasets["Sample_number"].attrs["Min_scale"] = 0
-                for groupname in self.hieracy:
-                    vectorlength = len(self.hieracy[groupname]["copymask"])
-                    self.Datasets[groupname] = self.group.create_dataset(
-                        groupname,
-                        ([vectorlength, bufferLen]),
-                        maxshape=(3, None),
-                        dtype="float32",
-                        compression="gzip",
-                        shuffle=True,
-                    )  # compression="gzip",shuffle=True,
-                    self.Datasets[groupname].dims[0].label = "Absoluitetime"
-                    self.Datasets[groupname].dims[0].attach_scale(
-                        self.Datasets["Absolutetime"]
-                    )
-                    self.Datasets[groupname].attrs["Unit"] = self.hieracy[groupname][
-                        "UNIT"
-                    ]
-                    self.Datasets[groupname].attrs["Physical_quantity"] = self.hieracy[
-                        groupname
-                    ]["PHYSICAL_QUANTITY"]
-                    self.Datasets[groupname].attrs["Resolution"] = self.hieracy[
-                        groupname
-                    ]["RESOLUTION"]
-                    self.Datasets[groupname].attrs["Max_scale"] = self.hieracy[
-                        groupname
-                    ]["MAX_SCALE"]
-                    self.Datasets[groupname].attrs["Min_scale"] = self.hieracy[
-                        groupname
-                    ]["MIN_SCALE"]
-                self.f.flush()
-
-    def __str__(self):
-        return str(self.f)+" "+hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_")+' '+str(self.msgbufferd + self.bufferLen * self.chunkswritten)+ ' msg received'
-    def pushmsg(self, message, Description):
-        with self.pushlock:
-            time=message.unix_time*1e9+message.unix_time_nsecs
-            if self.correcttimeglitches:
-                if(self.msgbufferd==0 and self.chunkswritten==0):
-                    self.lastdatatime = message.unix_time * 1e9 + message.unix_time_nsecs  # store fist time as last timestamp to have an difference of 0ns for fisrt sample
-                deltat=time-self.lastdatatime
-                if deltat<-2.5e8:
-                    deltains=np.rint((deltat)/1e9)
-                    self.timeoffset=self.timeoffset-deltains
-                    warnings.warn("Time difference is negative in Sensor " + self.dscp.SensorName +' ID ' + hex(self.dscp.ID) +" at IDX " + str(self.msgbufferd + self.bufferLen * self.chunkswritten) + "with timme difference " + str(time - self.lastdatatime) + " ns " + str(deltains) + " in seconds " + str(self.timeoffset) + ' accumulated deltat in s', UserWarning)
-                if deltat > 2.5e8:
-                    if self.timeoffset<0:
-                        deltains=np.rint((deltat)/1e9)
-                        self.timeoffset = self.timeoffset-deltains
-                        if self.timeoffset!=0:
-                            warnings.warn("Time difference is large positive in Sensor " + self.dscp.SensorName +' ID ' + hex(self.dscp.ID) +"at IDX " + str(self.msgbufferd + self.bufferLen * self.chunkswritten) + "with timme difference " + str(time - self.lastdatatime) + " ns " + str(deltains) + " in seconds " + str(self.timeoffset) + ' accumulated deltat in seconds. Accumulated deltat will be set to 0', UserWarning)
-                        self.timeoffset=0
-            self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
-            self.buffer[:, self.msgbufferd] = np.array(
-                [
-                    message.Data_01,
-                    message.Data_02,
-                    message.Data_03,
-                    message.Data_04,
-                    message.Data_05,
-                    message.Data_06,
-                    message.Data_07,
-                    message.Data_08,
-                    message.Data_09,
-                    message.Data_10,
-                    message.Data_11,
-                    message.Data_12,
-                    message.Data_13,
-                    message.Data_14,
-                    message.Data_15,
-                    message.Data_16,
-                ]
-            )
-            self.time_buffer[:, self.msgbufferd] = np.array([
-                message.sample_number,
-                message.unix_time + self.timeoffset,
-                message.unix_time_nsecs,
-                message.time_uncertainty + self.uncerpenaltyfortimeerrorns * self.timeoffset])
-            self.ticks_buffer[self.msgbufferd] = message.time_ticks
-            self.msgbufferd = self.msgbufferd + 1
-            if self.msgbufferd == self.bufferLen:
-                #print(hex(self.dscp.ID)+"waiting for lock "+str(self.hdflock))
-                with self.hdflock:
-                    #print(hex(self.dscp.ID)+"Aquired lock " + str(self.hdflock))
-                    startIDX = self.bufferLen * self.chunkswritten
-                    #print("Start index is " + str(startIDX))
-                    self.Datasets["Absolutetime"].resize([1, startIDX + self.bufferLen])
-                    time = (
-                        self.time_buffer[1, :] * 1000000000
-                        + self.time_buffer[2, : startIDX + self.bufferLen]
-                    )
-                    self.Datasets["Absolutetime"][:, startIDX:] = time
-                    if (self.dscp.has_time_ticks):
-                        self.Datasets["Time_Ticks"].resize([1, startIDX + self.bufferLen])
-                        self.Datasets["Time_Ticks"][:, startIDX:] = self.ticks_buffer
-
-                    self.Datasets["Absolutetime_uncertainty"].resize(
-                        [1, startIDX + self.bufferLen]
-                    )
-                    Absolutetime_uncertainty = self.time_buffer[3, :].astype(np.uint32)
-                    self.Datasets["Absolutetime_uncertainty"][
-                        :, startIDX:
-                    ] = Absolutetime_uncertainty
-                    if not self.startimewritten:
-                        self.group.attrs["Start_time"] = time[0]
-                        self.group.attrs[
-                            "Start_time_uncertainty"
-                        ] = Absolutetime_uncertainty[0]
-                        self.startimewritten = True
-                    self.Datasets["Sample_number"].resize(
-                        [1, startIDX + self.bufferLen]
-                    )
-                    samplenumbers = self.time_buffer[0, :].astype(np.uint32)
-                    self.Datasets["Sample_number"][:, startIDX:] = samplenumbers
-
-                    for groupname in self.hieracy:
-                        vectorlength = len(self.hieracy[groupname]["copymask"])
-                        self.Datasets[groupname].resize(
-                            [vectorlength, startIDX + self.bufferLen]
-                        )
-                        data = self.buffer[
-                            (
-                                self.hieracy[groupname]["copymask"]
-                                #+ self.dataframindexoffset
-                            ),
-                            :,
-                        ].astype("float32")
-                        self.Datasets[groupname][:, startIDX:] = data
-                    # self.f.flush()
-                    self.msgbufferd = 0
-                    self.chunkswritten = self.chunkswritten + 1
-                    self.group.attrs["Data_point_number"] = self.chunkswritten*self.bufferLen
-                    self.buffer.fill(np.NaN)
-                    self.ticks_buffer.fill(0)
-                    self.buffer[0:4,:]=np.zeros([4, self.bufferLen])
-
-    def wirteRemainingToHDF(self):
-        warnings.warn('WARNING will generate zeros in the end of the data file if callback is active there will be an gap in the file ')
-        with self.hdflock:
-            startIDX = self.bufferLen * self.chunkswritten
-            # print("Start index is " + str(startIDX))
-            self.Datasets["Absolutetime"].resize([1, startIDX + self.bufferLen])
-            time = (
-                    self.time_buffer[1, :] * 1000000000
-                    + self.time_buffer[2, : startIDX + self.bufferLen]
-            ).astype(np.uint64)
-            self.Datasets["Absolutetime"][:, startIDX:] = time
-            if (self.dscp.has_time_ticks):
-                self.Datasets["Time_Ticks"].resize([1, startIDX + self.bufferLen])
-                self.Datasets["Time_Ticks"][:, startIDX:] = self.ticks_buffer
-
-            self.Datasets["Absolutetime_uncertainty"].resize(
-                [1, startIDX + self.bufferLen]
-            )
-            Absolutetime_uncertainty = self.time_buffer[3, :].astype(np.uint32)
-            self.Datasets["Absolutetime_uncertainty"][
-            :, startIDX:
-            ] = Absolutetime_uncertainty
-            if not self.startimewritten:
-                self.group.attrs["Start_time"] = time[0]
-                self.group.attrs[
-                    "Start_time_uncertainty"
-                ] = Absolutetime_uncertainty[0]
-                self.startimewritten = True
-            self.Datasets["Sample_number"].resize(
-                [1, startIDX + self.bufferLen]
-            )
-            samplenumbers = self.buffer[0, :].astype(np.uint32)
-            self.Datasets["Sample_number"][:, startIDX:] = samplenumbers
-
-            for groupname in self.hieracy:
-                vectorlength = len(self.hieracy[groupname]["copymask"])
-                self.Datasets[groupname].resize(
-                    [vectorlength, startIDX + self.bufferLen]
-                )
-                data = self.buffer[
-                       (
-                               self.hieracy[groupname]["copymask"]
-                               #+ self.dataframindexoffset
-                       ),
-                       :,
-                       ].astype("float32")
-                self.Datasets[groupname][:, startIDX:] = data
-            self.f.flush()
-            self.group.attrs["Data_point_number"] = self.group.attrs["Data_point_number"] + self.msgbufferd
-            self.msgbufferd = 0
-            self.chunkswritten = self.chunkswritten + 1
 
 
 class HDF5Dumper:
@@ -2071,17 +1650,98 @@ class HDF5Dumper:
             self.group.attrs["Data_point_number"] = self.group.attrs["Data_point_number"] + self.msgbufferd
             self.msgbufferd = 0
             self.chunkswritten = self.chunkswritten + 1
+class NewHDF5Dumper:
+    def __init__(self, dscp, file,timeSliceGPRName, hdfffilelock, bufferLen=2048, ignoreMissmatchErrors=True):
+        self.dscp=dscp
+        self.hdflock = hdfffilelock
+        self.pushlock = threading.Lock()
+        self.dataframindexoffset = 4
+        self.bufferLen = bufferLen
+        self.buffer = np.zeros([16+3, self.bufferLen])
+        self.ticks_buffer = np.zeros(self.bufferLen, dtype=np.uint64)
+        self.chunkswritten = 0
+        self.msgbufferd = 0
+        self.lastdatatime=0
+        self.timeoffset = 0
+        self.uncerpenaltyfortimeerrorns=10000
+        self.hieracy = dscp.gethieracyasdict()
+        self.startimewritten = False
+        self.dataFile=file
+        self.Datasets = {}
+        # chreate self.groups
+        with self.hdflock:
+            try:
+                self.rawDataGPR = self.dataFile.initRawDataGPR(groupAttrs={"creationSoftware":"Met4FoFDataReceiver"})
+                self.timeSliceGPR=self.rawDataGPR.initTimeSliceGroup(timeSliceGPRName)
+                name='{0:0{1}X}'.format(self.dscp.ID,8)+'_'+str(self.dscp.SensorName)
+                self.sourceGPR=self.timeSliceGPR.initSourceGroup(name)
+                names=[]
+                rows=[]
+                arrayMapping={}
+                dsetAttrs=[]
+                for groupname in self.hieracy.keys():
+                    dSetDSCP=self.hieracy[groupname]
+                    names.append(str(groupname))
+                    rows.append(len(dSetDSCP['copymask']))
+                    arrayMapping[str(groupname)]=np.array(dSetDSCP['copymask']+3)#+3 since abstime abstimeunce and samplecount ar first 3 rows allways
+                    ProtobufTOHDFKeyMapping={'pysicalQuantity':'PHYSICAL_QUANTITY','unit':'UNIT','resolution':'RESOLUTION',"minRange":'MIN_SCALE',"maxRange":'MAX_SCALE'} #TODO move to HDF5Datafile.py
+                    attrs={}
+                    for hdfKey,protoKey in ProtobufTOHDFKeyMapping.items():
+                        attrs[hdfKey]=dSetDSCP[protoKey]
+                    dsetAttrs.append(attrs)
+                self.sourceGPR.createMultiplerawDataSets(names, rows, arrayMapping,dsetAttrs,createAbsTimeBase=True)
+            except Exception as E:
+                print(E)
 
-def startdumpingallsensorshdf(filename):
+    def __str__(self):
+        return str(self.dataFile)+" "+hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_")+' '+str(self.msgbufferd + self.bufferLen * self.chunkswritten)+ ' msg received'
+    def pushmsg(self, message, Description):
+        with self.pushlock:
+            self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
+            self.buffer[:, self.msgbufferd] = np.array(
+                [
+                    message.unix_time*1000000000+message.unix_time_nsecs,
+                    message.time_uncertainty,
+                    message.sample_number,
+                    message.Data_01,
+                    message.Data_02,
+                    message.Data_03,
+                    message.Data_04,
+                    message.Data_05,
+                    message.Data_06,
+                    message.Data_07,
+                    message.Data_08,
+                    message.Data_09,
+                    message.Data_10,
+                    message.Data_11,
+                    message.Data_12,
+                    message.Data_13,
+                    message.Data_14,
+                    message.Data_15,
+                    message.Data_16,
+                ]
+            )
+            self.msgbufferd+=1
+            if self.msgbufferd == self.bufferLen-1:
+                with self.hdflock:
+                    self.sourceGPR.pushArray(self.buffer)
+                    self.msgbufferd=0
+    def wirteRemainingToHDF(self):
+        with self.hdflock:
+            self.sourceGPR.pushArray(self.buffer[:,:self.msgbufferd])
+            self.msgbufferd = 0
+            self.sourceGPR.finishArrayPushing()
+
+
+def startdumpingallsensorshdf(dataFile,timeSliceGPRName):
     hdfdumplock = threading.Lock()
-    hdfdumpfile = h5py.File(filename, "a")
-    hdfdumper = []
+    hdfdumpers = []
     for SensorID in DR.AllSensors:
-        hdfdumper.append(
-            HDF5Dumper(DR.AllSensors[SensorID].Description, hdfdumpfile, hdfdumplock,chunksize=1024,correcttimeglitches=False)
+        hdfdumpers.append(
+            NewHDF5Dumper(DR.AllSensors[SensorID].Description,dataFile,timeSliceGPRName, hdfdumplock,bufferLen=int(32000))
         )
-        DR.AllSensors[SensorID].SetCallback(hdfdumper[-1].pushmsg)
-    return hdfdumper, hdfdumpfile
+        DR.AllSensors[SensorID].SetCallback(hdfdumpers[-1].pushmsg)
+    return hdfdumpers, dataFile
 
 
 def stopdumpingallsensorshdf(dumperlist, dumpfile):
@@ -2090,7 +1750,7 @@ def stopdumpingallsensorshdf(dumperlist, dumpfile):
     for dumper in dumperlist:
         print("closing"+str(dumper))
         dumper.wirteRemainingToHDF()
-        dumper.f.flush()
+        dumper.dataFile.flush()
         del dumper
     dumpfile.close()
 
@@ -2151,8 +1811,13 @@ if __name__ == "__main__":
     try:
         DR = DataReceiver("192.168.0.200", 7654)
         bokehPort=5010
-        time.sleep(5)
-        startdumpingallsensorshdf("tmp.hdf5")
+        time.sleep(10)
+        import time
+        DF=HDF5DataFile("tmp"+str(time.time())+".hdf5","w")
+        hdfdumpers, dataFile=startdumpingallsensorshdf(DF,"TEST0000")
+        time.sleep(100)
+        stopdumpingallsensorshdf(hdfdumpers, dataFile)
+        """
         io_loop = IOLoop.current()
         bokeh_app = Application(FunctionHandler(make_doc))
         server = Server(
@@ -2172,8 +1837,11 @@ if __name__ == "__main__":
         print("Opening Bokeh application on http://" + str(IPAddr) + ":" + str(bokehPort) + "/")
         io_loop.add_callback(server.show, "/")
         io_loop.start()
+        """
     finally:
+        """
         server.stop()
         io_loop.stop()
+        """
         del DR
-        del bokeh_app
+        #del bokeh_app
