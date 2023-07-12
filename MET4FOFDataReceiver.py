@@ -749,12 +749,10 @@ class Sensor:
         self.buffer = Queue(int(BufferSize))
         self.buffersize = BufferSize
         self.flags = {
-            "DumpToFile": False,
-            "DumpToFileProto": False,
-            "DumpToFileASCII": False,
             "PrintProcessedCounts": True,
             "callbackSet": False,
         }
+        self.processData=True
         self.params = {"ID": ID, "BufferSize": BufferSize, "DumpFileName": ""}
         self.DescriptionsProcessed = AliasDict(
             {
@@ -776,14 +774,11 @@ class Sensor:
         # self.thread.daemon = True
         self.thread.start()
         self.ProcessedPacekts = 0
-        self.datarate = 0
+        self.ProcessedPacektsLastDataRateupdate = 0
+        self.timeLastDataRateupdate=time.monotonic()
+        self.dataRate = np.NaN
         self.timeoutOccured = False
         self.timeSinceLastPacket = 0
-        self.ASCIIDumpStartTime = None
-        self.ASCIIDumpFileCount = 0
-        self.ASCIIDumpFilePrefix = ""
-        self.ASCIIDumpSplittime = 86400
-        self.ASCIIDumpNextSplittime = 0
 
     def __repr__(self):
         """
@@ -796,119 +791,6 @@ class Sensor:
         """
         return hex(self.Description.ID) + " " + self.Description.SensorName
 
-    def StartDumpingToFileASCII(self, filenamePrefix="", splittime=86400):
-        """
-        Activate dumping Messages in a file ASCII encoded ; seperated.
-
-        Parameters
-        ----------
-        filename : path
-            path to the dumpfile.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.ASCIIDumpFilePrefix = filenamePrefix
-        self.ASCIIDumpStartTime = time.monotonic()
-        self.ASCIIDumpStartTimeLocal = datetime.datetime.now()
-        self.flags["DumpToFileASCII"] = True
-        if splittime > 0:
-            self.ASCIIDumpSplittime = splittime
-        self.initNewASCIIFile()
-
-    def initNewASCIIFile(self):
-        try:
-            self.DumpfileASCII.close()
-        except:
-            pass  # the file is not opend or existing and there fore cant be closed
-        filename = os.path.join(
-            self.ASCIIDumpFilePrefix,
-            self.ASCIIDumpStartTimeLocal.strftime("%Y%m%d%H%M%S")
-            + "_"
-            + str(self.Description.SensorName).replace(" ", "_")
-            + "_"
-            + hex(self.Description.ID)
-            + "_"
-            + str(self.ASCIIDumpFileCount).zfill(5)
-            + ".dump",
-        )
-        print("created new dumpfile " + filename)
-        self.DumpfileASCII = open(filename, "a")
-        json.dump(self.Description.asDict(), self.DumpfileASCII)
-        self.DumpfileASCII.write("\n")
-        self.DumpfileASCII.write(
-            "id;sample_number;unix_time;unix_time_nsecs;time_uncertainty;Data_01;Data_02;Data_03;Data_04;Data_05;Data_06;Data_07;Data_08;Data_09;Data_10;Data_11;Data_12;Data_13;Data_14;Data_15;Data_16\n"
-        )
-        self.params["DumpFileNameASCII"] = filename
-        self.ASCIIDumpFileCount = self.ASCIIDumpFileCount + 1
-        self.ASCIIDumpNextSplittime = (
-            self.ASCIIDumpStartTime + self.ASCIIDumpSplittime * self.ASCIIDumpFileCount
-        )
-
-    def StopDumpingToFileASCII(self):
-        """
-        Stops dumping to file ASCII encoded.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.flags["DumpToFileASCII"] = False
-        self.params["DumpFileNameASCII"] = ""
-        self.DumpfileASCII.close()
-        self.ASCIIDumpFileCount = 0
-
-    def StartDumpingToFileProto(self, filename=""):
-        """
-        Activate dumping Messages in a file ProtBuff encoded \\n seperated.
-
-        Parameters
-        ----------
-        filename : path
-            path to the dumpfile.
-
-
-        Returns
-        -------
-        None.
-
-        """
-        # check if the path is valid
-        # if(os.path.exists(os.path.dirname(os.path.abspath('data/dump.csv')))):
-        if filename == "":
-            now = datetime.now()
-            filename = (
-                "data/"
-                + now.strftime("%Y%m%d%H%M%S")
-                + "_"
-                + str(self.Description.SensorName).replace(" ", "_")
-                + "_"
-                + hex(self.Description.ID)
-                + ".protodump"
-            )
-        self.DumpfileProto = open(filename, "a")
-        json.dump(self.Description.asDict(), self.DumpfileProto)
-        self.DumpfileProto.write("\n")
-        self.DumpfileProto = open(filename, "ab")
-        self.params["DumpFileNameProto"] = filename
-        self.flags["DumpToFileProto"] = True
-
-    def StopDumpingToFileProto(self):
-        """
-        Stops dumping to file Protobuff encoded.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.flags["DumpToFileProto"] = False
-        self.params["DumpFileNameProto"] = ""
-        self.DumpfileProto.close()
-
     def run(self):
         """
         Starts the Sensor loop.
@@ -920,152 +802,124 @@ class Sensor:
             # problem when we are closing the queue this function is waiting for data and raises EOF error if we delet the q
             # work around adding time out so self.buffer.get is returning after a time an thestop_event falg can be checked
             try:
-                message = self.buffer.get(timeout=0.1)
-                self.timeoutOccured = False
-                self.ProcessedPacekts = self.ProcessedPacekts + 1
-                if self.flags["PrintProcessedCounts"]:
-                    if self.ProcessedPacekts % 10000 == 0:
-                        print(
-                            "processed 10000 packets in receiver for Sensor ID:"
-                            + hex(self.params["ID"])
-                            + " Packets in Que "
-                            + str(self.buffer.qsize())
-                            + " -->"
-                            + str((self.buffer.qsize() / self.buffersize) * 100)
-                            + "%"
-                        )
-                if message["Type"] == "Description":
-                    Description = message["ProtMsg"]
-                    try:
-                        if (
-                            not any(self.DescriptionsProcessed.values())
-                            and Description.IsInitialized()
-                        ):
-                            # run only if no description packed has been procesed ever
-                            # self.Description.SensorName=message.Sensor_name
-                            print(
-                                "Found new description "
-                                + Description.Sensor_name
-                                + " sensor with ID:"
-                                + str(self.params["ID"])
-                            )
-                            # print(str(Description.Description_Type))
-                            if(Description.has_time_ticks==True):
-                                print("Raw tick detected for " +Description.Sensor_name
-                                + " sensor with ID:"
-                                + str(self.params["ID"]))
-                                self.Description.has_time_ticks =True
-                        if (
-                            self.DescriptionsProcessed[Description.Description_Type]
-                            == False
-                        ):
-
-                            if self.Description.SensorName == "Name not Set":
-                                self.Description.SensorName = Description.Sensor_name
-                            # we havent processed thiss message before now do that
-                            if Description.Description_Type in [
-                                0,
-                                1,
-                                2,
-                                6,
-                            ]:  # ["PHYSICAL_QUANTITY","UNIT","UNCERTAINTY_TYPE"]
-                                # print(Description)
-                                # string Processing
-
-                                FieldNumber = 1
-                                for StrField in self.StrFieldNames:
-                                    if Description.HasField(StrField):
-                                        self.Description.setChannelParam(
-                                            FieldNumber,
-                                            self.DescriptionTypNames[
-                                                Description.Description_Type
-                                            ],
-                                            Description.__getattribute__(StrField),
-                                        )
-                                        # print(str(FieldNumber)+' '+Description.__getattribute__(StrField))
-                                    FieldNumber = FieldNumber + 1
-
-                                self.DescriptionsProcessed[
-                                    Description.Description_Type
-                                ] = True
-                                # print(self.DescriptionsProcessed)
-                            if Description.Description_Type in [
-                                3,
-                                4,
-                                5,
-                            ]:  # ["RESOLUTION","MIN_SCALE","MAX_SCALE"]
-                                self.DescriptionsProcessed[
-                                    Description.Description_Type
-                                ] = True
-                                FieldNumber = 1
-                                for FloatField in self.FFieldNames:
-                                    if Description.HasField(FloatField):
-                                        self.Description.setChannelParam(
-                                            FieldNumber,
-                                            self.DescriptionTypNames[
-                                                Description.Description_Type
-                                            ],
-                                            Description.__getattribute__(FloatField),
-                                        )
-                                        # print(str(FieldNumber)+' '+str(Description.__getattribute__(FloatField)))
-                                    FieldNumber = FieldNumber + 1
-                                # print(self.DescriptionsProcessed)
-                                # string Processing
-                    except Exception:
-                        print(
-                            " Sensor id:"
-                            + hex(self.params["ID"])
-                            + "Exception in user Description parsing:"
-                        )
-                        print("-" * 60)
-                        traceback.print_exc(file=sys.stdout)
-                        print("-" * 60)
-                if self.flags["callbackSet"]:
-                    if message["Type"] == "Data":
+                if self.processData:
+                    message = self.buffer.get(timeout=0.1)
+                    self.timeoutOccured = False
+                    if message["Type"] == "Description":
+                        Description = message["ProtMsg"]
                         try:
-                            self.callback(message["ProtMsg"], self.Description)
+                            if (
+                                not any(self.DescriptionsProcessed.values())
+                                and Description.IsInitialized()
+                            ):
+                                # run only if no description packed has been procesed ever
+                                # self.Description.SensorName=message.Sensor_name
+                                print(
+                                    "Found new description "
+                                    + Description.Sensor_name
+                                    + " sensor with ID:"
+                                    + str(self.params["ID"])
+                                )
+                                # print(str(Description.Description_Type))
+                                if(Description.has_time_ticks==True):
+                                    print("Raw tick detected for " +Description.Sensor_name
+                                    + " sensor with ID:"
+                                    + str(self.params["ID"]))
+                                    self.Description.has_time_ticks =True
+                            if (
+                                self.DescriptionsProcessed[Description.Description_Type]
+                                == False
+                            ):
+
+                                if self.Description.SensorName == "Name not Set":
+                                    self.Description.SensorName = Description.Sensor_name
+                                # we havent processed thiss message before now do that
+                                if Description.Description_Type in [
+                                    0,
+                                    1,
+                                    2,
+                                    6,
+                                ]:  # ["PHYSICAL_QUANTITY","UNIT","UNCERTAINTY_TYPE"]
+                                    # print(Description)
+                                    # string Processing
+
+                                    FieldNumber = 1
+                                    for StrField in self.StrFieldNames:
+                                        if Description.HasField(StrField):
+                                            self.Description.setChannelParam(
+                                                FieldNumber,
+                                                self.DescriptionTypNames[
+                                                    Description.Description_Type
+                                                ],
+                                                Description.__getattribute__(StrField),
+                                            )
+                                            # print(str(FieldNumber)+' '+Description.__getattribute__(StrField))
+                                        FieldNumber = FieldNumber + 1
+
+                                    self.DescriptionsProcessed[
+                                        Description.Description_Type
+                                    ] = True
+                                    # print(self.DescriptionsProcessed)
+                                if Description.Description_Type in [
+                                    3,
+                                    4,
+                                    5,
+                                ]:  # ["RESOLUTION","MIN_SCALE","MAX_SCALE"]
+                                    self.DescriptionsProcessed[
+                                        Description.Description_Type
+                                    ] = True
+                                    FieldNumber = 1
+                                    for FloatField in self.FFieldNames:
+                                        if Description.HasField(FloatField):
+                                            self.Description.setChannelParam(
+                                                FieldNumber,
+                                                self.DescriptionTypNames[
+                                                    Description.Description_Type
+                                                ],
+                                                Description.__getattribute__(FloatField),
+                                            )
+                                            # print(str(FieldNumber)+' '+str(Description.__getattribute__(FloatField)))
+                                        FieldNumber = FieldNumber + 1
+                                    # print(self.DescriptionsProcessed)
+                                    # string Processing
                         except Exception:
                             print(
                                 " Sensor id:"
                                 + hex(self.params["ID"])
-                                + "Exception in user callback:"
+                                + "Exception in user Description parsing:"
                             )
                             print("-" * 60)
                             traceback.print_exc(file=sys.stdout)
                             print("-" * 60)
-                            pass
-
-                if self.flags["DumpToFileProto"]:
                     if message["Type"] == "Data":
-                        try:
-                            self.__dumpMsgToFileProto(message["ProtMsg"])
-                        except Exception:
-                            print(
-                                " Sensor id:"
-                                + hex(self.params["ID"])
-                                + "Exception in user datadump:"
-                            )
-                            print("-" * 60)
-                            traceback.print_exc(file=sys.stdout)
-                            print("-" * 60)
-                            pass
-                if self.flags["DumpToFileASCII"]:
-                    if message["Type"] == "Data":
-                        if time.monotonic() > self.ASCIIDumpNextSplittime:
-                            # TODO remove bug in this line
-                            self.initNewASCIIFile()
-                        try:
-                            self.__dumpMsgToFileASCII(message["ProtMsg"])
-                        except Exception:
-                            print(
-                                " Sensor id:"
-                                + hex(self.params["ID"])
-                                + "Exception in user datadump:"
-                            )
-                            print("-" * 60)
-                            traceback.print_exc(file=sys.stdout)
-                            print("-" * 60)
-                            pass
+                        self.ProcessedPacekts = self.ProcessedPacekts + 1
+                        if self.flags["PrintProcessedCounts"]:
+                            if self.ProcessedPacekts % 100 == 0:
+                                self.updateDatarate()
+                            if self.ProcessedPacekts % 10000 == 0:
+                                print(
+                                    + hex(self.params["ID"])
+                                    + str(self.buffer.qsize())
+                                    + " ->"
+                                    + "{:.2f}".format((self.buffer.qsize() / self.buffersize) * 100)
+                                    + "%"
+                                    + " "
+                                    + "{:.2f}".format(self.dataRate)
+                                    + " Hz"
+                                )
+                        if self.flags["callbackSet"]:
+                            try:
+                                self.callback(message["ProtMsg"], self.Description)
+                            except Exception:
+                                print(
+                                    " Sensor id:"
+                                    + hex(self.params["ID"])
+                                    + "Exception in user callback:"
+                                )
+                                print("-" * 60)
+                                traceback.print_exc(file=sys.stdout)
+                                print("-" * 60)
+                                pass
             except Exception as inst:
                 if self.timeoutOccured == False:
                     self.timeoutOccured = True
@@ -1073,6 +927,18 @@ class Sensor:
                 else:
                     self.timeSinceLastPacket += 0.1
 
+    def updateDatarate(self):
+        newTime=time.monotonic()
+        deltaT=newTime-self.timeLastDataRateupdate
+        deltapacekts=self.ProcessedPacekts-self.ProcessedPacektsLastDataRateupdate
+        self.dataRate=deltapacekts/deltaT
+        self.ProcessedPacektsLastDataRateupdate=self.ProcessedPacekts
+        self.timeLastDataRateupdate=newTime
+        return self.dataRate
+    def stopDataProcessing(self):
+        self.processData=False
+    def startDataProcessing(self):
+        self.processData=True
     def donothingcb(self, message, Description):
         pass
 
@@ -1146,511 +1012,7 @@ class Sensor:
         """
         self.stop()
 
-    def __dumpMsgToFileASCII(self, message):
-        """
-        private function to dump MSG as ASCII line \n for new line.
-
-        Parameters
-        ----------
-        message : protobuff message
-            Data to be dumped.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.DumpfileASCII.write(
-            str(message.id)
-            + ";"
-            + str(message.sample_number)
-            + ";"
-            + str(message.unix_time)
-            + ";"
-            + str(message.unix_time_nsecs)
-            + ";"
-            + str(message.time_uncertainty)
-            + ";"
-            + str(message.Data_01)
-            + ";"
-            + str(message.Data_02)
-            + ";"
-            + str(message.Data_03)
-            + ";"
-            + str(message.Data_04)
-            + ";"
-            + str(message.Data_05)
-            + ";"
-            + str(message.Data_06)
-            + ";"
-            + str(message.Data_07)
-            + ";"
-            + str(message.Data_08)
-            + ";"
-            + str(message.Data_09)
-            + ";"
-            + str(message.Data_10)
-            + ";"
-            + str(message.Data_11)
-            + ";"
-            + str(message.Data_12)
-            + ";"
-            + str(message.Data_13)
-            + ";"
-            + str(message.Data_14)
-            + ";"
-            + str(message.Data_15)
-            + ";"
-            + str(message.Data_16)
-            + ";"
-            + str(message.time_ticks)
-            + "\n"
-        )
-
-    def __dumpMsgToFileProto(self, message):
-        """
-        private function to dump MSG as binaryblob \n for new data packet.
-
-        Parameters
-        ----------
-        message : protobuff message
-            Data to be dumped.
-
-        Returns
-        -------
-        None.
-
-        """
-        size = message.ByteSize()
-        self.DumpfileProto.write(_VarintBytes(size))
-        self.DumpfileProto.write(message.SerializeToString())
-
-
-
-
 class HDF5Dumper:
-    def __init__(self, dscp, file, hdfffilelock, chunksize=2048,correcttimeglitches=True,ignoreMissmatchErrors=True):
-        self.dscp=dscp
-        self.hdflock = hdfffilelock
-        self.pushlock = threading.Lock()
-        self.dataframindexoffset = 4
-        self.chunksize = chunksize
-        self.buffer = np.zeros([16, self.chunksize])
-        self.time_buffer = np.zeros([4,self.chunksize], dtype=np.uint64)
-        self.ticks_buffer = np.zeros( self.chunksize,dtype=np.uint64)
-        self.chunkswritten = 0
-        self.msgbufferd = 0
-        self.lastdatatime=0
-        self.timeoffset = 0
-        self.uncerpenaltyfortimeerrorns=10000
-        self.hieracy = dscp.gethieracyasdict()
-        self.startimewritten = False
-        self.correcttimeglitches=correcttimeglitches
-        if isinstance(file, str):
-            self.f = h5py.File(file, "a")
-        elif isinstance(file, h5py._hl.files.File):
-            self.f = file
-        else:
-            raise TypeError(
-                "file needs to be either str or h5py._hl.files.File not "
-                + str(type(file))
-            )
-        self.Datasets = {}
-        # chreate self.groups
-        with self.hdflock:
-            try:
-                self.group = self.f[
-                    "RAWDATA/" + hex(dscp.ID) + "_" + dscp.SensorName.replace(" ", "_")
-                ]
-                warnings.warn(
-                    "GROUP RAWDATA/"
-                    + hex(dscp.ID)
-                    + "_"
-                    + dscp.SensorName.replace(" ", "_")
-                    + " existed allready !"
-                )
-
-                self.Datasets["Absolutetime"] = self.group["Absolutetime"]
-                self.Datasets["Absolutetime_uncertainty"] = self.group[
-                    "Absolutetime_uncertainty"
-                ]
-                if(self.dscp.has_time_ticks):
-                    self.Datasets["Time_ticks"] = self.group["Time_ticks"]
-                self.Datasets["Sample_number"] = self.group["Sample_number"]
-                if (self.Datasets["Absolutetime"].shape[1] / self.chunksize) / int(
-                    self.Datasets["Absolutetime"].shape[1] / self.chunksize
-                ) != 1:
-                    warnings.warn(
-                        "CHECK Chunksize Actual datasize is not an multiple of the chunksize set",
-                        RuntimeWarning,
-                    )
-                self.chunkswritten = int(
-                    self.Datasets["Absolutetime"].shape[1] / self.chunksize
-                )
-                for groupname in self.hieracy:
-                    #TODO add loop over dict with error mesaages for unmatched parirs this will save at least 50 lines code and will be way better readable
-                    self.Datasets[groupname] = self.group[groupname]
-                    if (
-                        not self.Datasets[groupname].attrs["Unit"]
-                        == self.hieracy[groupname]["UNIT"]
-                    ):
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Unit missmatch !"
-                                + self.Datasets[groupname].attrs["Unit"]
-                                + " "
-                                + self.hieracy[groupname]["UNIT"]
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Unit missmatch !"
-                                + self.Datasets[groupname].attrs["Unit"]
-                                + " "
-                                + self.hieracy[groupname]["UNIT"]
-                            )
-
-                    if not (
-                        self.Datasets[groupname].attrs["Physical_quantity"]
-                        == self.hieracy[groupname]["PHYSICAL_QUANTITY"]
-                    ).all():
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Physical_quantity missmatch !"
-                                + self.Datasets[groupname].attrs["Physical_quantity"]
-                                + " "
-                                + self.hieracy[groupname]["PHYSICAL_QUANTITY"]
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Physical_quantity missmatch !"
-                                + self.Datasets[groupname].attrs["Physical_quantity"]
-                                + " "
-                                + self.hieracy[groupname]["PHYSICAL_QUANTITY"]
-                            )
-
-                    if not (
-                        np.nan_to_num(self.Datasets[groupname].attrs["Resolution"])
-                        == np.nan_to_num(self.hieracy[groupname]["RESOLUTION"])
-                    ).all():
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Resolution  missmatch !"
-                                + str(self.Datasets[groupname].attrs["Resolution"])
-                                + " "
-                                + str(self.hieracy[groupname]["RESOLUTION"])
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Resolution  missmatch !"
-                                + str(self.Datasets[groupname].attrs["Resolution"])
-                                + " "
-                                + str(self.hieracy[groupname]["RESOLUTION"])
-                            )
-
-                    if not (
-                        np.nan_to_num(self.Datasets[groupname].attrs["Max_scale"])
-                        == np.nan_to_num(self.hieracy[groupname]["MAX_SCALE"])
-                    ).all():
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Max scale missmatch !"
-                                + str(self.Datasets[groupname].attrs["Max_scale"])
-                                + " "
-                                + str(self.hieracy[groupname]["MAX_SCALE"])
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Max scale missmatch !"
-                                + str(self.Datasets[groupname].attrs["Max_scale"])
-                                + " "
-                                + str(self.hieracy[groupname]["MAX_SCALE"])
-                            )
-
-                    if not (
-                        np.nan_to_num(self.Datasets[groupname].attrs["Min_scale"])
-                        == np.nan_to_num(self.hieracy[groupname]["MIN_SCALE"])
-                    ).all():
-                        if ignoreMissmatchErrors:
-                            raise RuntimeWarning(
-                                "Min scale missmatch !"
-                                + str(self.Datasets[groupname].attrs["Min_scale"])
-                                + " "
-                                + str(self.hieracy[groupname]["MIN_SCALE"])
-                            )
-                        else:
-                            raise RuntimeError(
-                                "Min scale missmatch !"
-                                + str(self.Datasets[groupname].attrs["Min_scale"])
-                                + " "
-                                + str(self.hieracy[groupname]["MIN_SCALE"])
-                            )
-            except KeyError:
-                self.group = self.f.create_group(
-                    "RAWDATA/" + hex(dscp.ID) + "_" + dscp.SensorName.replace(" ", "_")
-                )
-                self.group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
-                self.group.attrs["Sensor_name"] = dscp.SensorName
-                self.group.attrs["Sensor_ID"] = dscp.ID
-                self.group.attrs["Data_description_json"] = json.dumps(dscp.asDict())
-                self.group.attrs["Data_point_number"]=0
-                if (self.dscp.has_time_ticks):
-                    self.Datasets["Time_Ticks"] = self.group.create_dataset(
-                        "Time_Ticks",
-                        ([1, chunksize]),
-                        maxshape=(1, None),
-                        dtype="uint64",
-                        compression="gzip",
-                        shuffle=True,
-                    )
-                    self.Datasets["Time_Ticks"]
-                    self.Datasets["Time_Ticks"].attrs["Unit"] = "\\one"
-                    self.Datasets["Time_Ticks"].attrs[
-                        "Physical_quantity"
-                    ] = "CPU Ticks since System Start"
-                    self.Datasets["Time_Ticks"].attrs["Resolution"] = np.exp2(64)
-                    self.Datasets["Time_Ticks"].attrs["Max_scale"] = np.exp2(64)
-                    self.Datasets["Time_Ticks"].attrs["Min_scale"] = 0
-
-                self.Datasets["Absolutetime"] = self.group.create_dataset(
-                    "Absolutetime",
-                    ([1, chunksize]),
-                    maxshape=(1, None),
-                    dtype="uint64",
-                    compression="gzip",
-                    shuffle=True,
-                )
-                self.Datasets["Absolutetime"].make_scale("Absoluitetime")
-                self.Datasets["Absolutetime"].attrs["Unit"] = "\\nano\\seconds"
-                self.Datasets["Absolutetime"].attrs[
-                    "Physical_quantity"
-                ] = "Uinix_time_in_nanoseconds"
-                self.Datasets["Absolutetime"].attrs["Resolution"] = np.exp2(64)
-                self.Datasets["Absolutetime"].attrs["Max_scale"] = np.exp2(64)
-                self.Datasets["Absolutetime"].attrs["Min_scale"] = 0
-                self.Datasets["Absolutetime_uncertainty"] = self.group.create_dataset(
-                    "Absolutetime_uncertainty",
-                    ([1, chunksize]),
-                    maxshape=(1, None),
-                    dtype="uint32",
-                    compression="gzip",
-                    shuffle=True,
-                )
-                self.Datasets["Absolutetime_uncertainty"].attrs[
-                    "Unit"
-                ] = "\\nano\\seconds"
-                self.Datasets["Absolutetime_uncertainty"].attrs[
-                    "Physical_quantity"
-                ] = "Uinix_time_uncertainty_in_nanosconds"
-                self.Datasets["Absolutetime_uncertainty"].attrs["Resolution"] = np.exp2(
-                    32
-                )
-                self.Datasets["Absolutetime_uncertainty"].attrs["Max_scale"] = np.exp2(
-                    32
-                )
-                self.Datasets["Absolutetime_uncertainty"].attrs["Min_scale"] = 0.0
-
-                self.Datasets["Sample_number"] = self.group.create_dataset(
-                    "Sample_number",
-                    ([1, chunksize]),
-                    maxshape=(1, None),
-                    dtype="uint32",
-                    compression="gzip",
-                    shuffle=True,
-                )
-                self.Datasets["Sample_number"].attrs["Unit"] = "\\one"
-                self.Datasets["Sample_number"].attrs[
-                    "Physical_quantity"
-                ] = "Sample_number"
-                self.Datasets["Sample_number"].attrs["Resolution"] = np.exp2(32)
-                self.Datasets["Sample_number"].attrs["Max_scale"] = np.exp2(32)
-                self.Datasets["Sample_number"].attrs["Min_scale"] = 0
-                for groupname in self.hieracy:
-                    vectorlength = len(self.hieracy[groupname]["copymask"])
-                    self.Datasets[groupname] = self.group.create_dataset(
-                        groupname,
-                        ([vectorlength, chunksize]),
-                        maxshape=(3, None),
-                        dtype="float32",
-                        compression="gzip",
-                        shuffle=True,
-                    )  # compression="gzip",shuffle=True,
-                    self.Datasets[groupname].dims[0].label = "Absoluitetime"
-                    self.Datasets[groupname].dims[0].attach_scale(
-                        self.Datasets["Absolutetime"]
-                    )
-                    self.Datasets[groupname].attrs["Unit"] = self.hieracy[groupname][
-                        "UNIT"
-                    ]
-                    self.Datasets[groupname].attrs["Physical_quantity"] = self.hieracy[
-                        groupname
-                    ]["PHYSICAL_QUANTITY"]
-                    self.Datasets[groupname].attrs["Resolution"] = self.hieracy[
-                        groupname
-                    ]["RESOLUTION"]
-                    self.Datasets[groupname].attrs["Max_scale"] = self.hieracy[
-                        groupname
-                    ]["MAX_SCALE"]
-                    self.Datasets[groupname].attrs["Min_scale"] = self.hieracy[
-                        groupname
-                    ]["MIN_SCALE"]
-                self.f.flush()
-
-    def __str__(self):
-        return str(self.f)+" "+hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_")+' '+str(self.msgbufferd +self.chunksize * self.chunkswritten)+' msg received'
-    def pushmsg(self, message, Description):
-        with self.pushlock:
-            time=message.unix_time*1e9+message.unix_time_nsecs
-            if self.correcttimeglitches:
-                if(self.msgbufferd==0 and self.chunkswritten==0):
-                    self.lastdatatime = message.unix_time * 1e9 + message.unix_time_nsecs  # store fist time as last timestamp to have an difference of 0ns for fisrt sample
-                deltat=time-self.lastdatatime
-                if deltat<-2.5e8:
-                    deltains=np.rint((deltat)/1e9)
-                    self.timeoffset=self.timeoffset-deltains
-                    warnings.warn("Time difference is negative in Sensor "+self.dscp.SensorName+' ID '+hex(self.dscp.ID)+" at IDX "+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+" ns "+str(deltains)+" in seconds "+str(self.timeoffset)+' accumulated deltat in s',UserWarning)
-                if deltat > 2.5e8:
-                    if self.timeoffset<0:
-                        deltains=np.rint((deltat)/1e9)
-                        self.timeoffset = self.timeoffset-deltains
-                        if self.timeoffset!=0:
-                            warnings.warn("Time difference is large positive in Sensor "+self.dscp.SensorName+' ID '+hex(self.dscp.ID)+"at IDX "+str(self.msgbufferd+self.chunksize * self.chunkswritten)+"with timme difference "+str(time-self.lastdatatime)+" ns "+str(deltains)+" in seconds "+str(self.timeoffset)+' accumulated deltat in seconds. Accumulated deltat will be set to 0',UserWarning)
-                        self.timeoffset=0
-            self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
-            self.buffer[:, self.msgbufferd] = np.array(
-                [
-                    message.Data_01,
-                    message.Data_02,
-                    message.Data_03,
-                    message.Data_04,
-                    message.Data_05,
-                    message.Data_06,
-                    message.Data_07,
-                    message.Data_08,
-                    message.Data_09,
-                    message.Data_10,
-                    message.Data_11,
-                    message.Data_12,
-                    message.Data_13,
-                    message.Data_14,
-                    message.Data_15,
-                    message.Data_16,
-                ]
-            )
-            self.time_buffer[:, self.msgbufferd] = np.array([
-                message.sample_number,
-                message.unix_time + self.timeoffset,
-                message.unix_time_nsecs,
-                message.time_uncertainty + self.uncerpenaltyfortimeerrorns * self.timeoffset])
-            self.ticks_buffer[self.msgbufferd] = message.time_ticks
-            self.msgbufferd = self.msgbufferd + 1
-            if self.msgbufferd == self.chunksize:
-                #print(hex(self.dscp.ID)+"waiting for lock "+str(self.hdflock))
-                with self.hdflock:
-                    #print(hex(self.dscp.ID)+"Aquired lock " + str(self.hdflock))
-                    startIDX = self.chunksize * self.chunkswritten
-                    #print("Start index is " + str(startIDX))
-                    self.Datasets["Absolutetime"].resize([1, startIDX + self.chunksize])
-                    time = (
-                        self.time_buffer[1, :] * 1000000000
-                        + self.time_buffer[2, : startIDX + self.chunksize]
-                    )
-                    self.Datasets["Absolutetime"][:, startIDX:] = time
-                    if (self.dscp.has_time_ticks):
-                        self.Datasets["Time_Ticks"].resize([1, startIDX + self.chunksize])
-                        self.Datasets["Time_Ticks"][:, startIDX:] = self.ticks_buffer
-
-                    self.Datasets["Absolutetime_uncertainty"].resize(
-                        [1, startIDX + self.chunksize]
-                    )
-                    Absolutetime_uncertainty = self.time_buffer[3, :].astype(np.uint32)
-                    self.Datasets["Absolutetime_uncertainty"][
-                        :, startIDX:
-                    ] = Absolutetime_uncertainty
-                    if not self.startimewritten:
-                        self.group.attrs["Start_time"] = time[0]
-                        self.group.attrs[
-                            "Start_time_uncertainty"
-                        ] = Absolutetime_uncertainty[0]
-                        self.startimewritten = True
-                    self.Datasets["Sample_number"].resize(
-                        [1, startIDX + self.chunksize]
-                    )
-                    samplenumbers = self.time_buffer[0, :].astype(np.uint32)
-                    self.Datasets["Sample_number"][:, startIDX:] = samplenumbers
-
-                    for groupname in self.hieracy:
-                        vectorlength = len(self.hieracy[groupname]["copymask"])
-                        self.Datasets[groupname].resize(
-                            [vectorlength, startIDX + self.chunksize]
-                        )
-                        data = self.buffer[
-                            (
-                                self.hieracy[groupname]["copymask"]
-                                #+ self.dataframindexoffset
-                            ),
-                            :,
-                        ].astype("float32")
-                        self.Datasets[groupname][:, startIDX:] = data
-                    # self.f.flush()
-                    self.msgbufferd = 0
-                    self.chunkswritten = self.chunkswritten + 1
-                    self.group.attrs["Data_point_number"] = self.chunkswritten*self.chunksize
-                    self.buffer.fill(np.NaN)
-                    self.ticks_buffer.fill(0)
-                    self.buffer[0:4,:]=np.zeros([4,self.chunksize])
-
-    def wirteRemainingToHDF(self):
-        warnings.warn('WARNING will generate zeros in the end of the data file if callback is active there will be an gap in the file ')
-        with self.hdflock:
-            startIDX = self.chunksize * self.chunkswritten
-            # print("Start index is " + str(startIDX))
-            self.Datasets["Absolutetime"].resize([1, startIDX + self.chunksize])
-            time = (
-                    self.time_buffer[1, :] * 1000000000
-                    + self.time_buffer[2, : startIDX + self.chunksize]
-            ).astype(np.uint64)
-            self.Datasets["Absolutetime"][:, startIDX:] = time
-            if (self.dscp.has_time_ticks):
-                self.Datasets["Time_Ticks"].resize([1, startIDX + self.chunksize])
-                self.Datasets["Time_Ticks"][:, startIDX:] = self.ticks_buffer
-
-            self.Datasets["Absolutetime_uncertainty"].resize(
-                [1, startIDX + self.chunksize]
-            )
-            Absolutetime_uncertainty = self.time_buffer[3, :].astype(np.uint32)
-            self.Datasets["Absolutetime_uncertainty"][
-            :, startIDX:
-            ] = Absolutetime_uncertainty
-            if not self.startimewritten:
-                self.group.attrs["Start_time"] = time[0]
-                self.group.attrs[
-                    "Start_time_uncertainty"
-                ] = Absolutetime_uncertainty[0]
-                self.startimewritten = True
-            self.Datasets["Sample_number"].resize(
-                [1, startIDX + self.chunksize]
-            )
-            samplenumbers = self.buffer[0, :].astype(np.uint32)
-            self.Datasets["Sample_number"][:, startIDX:] = samplenumbers
-
-            for groupname in self.hieracy:
-                vectorlength = len(self.hieracy[groupname]["copymask"])
-                self.Datasets[groupname].resize(
-                    [vectorlength, startIDX + self.chunksize]
-                )
-                data = self.buffer[
-                       (
-                               self.hieracy[groupname]["copymask"]
-                               #+ self.dataframindexoffset
-                       ),
-                       :,
-                       ].astype("float32")
-                self.Datasets[groupname][:, startIDX:] = data
-            self.f.flush()
-            self.group.attrs["Data_point_number"] = self.group.attrs["Data_point_number"] + self.msgbufferd
-            self.msgbufferd = 0
-            self.chunkswritten = self.chunkswritten + 1
-class NewHDF5Dumper:
     def __init__(self, dscp, file,timeSliceGPRName, hdfffilelock, bufferLen=2048, ignoreMissmatchErrors=True):
         self.dscp=dscp
         self.hdflock = hdfffilelock
@@ -1662,8 +1024,6 @@ class NewHDF5Dumper:
         self.chunkswritten = 0
         self.msgbufferd = 0
         self.lastdatatime=0
-        self.timeoffset = 0
-        self.uncerpenaltyfortimeerrorns=10000
         self.hieracy = dscp.gethieracyasdict()
         self.startimewritten = False
         self.dataFile=file
@@ -1738,11 +1098,10 @@ def startdumpingallsensorshdf(dataFile,timeSliceGPRName):
     hdfdumpers = []
     for SensorID in DR.AllSensors:
         hdfdumpers.append(
-            NewHDF5Dumper(DR.AllSensors[SensorID].Description,dataFile,timeSliceGPRName, hdfdumplock,bufferLen=int(32000))
+            HDF5Dumper(DR.AllSensors[SensorID].Description,dataFile,timeSliceGPRName, hdfdumplock,bufferLen=int(32000))
         )
         DR.AllSensors[SensorID].SetCallback(hdfdumpers[-1].pushmsg)
     return hdfdumpers, dataFile
-
 
 def stopdumpingallsensorshdf(dumperlist, dumpfile):
     for SensorID in DR.AllSensors:
@@ -1752,11 +1111,53 @@ def stopdumpingallsensorshdf(dumperlist, dumpfile):
         dumper.wirteRemainingToHDF()
         dumper.dataFile.flush()
         del dumper
-    dumpfile.close()
 
 
     #for dumper in dumperlist:
     #    print(str(dumper))
+
+class fileDumper:
+
+    def __init__(self,DR,fileName,bufferLen=int(32000)):
+        self.DR=DR
+        self.file=HDF5DataFile(fileName,'w')
+        self.lock=threading.Lock()
+        self.dumpers=[]
+        self.bufferLen=bufferLen
+    def startDumpingAllSensors(self,timeSliceGPRName):
+        for SensorID in self.DR.AllSensors:
+            self.dumpers.append(
+                HDF5Dumper(DR.AllSensors[SensorID].Description, self.file, timeSliceGPRName, self.lock,
+                           bufferLen=self.bufferLen)
+            )
+            self.DR.AllSensors[SensorID].SetCallback(self.dumpers[-1].pushmsg)
+            self.DR.AllSensors[SensorID].startDataProcessing()
+    def switchTimeSliceGPR(self,timeSliceGPRName):
+        for SensorID in self.DR.AllSensors:
+            self.DR.AllSensors[SensorID].stopDataProcessing()
+        for SensorID in DR.AllSensors:
+            DR.AllSensors[SensorID].UnSetCallback()
+        for dumper in self.dumpers:
+            print("closing" + str(dumper))
+            dumper.wirteRemainingToHDF()
+            del dumper
+        del self.dumpers
+        self.dumpers=[]
+        self.file.flush()
+        self.startDumpingAllSensors(timeSliceGPRName)
+
+    def stopDumpingAllSensors(self):
+        for SensorID in self.DR.AllSensors:
+            self.DR.AllSensors[SensorID].stopDataProcessing()
+        for SensorID in DR.AllSensors:
+            DR.AllSensors[SensorID].UnSetCallback()
+        for dumper in self.dumpers:
+            print("closing" + str(dumper))
+            dumper.wirteRemainingToHDF()
+            del dumper
+        del self.dumpers
+        self.dumpers=[]
+        self.file.flush()
 
 class page:
     class SensorBokehWidget:
@@ -1771,19 +1172,51 @@ class page:
             columns = [TableColumn(field=Ci, title=Ci) for Ci in vars]  # bokeh columns
             self.data_table = DataTable(source=source, columns=columns, width=1800,
                                         height=30 * self.descriptionDF.shape[0])
-            self.widget = column(Div(text="""<h2 style="color:#1f77b4";>Sensor """ + str(
-                DR.AllSensors[sensorID].Description.SensorName) + """</h2> """, height=14), Spacer(height=14),
+            self.descriptionDiv=Div(text="""<h2 style="color:#1f77b4";>"""+" {:08X}".format(self.sensorID)+" "+ str(
+                DR.AllSensors[self.sensorID].Description.SensorName)+" datarate {:.2f}".format(DR.AllSensors[self.sensorID].dataRate) +""" Hz </h2> """, height=10)
+            self.widget = column(self.descriptionDiv, Spacer(height=10),
                                  self.data_table)
-            print("Init Done")
+        def update(self):
+            self.descriptionDiv.text="""<h2 style="color:#1f77b4";>"""+" {:08X}".format(self.sensorID)+" "+ str(
+                DR.AllSensors[self.sensorID].Description.SensorName)+" datarate {:.2f}".format(DR.AllSensors[self.sensorID].dataRate) +""" Hz </h2> """
+    class DumperBokehWidget:
+        def __init__(self, page, DR):
+            self.page=page
+            self.DR=DR
+            self.dumping=False
+            self.fileNameInput=TextAreaInput(value="filename.hdf5", title="Enter Filename")
+            self.sourceGroupInput=TextAreaInput(value="TEST0000", title="Enter Source Group Name")
+            self.startStopButton=Button(button_type="primary",label="Start Dumping")
+            self.startStopButton.on_click(self.toggleDumping)
+            self.widget=row(self.fileNameInput,self.sourceGroupInput,self.startStopButton)
+        def toggleDumping(self):
+            if self.dumping == False:
+                self.filename=self.fileNameInput.value
+                self.sourceGroupName=self.sourceGroupInput.value
+                self.startStopButton.button_type="danger"
+                self.startStopButton.label = "Stop Dumping"
+            else:
+                self.fileDumper.stopDumpingAllSensors()
+                self.startStopButton.button_type="succes"
+                self.startStopButton.label = "Start Dumping"
+
     def __init__(self,DR):
         self.DR=DR
-        self.page=column(Div(text="""<h2 style="color:#1f77b4";>This is a test</h2> """,height=14))
+        self.descriptionDiv=Div(text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """,height=14)
+        self.page=column(self.descriptionDiv)
         self.bokehSensorWidgets=[]
         print("Creating Sensor Widgets")
-        for sensorID in self.DR.AllSensors:
+        for sensorID in sorted(self.DR.AllSensors):
             print("ID"+str(sensorID))
             self.bokehSensorWidgets.append(self.SensorBokehWidget(self,self.DR,sensorID))
             self.page.children.append(self.bokehSensorWidgets[-1].widget)
+        self.DumperWidget=self.DumperBokehWidget(self,self.DR)
+        self.page.children.append(self.DumperWidget.widget)
+    def update(self):
+        self.descriptionDiv.text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """
+        for sensorWidget in self.bokehSensorWidgets:
+            sensorWidget.update()
+
 
 def make_doc(doc):
         LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
@@ -1801,23 +1234,14 @@ def make_doc(doc):
         myPage = page(DR)
         doc.add_root(myPage.page)
         doc.title = "DR view"
-        #doc.add_periodic_callback(myPage.p_callback, 500)
+        doc.add_periodic_callback(myPage.update, 500)
         print("Done")
-
-
-
 
 if __name__ == "__main__":
     try:
         DR = DataReceiver("192.168.0.200", 7654)
         bokehPort=5010
-        time.sleep(10)
-        import time
-        DF=HDF5DataFile("tmp"+str(time.time())+".hdf5","w")
-        hdfdumpers, dataFile=startdumpingallsensorshdf(DF,"TEST0000")
-        time.sleep(100)
-        stopdumpingallsensorshdf(hdfdumpers, dataFile)
-        """
+        time.sleep(3)
         io_loop = IOLoop.current()
         bokeh_app = Application(FunctionHandler(make_doc))
         server = Server(
@@ -1837,11 +1261,9 @@ if __name__ == "__main__":
         print("Opening Bokeh application on http://" + str(IPAddr) + ":" + str(bokehPort) + "/")
         io_loop.add_callback(server.show, "/")
         io_loop.start()
-        """
     finally:
-        """
         server.stop()
         io_loop.stop()
-        """
+        DR.stop()
         del DR
         #del bokeh_app
