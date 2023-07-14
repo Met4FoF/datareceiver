@@ -52,6 +52,7 @@ import logging
 from hdf_sensor_data_file_format.src.HDF5DataFiles import *
 # matplotlib.use('Qt5Agg')
 
+from filelock import Timeout, FileLock
 
 class DataReceiver:
     """Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task
@@ -1019,7 +1020,7 @@ class HDF5Dumper:
         self.pushlock = threading.Lock()
         self.dataframindexoffset = 4
         self.bufferLen = bufferLen
-        self.buffer = np.zeros([16+3, self.bufferLen])
+        self.buffer = np.zeros([16+3, self.bufferLen],dtype=[('f0', 'u8'), ('f1', 'u4'), ('f2', 'u4'), ('f3', 'f4'), ('f4', 'f4'), ('f5', 'f4'), ('f6', 'f4'), ('f7', 'f4'), ('f8', 'f4'), ('f9', 'f4'), ('f10', 'f4'), ('f11', 'f4'), ('f12', 'f4'),('f13', 'f4'), ('f14', 'f4'), ('f15', 'f4'),('f16', 'f4'), ('f17', 'f4'), ('f18', 'f4')])
         self.ticks_buffer = np.zeros(self.bufferLen, dtype=np.uint64)
         self.chunkswritten = 0
         self.msgbufferd = 0
@@ -1056,13 +1057,14 @@ class HDF5Dumper:
     def __str__(self):
         return str(self.dataFile)+" "+hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_")+' '+str(self.msgbufferd + self.bufferLen * self.chunkswritten)+ ' msg received'
     def pushmsg(self, message, Description):
+        test=10
         with self.pushlock:
             self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
             self.buffer[:, self.msgbufferd] = np.array(
                 [
-                    message.unix_time*1000000000+message.unix_time_nsecs,
-                    message.time_uncertainty,
-                    message.sample_number,
+                    np.uint64(np.uint64(message.unix_time)*np.uint64(1000000000))+np.uint64(message.unix_time_nsecs),
+                    np.uint32(message.time_uncertainty),
+                    np.uint32(message.sample_number),
                     message.Data_01,
                     message.Data_02,
                     message.Data_03,
@@ -1118,46 +1120,67 @@ def stopdumpingallsensorshdf(dumperlist, dumpfile):
 
 class fileDumper:
 
-    def __init__(self,DR,fileName,bufferLen=int(32000)):
+    def __init__(self,DR,fileName=None,bufferLen=int(32000)):
         self.DR=DR
-        self.file=HDF5DataFile(fileName,'w')
-        self.lock=threading.Lock()
         self.dumpers=[]
         self.bufferLen=bufferLen
+        self.groupName=None
+        self.lock=threading.Lock()
+        self.state="idle"
+        if fileName!=None:
+            self.openFile(fileName)
+    def openFile(self,fileName):
+        if self.state == "idle":
+            self.fileLock= FileLock(fileName+".lock")
+            self.fileLock.acquire()
+            self.file=HDF5DataFile(fileName,'w')
+            self.state="fileNoDump"#stats are "idle","fileNoDUmp","fileDump"
+
+    def closeFile(self):
+        if self.state=="fileDump":
+            self.stopDumpingAllSensors()
+            self.file.flush()
+            self.file.close()
+            self.fileLock.rlease()
+        elif self.state=="fileNoDump":
+            self.file.flush()
+            self.file.close()
+            self.fileLock.rlease()
+        elif self.state=="idle":
+            warnings.warn("Dumper has no File to close!",RuntimeWarning)
     def startDumpingAllSensors(self,timeSliceGPRName):
-        for SensorID in self.DR.AllSensors:
-            self.dumpers.append(
-                HDF5Dumper(DR.AllSensors[SensorID].Description, self.file, timeSliceGPRName, self.lock,
-                           bufferLen=self.bufferLen)
-            )
-            self.DR.AllSensors[SensorID].SetCallback(self.dumpers[-1].pushmsg)
-            self.DR.AllSensors[SensorID].startDataProcessing()
+        if self.state=="fileNoDump":
+            for SensorID in self.DR.AllSensors:
+                self.dumpers.append(HDF5Dumper(DR.AllSensors[SensorID].Description, self.file, timeSliceGPRName, self.lock,bufferLen=self.bufferLen))
+                self.DR.AllSensors[SensorID].SetCallback(self.dumpers[-1].pushmsg)
+                self.DR.AllSensors[SensorID].startDataProcessing()
+            self.state="fileDump"
+        self.groupName = timeSliceGPRName
     def switchTimeSliceGPR(self,timeSliceGPRName):
-        for SensorID in self.DR.AllSensors:
-            self.DR.AllSensors[SensorID].stopDataProcessing()
-        for SensorID in DR.AllSensors:
-            DR.AllSensors[SensorID].UnSetCallback()
-        for dumper in self.dumpers:
-            print("closing" + str(dumper))
-            dumper.wirteRemainingToHDF()
-            del dumper
-        del self.dumpers
-        self.dumpers=[]
-        self.file.flush()
-        self.startDumpingAllSensors(timeSliceGPRName)
+        if self.state=="fileDump":
+            self.stopDumpingAllSensors()
+            self.state == "fileNoDump"
+            self.startDumpingAllSensors(timeSliceGPRName)
+        if self.state=="fileNoDump":
+            self.startDumpingAllSensors(timeSliceGPRName)#we haven ben dumping so far so just start dumping
 
     def stopDumpingAllSensors(self):
-        for SensorID in self.DR.AllSensors:
-            self.DR.AllSensors[SensorID].stopDataProcessing()
-        for SensorID in DR.AllSensors:
-            DR.AllSensors[SensorID].UnSetCallback()
-        for dumper in self.dumpers:
-            print("closing" + str(dumper))
-            dumper.wirteRemainingToHDF()
-            del dumper
-        del self.dumpers
-        self.dumpers=[]
-        self.file.flush()
+        if self.state=="fileDump":
+            for SensorID in self.DR.AllSensors:
+                self.DR.AllSensors[SensorID].stopDataProcessing()
+            for SensorID in DR.AllSensors:
+                DR.AllSensors[SensorID].UnSetCallback()
+            for dumper in self.dumpers:
+                print("closing" + str(dumper))
+                dumper.wirteRemainingToHDF()
+                del dumper
+            del self.dumpers
+            self.dumpers=[]
+            self.file.flush()
+            self.groupName = None
+            self.state="fileNoDump"
+        else:
+            warnings.warn("Not dumping stopDumpingAllSensors is pointless",RuntimeWarning)
 
 class page:
     class SensorBokehWidget:
@@ -1180,28 +1203,45 @@ class page:
             self.descriptionDiv.text="""<h2 style="color:#1f77b4";>"""+" {:08X}".format(self.sensorID)+" "+ str(
                 DR.AllSensors[self.sensorID].Description.SensorName)+" datarate {:.2f}".format(DR.AllSensors[self.sensorID].dataRate) +""" Hz </h2> """
     class DumperBokehWidget:
-        def __init__(self, page, DR):
+        def __init__(self, page, DR,dumper):
             self.page=page
             self.DR=DR
-            self.dumping=False
+            self.dumper=dumper
+            self.dumping = False
             self.fileNameInput=TextAreaInput(value="filename.hdf5", title="Enter Filename")
+            self.lastFileName=""
+            self.lastSourceGroupName=""
             self.sourceGroupInput=TextAreaInput(value="TEST0000", title="Enter Source Group Name")
             self.startStopButton=Button(button_type="primary",label="Start Dumping")
             self.startStopButton.on_click(self.toggleDumping)
-            self.widget=row(self.fileNameInput,self.sourceGroupInput,self.startStopButton)
+            self.dumperStateText=PreText(text=self.dumper.state)
+            self.widget=row(self.dumperStateText,self.fileNameInput,self.sourceGroupInput,self.startStopButton)
+
         def toggleDumping(self):
             if self.dumping == False:
                 self.filename=self.fileNameInput.value
+                if self.dumper.state=="idle":
+                    self.dumper.openFile(self.filename)
+                    self.lastFileName=self.filename
                 self.sourceGroupName=self.sourceGroupInput.value
+                if self.sourceGroupName!=self.lastSourceGroupName:
+                    if self.dumper.state=="fileNoDump":
+                        self.dumper.startDumpingAllSensors(self.sourceGroupName)
+                    self.lastSourceGroupName=self.sourceGroupName
                 self.startStopButton.button_type="danger"
                 self.startStopButton.label = "Stop Dumping"
+                self.dumping = True
             else:
-                self.fileDumper.stopDumpingAllSensors()
+                self.dumper.stopDumpingAllSensors()
                 self.startStopButton.button_type="succes"
                 self.startStopButton.label = "Start Dumping"
+                self.dumping = False
+        def update(self):
+            self.dumperStateText.text=self.dumper.state
 
-    def __init__(self,DR):
+    def __init__(self,DR,dumper):
         self.DR=DR
+        self.dumper=dumper
         self.descriptionDiv=Div(text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """,height=14)
         self.page=column(self.descriptionDiv)
         self.bokehSensorWidgets=[]
@@ -1210,12 +1250,13 @@ class page:
             print("ID"+str(sensorID))
             self.bokehSensorWidgets.append(self.SensorBokehWidget(self,self.DR,sensorID))
             self.page.children.append(self.bokehSensorWidgets[-1].widget)
-        self.DumperWidget=self.DumperBokehWidget(self,self.DR)
+        self.DumperWidget=self.DumperBokehWidget(self,self.DR,self.dumper)
         self.page.children.append(self.DumperWidget.widget)
     def update(self):
         self.descriptionDiv.text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """
         for sensorWidget in self.bokehSensorWidgets:
             sensorWidget.update()
+        self.DumperWidget.update()
 
 
 def make_doc(doc):
@@ -1231,7 +1272,7 @@ def make_doc(doc):
         IPAddr = socket.gethostbyname(hostname)
         logger.info("Opening Bokeh application on http://" + str(hostname) + ":5003/")
         logger.info("Opening Bokeh application on http://" + str(IPAddr) + ":5003/")
-        myPage = page(DR)
+        myPage = page(DR,dumper)
         doc.add_root(myPage.page)
         doc.title = "DR view"
         doc.add_periodic_callback(myPage.update, 500)
@@ -1241,7 +1282,12 @@ if __name__ == "__main__":
     try:
         DR = DataReceiver("192.168.0.200", 7654)
         bokehPort=5010
-        time.sleep(3)
+        time.sleep(5)
+        dumper=fileDumper(DR)
+        dumper.openFile("testasl1ö110l245df5dak11lasf4ae.hdf5")
+        dumper.startDumpingAllSensors("Test0000")
+        time.sleep(10)
+        dumper.stopDumpingAllSensors()
         io_loop = IOLoop.current()
         bokeh_app = Application(FunctionHandler(make_doc))
         server = Server(
@@ -1252,7 +1298,6 @@ if __name__ == "__main__":
             port=bokehPort,
             allow_websocket_origin=['*']
         )
-
         # start timers and services and immediately return
         server.start()
         hostname = socket.gethostname()
