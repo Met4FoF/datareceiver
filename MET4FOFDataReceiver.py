@@ -1020,8 +1020,10 @@ class HDF5Dumper:
         self.pushlock = threading.Lock()
         self.dataframindexoffset = 4
         self.bufferLen = bufferLen
-        self.buffer = np.zeros([16+3, self.bufferLen],dtype=[('f0', 'u8'), ('f1', 'u4'), ('f2', 'u4'), ('f3', 'f4'), ('f4', 'f4'), ('f5', 'f4'), ('f6', 'f4'), ('f7', 'f4'), ('f8', 'f4'), ('f9', 'f4'), ('f10', 'f4'), ('f11', 'f4'), ('f12', 'f4'),('f13', 'f4'), ('f14', 'f4'), ('f15', 'f4'),('f16', 'f4'), ('f17', 'f4'), ('f18', 'f4')])
+        self.buffer = np.zeros([16, self.bufferLen])
         self.ticks_buffer = np.zeros(self.bufferLen, dtype=np.uint64)
+        self.absTimeBuffer = np.zeros(self.bufferLen, dtype=np.uint64)
+        self.absTimeUncerSampleNumberBuffer = np.zeros([2,self.bufferLen], dtype=np.uint32)
         self.chunkswritten = 0
         self.msgbufferd = 0
         self.lastdatatime=0
@@ -1044,7 +1046,7 @@ class HDF5Dumper:
                     dSetDSCP=self.hieracy[groupname]
                     names.append(str(groupname))
                     rows.append(len(dSetDSCP['copymask']))
-                    arrayMapping[str(groupname)]=np.array(dSetDSCP['copymask']+3)#+3 since abstime abstimeunce and samplecount ar first 3 rows allways
+                    arrayMapping[str(groupname)]=np.array(dSetDSCP['copymask'])
                     ProtobufTOHDFKeyMapping={'pysicalQuantity':'PHYSICAL_QUANTITY','unit':'UNIT','resolution':'RESOLUTION',"minRange":'MIN_SCALE',"maxRange":'MAX_SCALE'} #TODO move to HDF5Datafile.py
                     attrs={}
                     for hdfKey,protoKey in ProtobufTOHDFKeyMapping.items():
@@ -1062,9 +1064,6 @@ class HDF5Dumper:
             self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
             self.buffer[:, self.msgbufferd] = np.array(
                 [
-                    np.uint64(np.uint64(message.unix_time)*np.uint64(1000000000))+np.uint64(message.unix_time_nsecs),
-                    np.uint32(message.time_uncertainty),
-                    np.uint32(message.sample_number),
                     message.Data_01,
                     message.Data_02,
                     message.Data_03,
@@ -1083,14 +1082,16 @@ class HDF5Dumper:
                     message.Data_16,
                 ]
             )
+            self.absTimeBuffer[self.msgbufferd]=np.uint64(np.uint64(message.unix_time) * np.uint64(1000000000)) + np.uint64(message.unix_time_nsecs)
+            self.absTimeUncerSampleNumberBuffer[:,self.msgbufferd]=np.array([np.uint32(message.time_uncertainty),np.uint32(message.sample_number)])
             self.msgbufferd+=1
             if self.msgbufferd == self.bufferLen-1:
                 with self.hdflock:
-                    self.sourceGPR.pushArray(self.buffer)
+                    self.sourceGPR.pushArray(self.buffer,absTimeArray=self.absTimeBuffer,absTimeUncerSampleNumberArray=self.absTimeUncerSampleNumberBuffer)
                     self.msgbufferd=0
     def wirteRemainingToHDF(self):
         with self.hdflock:
-            self.sourceGPR.pushArray(self.buffer[:,:self.msgbufferd])
+            self.sourceGPR.pushArray(self.buffer[:,:self.msgbufferd],absTimeArray=self.absTimeBuffer[:self.msgbufferd],absTimeUncerSampleNumberArray=self.absTimeUncerSampleNumberBuffer[:,:self.msgbufferd])
             self.msgbufferd = 0
             self.sourceGPR.finishArrayPushing()
 
@@ -1162,7 +1163,7 @@ class fileDumper:
             self.state == "fileNoDump"
             self.startDumpingAllSensors(timeSliceGPRName)
         if self.state=="fileNoDump":
-            self.startDumpingAllSensors(timeSliceGPRName)#we haven ben dumping so far so just start dumping
+            self.startDumpingAllSensors(timeSliceGPRName)#we havent been dumping so far so just start dumping
 
     def stopDumpingAllSensors(self):
         if self.state=="fileDump":
@@ -1233,7 +1234,7 @@ class page:
                 self.dumping = True
             else:
                 self.dumper.stopDumpingAllSensors()
-                self.startStopButton.button_type="succes"
+                self.startStopButton.button_type="success"
                 self.startStopButton.label = "Start Dumping"
                 self.dumping = False
         def update(self):
@@ -1284,9 +1285,9 @@ if __name__ == "__main__":
         bokehPort=5010
         time.sleep(5)
         dumper=fileDumper(DR)
-        dumper.openFile("testasl1ö110l245df5dak11lasf4ae.hdf5")
+        dumper.openFile(str(time.time()).replace('.','_')+".hdf5")
         dumper.startDumpingAllSensors("Test0000")
-        time.sleep(10)
+        time.sleep(30)
         dumper.stopDumpingAllSensors()
         io_loop = IOLoop.current()
         bokeh_app = Application(FunctionHandler(make_doc))
