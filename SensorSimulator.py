@@ -161,7 +161,7 @@ class SensorSimulator:
             4: [np.sin(max), np.cos(max), max, abs(max)],  # 4: "MIN_SCALE",
             5: [np.sin(min), np.cos(min), max, abs(min)],  #'5: "MAX_SCALE",
         }
-        DescriptonType = {0: "str", 1: "str", 3: "float", 4: "float", 5: "float"}
+        DescriptonType = {0: "str", 1: "str", 3: "float", 4: "float", 5: "float",6: "str"}
         for desckeys in Description.keys():
             proto_description = messages_pb2.DescriptionMessage()
             proto_description.Sensor_name = "Sensor Simulation"
