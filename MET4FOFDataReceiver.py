@@ -12,10 +12,13 @@ import traceback
 import os
 import socket
 import threading
+import asyncio
 
 import warnings
 from datetime import datetime
 from multiprocessing import Queue
+from multiprocessing import shared_memory
+import multiprocessing
 import time
 import datetime
 import copy
@@ -53,7 +56,25 @@ from hdf_sensor_data_file_format.src.HDF5DataFiles import *
 # matplotlib.use('Qt5Agg')
 
 from filelock import Timeout, FileLock
-
+bufferDtype=np.dtype([('absTime','u8'),
+                      ('abstimeUncer','u4'),
+                      ('sampleNumber','u4'),
+                      ('Data_01','f4'),
+                      ('Data_02','f4'),
+                      ('Data_03','f4'),
+                      ('Data_04','f4'),
+                      ('Data_05','f4'),
+                      ('Data_06','f4'),
+                      ('Data_07','f4'),
+                      ('Data_08','f4'),
+                      ('Data_09','f4'),
+                      ('Data_10','f4'),
+                      ('Data_11','f4'),
+                      ('Data_12','f4'),
+                      ('Data_13','f4'),
+                      ('Data_14','f4'),
+                      ('Data_15','f4'),
+                      ('Data_16','f4')])
 class DataReceiver:
     """Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task
 
@@ -122,7 +143,8 @@ class DataReceiver:
         self.lastTimestamp = 0
         self.Datarate = 0
         self._stop_event = threading.Event()
-        # start thread for data processing
+        self.mpManager=multiprocessing.Manager()
+        self.mpSensorDict=self.mpManager.dict()
         self.thread = threading.Thread(
             target=self.run, name="Datareceiver_thread", args=()
         )
@@ -188,9 +210,9 @@ class DataReceiver:
                 while BytesProcessed < len(data):
                     msg_len, new_pos = _DecodeVarint32(data, BytesProcessed)
                     BytesProcessed = new_pos
-
                     try:
                         msg_buf = data[new_pos : new_pos + msg_len]
+                        #TODO performace improvement don't clall  ProtoData.ParseFromString(msg_buf) just get the id out of the str since its fixed position and length
                         ProtoData.ParseFromString(msg_buf)
                         wasValidData = True
                         SensorID = ProtoData.id
@@ -204,7 +226,7 @@ class DataReceiver:
 
                     if SensorID in self.AllSensors:
                         try:
-                            self.AllSensors[SensorID].buffer.put_nowait(message)
+                            self.AllSensors[SensorID].msgQueue.put_nowait(message)
                         except:
                             tmp = self.packestlosforsensor[SensorID] = (
                                 self.packestlosforsensor[SensorID] + 1
@@ -221,7 +243,7 @@ class DataReceiver:
                             if tmp % 1000 == 0:
                                 print("oh no lost an other  thousand packets :(")
                     else:
-                        self.AllSensors[SensorID] = Sensor(SensorID)
+                        self.AllSensors[SensorID] = Sensor(SensorID,self.mpSensorDict)
                         print(
                             "FOUND NEW SENSOR WITH ID=hex"
                             + hex(SensorID)
@@ -268,11 +290,11 @@ class DataReceiver:
 
                     if SensorID in self.AllSensors:
                         try:
-                            self.AllSensors[SensorID].buffer.put_nowait(message)
+                            self.AllSensors[SensorID].msgQueue.put_nowait(message)
                         except:
                             print("packet lost for sensor ID:" + hex(SensorID))
                     else:
-                        self.AllSensors[SensorID] = Sensor(SensorID)
+                        self.AllSensors[SensorID] = Sensor(SensorID,self.sharedMemorySensorList)
                         print(
                             "FOUND NEW SENSOR WITH ID=hex"
                             + hex(SensorID)
@@ -310,39 +332,6 @@ class DataReceiver:
         """
         self.stop()
         self.socket.close()
-
-    def StartDumpingAllSensorsASCII(
-        self, folder="data", filenamePrefix="", splittime=86400, force=False
-    ):
-        AllDscsCompleete = True
-        for SensorID in self.AllSensors:
-            if self.AllSensors[SensorID].Description._complete == False:
-                print(
-                    "Description incompelte for sensor "
-                    + str(self.AllSensors[SensorID])
-                )
-                if force != True:
-                    AllDscsCompleete = False
-        if AllDscsCompleete == False:
-            raise RuntimeError(
-                "not all descriptions are complete dumping not started."
-                " Wait until descriptions are complete or use function argument force=true to start anyway"
-            )
-        if folder != "":
-            if not os.path.exists(folder):
-                os.makedirs(folder)
-        filenamePrefixwFolder = os.path.join(folder, filenamePrefix)
-        for SensorID in self.AllSensors:
-            self.AllSensors[SensorID].StartDumpingToFileASCII(
-                filenamePrefix=filenamePrefixwFolder, splittime=splittime
-            )
-
-    def StopDumpingAllSensorsASCII(
-        self,
-    ):
-        for SensorID in self.AllSensors:
-            self.AllSensors[SensorID].StopDumpingToFileASCII()
-
 
 ### classes to proces sensor descriptions
 class AliasDict(dict):
@@ -730,7 +719,7 @@ class Sensor:
         6: "HIERARCHY",
     }
 
-    def __init__(self, ID, BufferSize=25e5):
+    def __init__(self, ID,mpSensorDict, msgQueSize=25e5,bufferSize=32768):
         """
         Constructor for the Sensor class
 
@@ -738,7 +727,7 @@ class Sensor:
         ----------
         ID : uint32
             ID of the Sensor.
-        BufferSize : integer, optional
+        msgQueSize : integer, optional
             Size of the Data Queue. The default is 25e5.
 
         Returns
@@ -747,14 +736,15 @@ class Sensor:
 
         """
         self.Description = SensorDescription(ID, "Name not Set")
-        self.buffer = Queue(int(BufferSize))
-        self.buffersize = BufferSize
+        self.msgQueue = Queue(int(msgQueSize))
+        self.msgQueSize = msgQueSize
         self.flags = {
             "PrintProcessedCounts": True,
             "callbackSet": False,
         }
         self.processData=True
-        self.params = {"ID": ID, "BufferSize": BufferSize, "DumpFileName": ""}
+        self.params = {"ID": ID, "BufferSize": msgQueSize, "DumpFileName": ""}
+        self.bufferSize=bufferSize
         self.DescriptionsProcessed = AliasDict(
             {
                 "PHYSICAL_QUANTITY": False,
@@ -772,7 +762,16 @@ class Sensor:
         self.thread = threading.Thread(
             target=self.run, name="Sensor_" + str(ID) + "_thread", args=()
         )
+        self.smBufferName=str(self.params['ID'])
         # self.thread.daemon = True
+        try:
+            self.sharedMemoryBuffer=shared_memory.SharedMemory(name=self.smBufferName, create=True, size=self.bufferSize*bufferDtype.itemsize)
+        except:
+            self.sharedMemoryBuffer = shared_memory.SharedMemory(name=self.smBufferName, create=False,
+                                                                 size=self.bufferSize * bufferDtype.itemsize)
+        self.sharedmemoryArray=np.ndarray((self.bufferSize,), dtype=bufferDtype, buffer=self.sharedMemoryBuffer.buf)
+        self.mpSensorDict=mpSensorDict
+        self.golbalDescriptionUpdated=False
         self.thread.start()
         self.ProcessedPacekts = 0
         self.ProcessedPacektsLastDataRateupdate = 0
@@ -804,7 +803,7 @@ class Sensor:
             # work around adding time out so self.buffer.get is returning after a time an thestop_event falg can be checked
             try:
                 if self.processData:
-                    message = self.buffer.get(timeout=0.1)
+                    message = self.msgQueue.get(timeout=0.1)
                     self.timeoutOccured = False
                     if message["Type"] == "Description":
                         Description = message["ProtMsg"]
@@ -883,6 +882,9 @@ class Sensor:
                                         FieldNumber = FieldNumber + 1
                                     # print(self.DescriptionsProcessed)
                                     # string Processing
+                            if self.Description._ChannelsComplte and self.golbalDescriptionUpdated==False:
+                                self.mpSensorDict[self.params['ID']]={'descriptionDict': self.Description.asDict(),'smBuffer':{'name':self.smBufferName,'size':self.bufferSize}}
+                                self.golbalDescriptionUpdated=True
                         except Exception:
                             print(
                                 " Sensor id:"
@@ -893,6 +895,26 @@ class Sensor:
                             traceback.print_exc(file=sys.stdout)
                             print("-" * 60)
                     if message["Type"] == "Data":
+                        msg=message['ProtMsg']
+                        self.sharedmemoryArray[self.ProcessedPacekts%self.bufferSize]=np.array((np.uint64(np.uint64(msg.unix_time) * np.uint64(1000000000)) + np.uint64(msg.unix_time_nsecs),
+                            msg.time_uncertainty,
+                            msg.sample_number,
+                            msg.Data_01,
+                            msg.Data_02,
+                            msg.Data_03,
+                            msg.Data_04,
+                            msg.Data_05,
+                            msg.Data_06,
+                            msg.Data_07,
+                            msg.Data_08,
+                            msg.Data_09,
+                            msg.Data_10,
+                            msg.Data_11,
+                            msg.Data_12,
+                            msg.Data_13,
+                            msg.Data_14,
+                            msg.Data_15,
+                            msg.Data_16),dtype=bufferDtype)
                         self.ProcessedPacekts = self.ProcessedPacekts + 1
                         if self.flags["PrintProcessedCounts"]:
                             if self.ProcessedPacekts % 100 == 0:
@@ -900,9 +922,9 @@ class Sensor:
                             if self.ProcessedPacekts % 10000 == 0:
                                 print(
                                     + hex(self.params["ID"])
-                                    + str(self.buffer.qsize())
+                                    + str(self.msgQueue.qsize())
                                     + " ->"
-                                    + "{:.2f}".format((self.buffer.qsize() / self.buffersize) * 100)
+                                    + "{:.2f}".format((self.msgQueue.qsize() / self.msgQueSize) * 100)
                                     + "%"
                                     + " "
                                     + "{:.2f}".format(self.dataRate)
@@ -988,12 +1010,12 @@ class Sensor:
         # sleeping until run function is exiting due to timeout
         time.sleep(0.2)
         # thrash all data in queue
-        while not self.buffer.empty():
+        while not self.msgQueue.empty():
             try:
-                self.buffer.get(False)
+                self.msgQueue.get(False)
             except:
                 pass
-        self.buffer.close()
+        self.msgQueue.close()
 
     def join(self, *args, **kwargs):
         """
@@ -1197,12 +1219,12 @@ class page:
             self.data_table = DataTable(source=source, columns=columns, width=1800,
                                         height=30 * self.descriptionDF.shape[0])
             self.descriptionDiv=Div(text="""<h2 style="color:#1f77b4";>"""+" {:08X}".format(self.sensorID)+" "+ str(
-                DR.AllSensors[self.sensorID].Description.SensorName)+" datarate {:.2f}".format(DR.AllSensors[self.sensorID].dataRate) +""" Hz </h2> """, height=10)
+                DR.AllSensors[self.sensorID].Description.SensorName)+" datarate {:.4f}".format(DR.AllSensors[self.sensorID].dataRate) +""" Hz </h2> """, height=10)
             self.widget = column(self.descriptionDiv, Spacer(height=10),
                                  self.data_table)
         def update(self):
             self.descriptionDiv.text="""<h2 style="color:#1f77b4";>"""+" {:08X}".format(self.sensorID)+" "+ str(
-                DR.AllSensors[self.sensorID].Description.SensorName)+" datarate {:.2f}".format(DR.AllSensors[self.sensorID].dataRate) +""" Hz </h2> """
+                DR.AllSensors[self.sensorID].Description.SensorName)+" datarate {:.4f}".format(DR.AllSensors[self.sensorID].dataRate) +""" Hz </h2> """
     class DumperBokehWidget:
         def __init__(self, page, DR,dumper):
             self.page=page
@@ -1253,6 +1275,7 @@ class page:
             self.page.children.append(self.bokehSensorWidgets[-1].widget)
         self.DumperWidget=self.DumperBokehWidget(self,self.DR,self.dumper)
         self.page.children.append(self.DumperWidget.widget)
+
     def update(self):
         self.descriptionDiv.text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """
         for sensorWidget in self.bokehSensorWidgets:
@@ -1267,7 +1290,6 @@ def make_doc(doc):
         logger = logging.getLogger(__name__)
         logger.addHandler(file_handler)
         logger.setLevel(logging.DEBUG)
-
         logger.info('This is Datareceiver Viewer ...')
         hostname = socket.gethostname()
         IPAddr = socket.gethostbyname(hostname)
@@ -1276,24 +1298,90 @@ def make_doc(doc):
         myPage = page(DR,dumper)
         doc.add_root(myPage.page)
         doc.title = "DR view"
-        doc.add_periodic_callback(myPage.update, 500)
+        doc.add_periodic_callback(myPage.update, 1000)
         print("Done")
+
+class viewServerPage:
+    def __init__(self,mpSensorDict):
+        self.mpSensorDict=mpSensorDict
+        self.page = column(Div(text="""<h2 style="color:#1f77b4";>Test</h2>"""))
+        print("Done")
+    def update(self):
+        print("Debug")
+        sensorID=self.mpSensorDict.keys()[0]
+        existing_shm = shared_memory.SharedMemory(name=str(sensorID))
+        # Note that a.shape is (6,) and a.dtype is np.int64 in this example
+        c = np.ndarray((32768,), dtype=bufferDtype, buffer=existing_shm.buf)
+        #self.mpSensorDict.keys
+        #self.sharedMemoryBuffer = shared_memory.SharedMemory(name=self.smBufferName, create=False,
+        #                                                         size=self.bufferSize * bufferDtype.itemsize)
+        #self.sharedmemoryArray=np.ndarray((self.bufferSize,), dtype=bufferDtype, buffer=self.sharedMemoryBuffer.buf)
+        pass
+
+
+def sharedMembokehDataViewThread(mpSensorDict):
+    print(mpSensorDict)
+    def make_viewServerdoc(doc):
+        LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
+        file_handler = logging.FileHandler(filename='./bokehViewServer.log', mode='w')
+        file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        logger = logging.getLogger(__name__)
+        logger.addHandler(file_handler)
+        logger.setLevel(logging.DEBUG)
+        logger.info('This is dataViewer ...')
+        hostname = socket.gethostname()
+        IPAddr = socket.gethostbyname(hostname)
+        logger.info("Opening Bokeh application on http://" + str(hostname) + ":5011/")
+        logger.info("Opening Bokeh application on http://" + str(IPAddr) + ":5011/")
+        vSPage = viewServerPage(mpSensorDict)
+        doc.add_root(vSPage.page)
+        doc.title = "DR viewServer"
+        doc.add_periodic_callback(vSPage.update, 1000)
+        print("Done")
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    bokehPort = 5146
+    dataViewerIo_loop = IOLoop.current()
+    dataViewerBokeh_app = Application(FunctionHandler(make_viewServerdoc))
+    viewServer = Server(
+        {"/": dataViewerBokeh_app},  # list of Bokeh applications
+        io_loop=dataViewerIo_loop,  # Tornado IOLoop
+        http_server_kwargs={'max_buffer_size': 900000000},
+        websocket_max_message_size=500000000,
+        port=bokehPort,
+        allow_websocket_origin=['*']
+    )
+    # start timers and services and immediately return
+    viewServer.start()
+    hostname = socket.gethostname()
+    IPAddr = socket.gethostbyname(hostname)
+    print("Opening Bokeh application on http://" + str(hostname) + ":" + str(bokehPort) + "/")
+    print("Opening Bokeh application on http://" + str(IPAddr) + ":" + str(bokehPort) + "/")
+    dataViewerIo_loop.add_callback(viewServer.show, "/")
+    dataViewerIo_loop.start()
 
 if __name__ == "__main__":
     try:
+
         DR = DataReceiver("192.168.0.200", 7654)
-        bokehPort=5010
-        time.sleep(5)
+        bokehPort=5046
+        time.sleep(10)
         dumper=fileDumper(DR)
+        """
         dumper.openFile(str(time.time()).replace('.','_')+".hdf5")
         dumper.startDumpingAllSensors("Test0000")
         time.sleep(30)
         dumper.stopDumpingAllSensors()
-        io_loop = IOLoop.current()
-        bokeh_app = Application(FunctionHandler(make_doc))
+        """
+        DataViewServerThread=threading.Thread(target=sharedMembokehDataViewThread, args=(DR.mpSensorDict,))
+        DataViewServerThread.start()
+        time.sleep(10)
+        dataReceiverIo_loop = IOLoop()
+        dataReceiverBokeh_app = Application(FunctionHandler(make_doc))
         server = Server(
-            {"/": bokeh_app},  # list of Bokeh applications
-            io_loop=io_loop,  # Tornado IOLoop
+            {"/": dataReceiverBokeh_app},  # list of Bokeh applications
+            io_loop=dataReceiverIo_loop,  # Tornado IOLoop
             http_server_kwargs={'max_buffer_size': 900000000},
             websocket_max_message_size=500000000,
             port=bokehPort,
@@ -1305,11 +1393,11 @@ if __name__ == "__main__":
         IPAddr = socket.gethostbyname(hostname)
         print("Opening Bokeh application on http://" + str(hostname) + ":" + str(bokehPort) + "/")
         print("Opening Bokeh application on http://" + str(IPAddr) + ":" + str(bokehPort) + "/")
-        io_loop.add_callback(server.show, "/")
-        io_loop.start()
+        dataReceiverIo_loop.add_callback(server.show, "/")
+        dataReceiverIo_loop.start()
     finally:
         server.stop()
-        io_loop.stop()
+        dataReceiverBokeh_app.stop()
         DR.stop()
         del DR
         #del bokeh_app
