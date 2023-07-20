@@ -47,6 +47,7 @@ from bokeh.server.server import Server
 from bokeh.models import TabPanel, Tabs,FileInput, Dropdown,ColumnDataSource, Ellipse, DataTable,TableColumn,Div,Spacer,NumericInput,RadioGroup,Button,TextAreaInput,MultiChoice,CheckboxGroup,PreText,HTMLTemplateFormatter
 from bokeh.layouts import column,row
 from bokeh.plotting import curdoc,figure, show
+from bokeh.palettes import Category10_10 as colors
 from tornado.ioloop import IOLoop
 from bokeh.application.handlers import FunctionHandler
 from bokeh.application import Application
@@ -294,7 +295,7 @@ class DataReceiver:
                         except:
                             print("packet lost for sensor ID:" + hex(SensorID))
                     else:
-                        self.AllSensors[SensorID] = Sensor(SensorID,self.sharedMemorySensorList)
+                        self.AllSensors[SensorID] = Sensor(SensorID,self.mpSensorDict)
                         print(
                             "FOUND NEW SENSOR WITH ID=hex"
                             + hex(SensorID)
@@ -762,14 +763,29 @@ class Sensor:
         self.thread = threading.Thread(
             target=self.run, name="Sensor_" + str(ID) + "_thread", args=()
         )
-        self.smBufferName=str(self.params['ID'])
-        # self.thread.daemon = True
-        try:
-            self.sharedMemoryBuffer=shared_memory.SharedMemory(name=self.smBufferName, create=True, size=self.bufferSize*bufferDtype.itemsize)
-        except:
-            self.sharedMemoryBuffer = shared_memory.SharedMemory(name=self.smBufferName, create=False,
-                                                                 size=self.bufferSize * bufferDtype.itemsize)
-        self.sharedmemoryArray=np.ndarray((self.bufferSize,), dtype=bufferDtype, buffer=self.sharedMemoryBuffer.buf)
+        self.mpDataLock=multiprocessing.Lock()
+        self.smBufferPrefix='{:08x}'.format(self.params['ID'])
+        with self.mpDataLock:
+            try:
+                self.sMabsTimeBuffer=shared_memory.SharedMemory(name=self.smBufferPrefix+'_absTime', create=True, size=self.bufferSize*8)
+            except:
+                self.sMabsTimeBuffer = shared_memory.SharedMemory(name=self.smBufferPrefix+'_absTime', create=False,
+                                                                     size=self.bufferSize * 8)
+            self.sMabsTimeArray=np.ndarray((self.bufferSize,), dtype=np.uint64, buffer=self.sMabsTimeBuffer.buf)
+            #this buffer is one element lager since we will use [0,-1] as write pointerIDX
+            try:
+                self.sMabsTimeUncerSampleNumberBuffer=shared_memory.SharedMemory(name=self.smBufferPrefix+'_absTimeUncerSampleNumber', create=True, size=(self.bufferSize+1)*2*4)
+            except:
+                self.sMabsTimeUncerSampleNumberBuffer = shared_memory.SharedMemory(name=self.smBufferPrefix+'_absTimeUncerSampleNumber', create=False,
+                                                                     size=(self.bufferSize+1)*2*4)
+            self.sMabsTimeUncerSampleNumberArray=np.ndarray((2,(self.bufferSize+1)), dtype=np.uint32, buffer=self.sMabsTimeUncerSampleNumberBuffer.buf)
+
+            try:
+                self.sMDataBuffer=shared_memory.SharedMemory(name=self.smBufferPrefix+'_data', create=True, size=self.bufferSize*16*4)
+            except:
+                self.sMDataBuffer = shared_memory.SharedMemory(name=self.smBufferPrefix+'_data', create=False,
+                                                                     size=self.bufferSize *16* 4)
+            self.sMDataArray=np.ndarray((16,self.bufferSize), dtype=np.float32, buffer=self.sMDataBuffer.buf)
         self.mpSensorDict=mpSensorDict
         self.golbalDescriptionUpdated=False
         self.thread.start()
@@ -883,7 +899,7 @@ class Sensor:
                                     # print(self.DescriptionsProcessed)
                                     # string Processing
                             if self.Description._ChannelsComplte and self.golbalDescriptionUpdated==False:
-                                self.mpSensorDict[self.params['ID']]={'descriptionDict': self.Description.asDict(),'smBuffer':{'name':self.smBufferName,'size':self.bufferSize}}
+                                self.mpSensorDict[self.params['ID']]={'descriptionDict': self.Description.asDict(),'hiracyDict':self.Description.gethieracyasdict(),'smBuffers':{'sMprefix':self.smBufferPrefix,'size':self.bufferSize}}#,'lock':self.mpDataLock TODO pass Lock to other Tasks but how ?
                                 self.golbalDescriptionUpdated=True
                         except Exception:
                             print(
@@ -896,9 +912,11 @@ class Sensor:
                             print("-" * 60)
                     if message["Type"] == "Data":
                         msg=message['ProtMsg']
-                        self.sharedmemoryArray[self.ProcessedPacekts%self.bufferSize]=np.array((np.uint64(np.uint64(msg.unix_time) * np.uint64(1000000000)) + np.uint64(msg.unix_time_nsecs),
-                            msg.time_uncertainty,
-                            msg.sample_number,
+                        with self.mpDataLock:
+                            self.sMabsTimeUncerSampleNumberArray[-1,-1]=self.ProcessedPacekts
+                            self.sMabsTimeArray[self.ProcessedPacekts%self.bufferSize]=np.uint64(np.uint64(msg.unix_time) * np.uint64(1000000000)) + np.uint64(msg.unix_time_nsecs)
+                            self.sMabsTimeUncerSampleNumberArray[:,self.ProcessedPacekts%self.bufferSize]=[msg.time_uncertainty,msg.sample_number]
+                            self.sMDataArray[:,self.ProcessedPacekts%self.bufferSize]=[
                             msg.Data_01,
                             msg.Data_02,
                             msg.Data_03,
@@ -914,7 +932,7 @@ class Sensor:
                             msg.Data_13,
                             msg.Data_14,
                             msg.Data_15,
-                            msg.Data_16),dtype=bufferDtype)
+                            msg.Data_16]
                         self.ProcessedPacekts = self.ProcessedPacekts + 1
                         if self.flags["PrintProcessedCounts"]:
                             if self.ProcessedPacekts % 100 == 0:
@@ -1302,26 +1320,103 @@ def make_doc(doc):
         print("Done")
 
 class viewServerPage:
+
+    class sensorPlotter:
+        def __init__(self,page,sensorID):
+            self.page=page
+            #{'descriptionDict': self.Description.asDict(),
+            # 'smBuffers': {'sMprefix': self.smBufferPrefix, 'size': self.bufferSize, 'lock': self.self.mpDataLock}}
+            self.shBufffLen=self.page.mpSensorDict[sensorID]['smBuffers']['size']
+            self.data_shm = shared_memory.SharedMemory(name='{:08x}'.format(sensorID)+'_data')
+            self.data = np.ndarray((16,self.shBufffLen), dtype=np.float32, buffer=self.data_shm.buf)
+            self.time_shm = shared_memory.SharedMemory(name='{:08x}'.format(sensorID)+'_absTime')
+            self.time = np.ndarray((self.shBufffLen,), dtype=np.uint64, buffer=self.time_shm.buf)
+            self.timeUncerSampleNumber_shm = shared_memory.SharedMemory(name='{:08x}'.format(sensorID)+'_absTimeUncerSampleNumber')
+            self.timeUncerSampleNumberWIDX = np.ndarray((2,self.shBufffLen+1), dtype=np.uint32, buffer=self.timeUncerSampleNumber_shm.buf)
+            self.timeUncerSampleNumber=self.timeUncerSampleNumberWIDX[:,:-1]
+            self.processedPakets=self.timeUncerSampleNumberWIDX[-1,-1]
+            self.lastprocessedPakets=copy.copy(self.processedPakets)
+            self.startTime=time.time()
+            self.descriptionDict=self.page.mpSensorDict[sensorID]['descriptionDict']
+            self.hiracyDict=self.page.mpSensorDict[sensorID]['hiracyDict']
+            """
+            {'Acceleration': {'copymask': array([0, 1, 2]),
+                              'PHYSICAL_QUANTITY': ['X Acceleration', 'Y Acceleration', 'Z Acceleration'],
+                              'RESOLUTION': array([65536., 65536., 65536.]),
+                              'MIN_SCALE': array([-39.22859955, -39.22859955, -39.22859955]),
+                              'MAX_SCALE': array([39.22740173, 39.22740173, 39.22740173]),
+                              'UNIT': '\\metre\\second\\tothe{-2}'},
+             'Angular_velocity': {'copymask': array([3, 4, 5]),
+                                  'PHYSICAL_QUANTITY': ['X Angular velocity',
+                                                        'Y Angular velocity',
+                                                        'Z Angular velocity'],
+                                  'RESOLUTION': array([65536., 65536., 65536.]),
+                                  'MIN_SCALE': array([-4.36338949, -4.36338949, -4.36338949]),
+                                  'MAX_SCALE': array([4.36325645, 4.36325645, 4.36325645]),
+                                  'UNIT': '\\radian\\second\\tothe{-1}'},
+             'Magnetic_flux_density': {'copymask': array([6, 7, 8]),
+                                       'PHYSICAL_QUANTITY': ['X Magnetic flux density',
+                                                             'Y Magnetic flux density',
+                                                             'Z Magnetic flux density'],
+                                       'RESOLUTION': array([65520., 65520., 65520.]),
+                                       'MIN_SCALE': array([-5890.5625, -5890.5625, -5890.5625]),
+                                       'MAX_SCALE': array([5890.5625, 5890.5625, 5890.5625]),
+                                       'UNIT': '\\micro\\tesla'},
+             'Temperature': {'copymask': array([9]),
+                             'PHYSICAL_QUANTITY': ['Temperature'],
+                             'RESOLUTION': array([65536.]),
+                             'MIN_SCALE': array([-77.20888519]),
+                             'MAX_SCALE': array([119.08009338]),
+                             'UNIT': '\\degreecelsius'}}
+            """
+            self.figs={}
+            self.dataSources={}
+            self.plots={}
+            for quantity in list(self.hiracyDict.keys()):
+                self.plots[quantity]=[]
+                self.figs[quantity]=figure(width=4000, height=300, title=quantity,output_backend="webgl")
+                dataSourceDict={'time':np.zeros(2000)}
+                for pysicalQuant in self.hiracyDict[quantity]['PHYSICAL_QUANTITY']:
+                    dataSourceDict[pysicalQuant]=np.zeros(2000)
+                self.dataSources[quantity]=ColumnDataSource(data=dataSourceDict)
+                j=0
+                for pysicalQuant in self.hiracyDict[quantity]['PHYSICAL_QUANTITY']:
+                    self.plots[quantity].append(self.figs[quantity].line(x='time',y=pysicalQuant,source=self.dataSources[quantity],legend_label=pysicalQuant,color=colors[j]))
+                    j=j+1
+            self.widget=column(list(self.figs.values()))
+
+        def update(self):
+            self.processedPakets = copy.copy(self.timeUncerSampleNumberWIDX[-1, -1])
+            packetsToPush=self.processedPakets-self.lastprocessedPakets
+            idx=np.arange(packetsToPush)+self.lastprocessedPakets
+            uinttime=np.take(self.time,idx,mode='warp')
+            uinttime-=np.uint64(self.startTime*1e9)
+            time=uinttime/1e9
+            for quantity in list(self.hiracyDict.keys()):
+                newDataSourceDict = {'time': time}
+                i=0
+                for pysicalQuant in self.hiracyDict[quantity]['PHYSICAL_QUANTITY']:
+                    dataIDX=self.hiracyDict[quantity]['copymask'][i]
+                    newDataSourceDict[pysicalQuant]=np.take(self.data[dataIDX],idx,mode='warp')
+                    i=i+1
+                self.dataSources[quantity].stream(newDataSourceDict,rollover=4000)
+            self.lastprocessedPakets=copy.copy(self.processedPakets)
+            pass
+
+
     def __init__(self,mpSensorDict):
         self.mpSensorDict=mpSensorDict
         activeSensors=[]
         for sensorKey in self.mpSensorDict.keys():
             activeSensors.append('{:8x}'.format(sensorKey)+'_'+self.mpSensorDict[sensorKey]['descriptionDict']['Name'])
         self.ActiveSensorCheckBox=CheckboxGroup(labels=activeSensors)
-        self.page = column(Div(text="""<h2 style="color:#1f77b4";>Test</h2>"""),self.ActiveSensorCheckBox)
+        self.Sensor1=self.sensorPlotter(self,self.mpSensorDict.keys()[0])
+        self.page = column(Div(text="""<h2 style="color:#1f77b4";>Test</h2>"""),self.ActiveSensorCheckBox,self.Sensor1.widget)
         print("Done")
 
 
     def update(self):
-        print("Debug")
-        sensorID=self.mpSensorDict.keys()[0]
-        existing_shm = shared_memory.SharedMemory(name=str(sensorID))
-        # Note that a.shape is (6,) and a.dtype is np.int64 in this example
-        c = np.ndarray((32768,), dtype=bufferDtype, buffer=existing_shm.buf)
-        #self.mpSensorDict.keys
-        #self.sharedMemoryBuffer = shared_memory.SharedMemory(name=self.smBufferName, create=False,
-        #                                                         size=self.bufferSize * bufferDtype.itemsize)
-        #self.sharedmemoryArray=np.ndarray((self.bufferSize,), dtype=bufferDtype, buffer=self.sharedMemoryBuffer.buf)
+        self.Sensor1.update()
         pass
 
 
@@ -1342,12 +1437,12 @@ def sharedMembokehDataViewThread(mpSensorDict):
         vSPage = viewServerPage(mpSensorDict)
         doc.add_root(vSPage.page)
         doc.title = "DR viewServer"
-        doc.add_periodic_callback(vSPage.update, 1000)
+        doc.add_periodic_callback(vSPage.update, 50)
         print("Done")
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    bokehPort = 5148
+    bokehPort = 5096
     dataViewerIo_loop = IOLoop.current()
     dataViewerBokeh_app = Application(FunctionHandler(make_viewServerdoc))
     viewServer = Server(
@@ -1371,8 +1466,8 @@ if __name__ == "__main__":
     try:
 
         DR = DataReceiver("192.168.0.200", 7654)
-        bokehPort=5048
-        time.sleep(10)
+        bokehPort=5050
+        time.sleep(15)
         dumper=fileDumper(DR)
         """
         dumper.openFile(str(time.time()).replace('.','_')+".hdf5")
