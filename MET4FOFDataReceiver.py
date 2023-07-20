@@ -1304,8 +1304,14 @@ def make_doc(doc):
 class viewServerPage:
     def __init__(self,mpSensorDict):
         self.mpSensorDict=mpSensorDict
-        self.page = column(Div(text="""<h2 style="color:#1f77b4";>Test</h2>"""))
+        activeSensors=[]
+        for sensorKey in self.mpSensorDict.keys():
+            activeSensors.append('{:8x}'.format(sensorKey)+'_'+self.mpSensorDict[sensorKey]['descriptionDict']['Name'])
+        self.ActiveSensorCheckBox=CheckboxGroup(labels=activeSensors)
+        self.page = column(Div(text="""<h2 style="color:#1f77b4";>Test</h2>"""),self.ActiveSensorCheckBox)
         print("Done")
+
+
     def update(self):
         print("Debug")
         sensorID=self.mpSensorDict.keys()[0]
@@ -1341,7 +1347,7 @@ def sharedMembokehDataViewThread(mpSensorDict):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    bokehPort = 5146
+    bokehPort = 5148
     dataViewerIo_loop = IOLoop.current()
     dataViewerBokeh_app = Application(FunctionHandler(make_viewServerdoc))
     viewServer = Server(
@@ -1365,7 +1371,7 @@ if __name__ == "__main__":
     try:
 
         DR = DataReceiver("192.168.0.200", 7654)
-        bokehPort=5046
+        bokehPort=5048
         time.sleep(10)
         dumper=fileDumper(DR)
         """
