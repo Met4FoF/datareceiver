@@ -1406,17 +1406,33 @@ class viewServerPage:
 
     def __init__(self,mpSensorDict):
         self.mpSensorDict=mpSensorDict
-        activeSensors=[]
+        self.activeSensorsLabels=[]
+        self.activeSensorsIds=[]
         for sensorKey in self.mpSensorDict.keys():
-            activeSensors.append('{:8x}'.format(sensorKey)+'_'+self.mpSensorDict[sensorKey]['descriptionDict']['Name'])
-        self.ActiveSensorCheckBox=CheckboxGroup(labels=activeSensors)
-        self.Sensor1=self.sensorPlotter(self,self.mpSensorDict.keys()[0])
-        self.page = column(Div(text="""<h2 style="color:#1f77b4";>Test</h2>"""),self.ActiveSensorCheckBox,self.Sensor1.widget)
+            self.activeSensorsLabels.append('{:8x}'.format(sensorKey)+'_'+self.mpSensorDict[sensorKey]['descriptionDict']['Name'])
+            self.activeSensorsIds.append(sensorKey)
+        self.ActiveSensorCheckBox=CheckboxGroup(labels=self.activeSensorsLabels)
+        self.ActiveSensorCheckBox.on_change('active',self.sensorWidgetsManager)
+        self.sensorWidgetsCol=column([])
+        self.sensorWidgets={}
+        self.page = column(Div(text="""<h2 style="color:#1f77b4";>Test</h2>"""), self.ActiveSensorCheckBox,self.sensorWidgetsCol)
         print("Done")
 
+    def sensorWidgetsManager(self,attr, old, new):
+        for idx in new:
+            if not idx in self.sensorWidgets.keys():
+                self.sensorWidgets[idx]=self.sensorPlotter(self,self.activeSensorsIds[idx])
+                self.sensorWidgetsCol.children.append(self.sensorWidgets[idx].widget)
+        for idx in old:
+            if idx not in new:
+                self.sensorWidgetsCol.children.remove(self.sensorWidgets[idx].widget)
+                del self.sensorWidgets[idx]
+        print(attr)
+        print(new)
 
     def update(self):
-        self.Sensor1.update()
+        for sensorWidget in self.sensorWidgets:
+            self.sensorWidgets[sensorWidget].update()
         pass
 
 
@@ -1442,7 +1458,7 @@ def sharedMembokehDataViewThread(mpSensorDict):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    bokehPort = 5096
+    bokehPort = 5110
     dataViewerIo_loop = IOLoop.current()
     dataViewerBokeh_app = Application(FunctionHandler(make_viewServerdoc))
     viewServer = Server(
