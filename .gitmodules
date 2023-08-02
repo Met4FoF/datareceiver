@@ -4,3 +4,6 @@
 [submodule "hdf_sensor_data_file_format"]
 	path = hdf_sensor_data_file_format
 	url = https://gitlab1.ptb.de/Seeger/hdf_sensor_data_file_format.git
+[submodule "met4fofeulercontroal"]
+	path = met4fofeulercontroal
+	url = https://gitlab1.ptb.de/Seeger/met4fofeulercontroal.git

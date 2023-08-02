@@ -52,11 +52,17 @@ from tornado.ioloop import IOLoop
 from bokeh.application.handlers import FunctionHandler
 from bokeh.application import Application
 from bokeh.server.server import Server
+from io import StringIO
+
 import logging
 from hdf_sensor_data_file_format.src.HDF5DataFiles import *
 # matplotlib.use('Qt5Agg')
 
 from filelock import Timeout, FileLock
+
+from met4fofeulercontroal.Met4FoFEulerControal import eulerControaler
+from met4fofeulercontroal.met4fofsoftwaresensor import softwareSensor#https://gitlab1.ptb.de/Seeger/met4fofsoftwaresensor
+
 bufferDtype=np.dtype([('absTime','u8'),
                       ('abstimeUncer','u4'),
                       ('sampleNumber','u4'),
@@ -1226,7 +1232,7 @@ class page:
             self.DR=DR
             self.dumper=dumper
             self.dumping = False
-            self.fileNameInput=TextAreaInput(value="filename.hdf5", title="Enter Filename")
+            self.fileNameInput=TextAreaInput(value=str(self.dumper.file), title="Enter Filename")
             self.lastFileName=""
             self.lastSourceGroupName=""
             self.sourceGroupInput=TextAreaInput(value="TEST0000", title="Enter Source Group Name")
@@ -1255,11 +1261,50 @@ class page:
                 self.startStopButton.label = "Start Dumping"
                 self.dumping = False
         def update(self):
-            self.dumperStateText.text=self.dumper.state
+            self.dumperStateText.text=self.dumper.state+' Group: '+str(self.dumper.groupName)
 
-    def __init__(self,DR,dumper):
+    class eulerControalBokehWidget:
+        def __init__(self, page, ec):
+            self.page=page
+            self.ec=ec
+            self.csvIN=TextAreaInput(value="csv", title="paste csv with ; seperator")
+            self.newCSVData=False
+            self.csvIN.on_change("value",self.readCsv)
+            self.addButton=Button(button_type="warning",label="Add Commands")
+            self.addButton.on_click(self.appendCSVToCMDQueue)
+            self.flushButton=Button(button_type="warning",label="Delete all CMDs")
+            self.flushButton.on_click(self.flushQueue)
+            self.tableDataSource = ColumnDataSource(data=ec.commandQueue)
+            self.tabColumns = [TableColumn(field=Ci, title=Ci) for Ci in self.tableDataSource.column_names]
+            self.data_table = DataTable(source=self.tableDataSource, columns=self.tabColumns, width=2000, height=800)
+            self.widget=column(row(self.csvIN,self.addButton,self.flushButton),self.data_table)
+            self.cmdDF=None
+        def appendCSVToCMDQueue(self):
+            if self.newCSVData:
+                self.ec.appendCommands(self.cmdDF)
+                self.tableDataSource.data=ec.commandQueue
+                self.newCSVData=False
+                self.addButton.button_type = 'warning'
+        def readCsv(self,attr, old, new):
+            try:
+                self.cmdDF=pd.read_csv(StringIO(self.csvIN.value))
+                self.newCSVData=True
+                self.addButton.button_type='success'
+            except Exception as e:
+                self.addButton.button_type = 'danger'
+                print(e)
+        def flushQueue(self):
+            self.ec.flushQueue()
+
+        def update(self):
+            self.tableDataSource.selected.indices=[self.ec.commandIDX-1]
+            self.tableDataSource.data = ec.commandQueue
+
+
+    def __init__(self,DR,dumper,eulerControaler):
         self.DR=DR
         self.dumper=dumper
+        self.eulerControaler=eulerControaler
         self.descriptionDiv=Div(text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """,height=14)
         self.page=column(self.descriptionDiv)
         self.bokehSensorWidgets=[]
@@ -1269,13 +1314,16 @@ class page:
             self.bokehSensorWidgets.append(self.SensorBokehWidget(self,self.DR,sensorID))
             self.page.children.append(self.bokehSensorWidgets[-1].widget)
         self.DumperWidget=self.DumperBokehWidget(self,self.DR,self.dumper)
+        self.ecWidget=self.eulerControalBokehWidget(self,self.eulerControaler)
         self.page.children.append(self.DumperWidget.widget)
+        self.page.children.append(self.ecWidget.widget)
 
     def update(self):
         self.descriptionDiv.text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """
         for sensorWidget in self.bokehSensorWidgets:
             sensorWidget.update()
         self.DumperWidget.update()
+        self.ecWidget.update()
 
 
 def make_doc(doc):
@@ -1290,7 +1338,7 @@ def make_doc(doc):
         IPAddr = socket.gethostbyname(hostname)
         logger.info("Opening Bokeh application on http://" + str(hostname) + ":5003/")
         logger.info("Opening Bokeh application on http://" + str(IPAddr) + ":5003/")
-        myPage = page(DR,dumper)
+        myPage = page(DR,dumper,ec)
         doc.add_root(myPage.page)
         doc.title = "DR view"
         doc.add_periodic_callback(myPage.update, 1000)
@@ -1366,7 +1414,6 @@ class viewServerPage:
                     self.dataSources[quantity].stream(newDataSourceDict,rollover=100)
                 self.lastprocessedPakets=copy.copy(self.processedPakets)
 
-
     def __init__(self,mpSensorDict):
         self.mpSensorDict=mpSensorDict
         self.activeSensorsLabels=[]
@@ -1421,7 +1468,7 @@ def sharedMembokehDataViewThread(mpSensorDict):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    bokehPort = 5147
+    bokehPort = 5164
     dataViewerIo_loop = IOLoop.current()
     dataViewerBokeh_app = Application(FunctionHandler(make_viewServerdoc))
     viewServer = Server(
@@ -1445,17 +1492,43 @@ if __name__ == "__main__":
     try:
         DR = DataReceiver("192.168.0.200", 7654)
         bokehPort=5050
-        time.sleep(20)
-        dumper=fileDumper(DR)
-        """
-        dumper.openFile(str(time.time()).replace('.','_')+".hdf5")
-        dumper.startDumpingAllSensors("Test0000")
-        time.sleep(30)
-        dumper.stopDumpingAllSensors()
-        """
+
+        cmdDF1 = pd.DataFrame(data={'Type': ['static','move', 'static', 'move', 'static', 'move', 'static', ],
+                                    'PHI': [0,0, 0, 10, 10, 20, 20],
+                                    'CHI': [0,10, 10, 20, 20, 30, 30],
+                                    'Duration': [30,0, 10, 0, 10, 0, 10]})
+        cmdDF2 = pd.DataFrame(data={'Type': ['move', 'static', 'move', 'static', 'move', 'static', ],
+                                    'PHI': [0, 0, 11, 11, 22, 22],
+                                    'CHI': [11, 11, 22, 22, 33, 33],
+                                    'Duration': [0, 10, 0, 10, 0, 10]})
+        ipadress = r'192.168.0.39'
+        Description = {
+            'PHYSICAL_QUANTITY': ["CHI Angle", "CHI Steps", "CHI Speed", "CHI Speed Steps", "PHI Angle", "PHI Steps",
+                                  "PHI Speed", "PHI Speed Steps"],
+            'UNIT': [r"\degree", r"\one", r"\degree\second\tothe{-1}", r"\one\second\tothe{-1}", r"\degree", r"\one",
+                     r"\degree\second\tothe{-1}", r"\one\second\tothe{-1}"],
+            "RESOLUTION": [5000 * 360, 5000 * 360, np.NaN, np.NaN, 2500 * 360, 2500 * 360, np.NaN, np.NaN],
+            "MIN_SCALE": [-360, -5000 * 360, -1, -5000, -360, -2500 * 360, -1, -2500],
+            "MAX_SCALE": [360, 5000 * 360, 1, 5000, 360, 2500 * 360, 1, 2500],
+            "HIERARCHY": ["Angle/0", "Steps/0", "Speed/0", "Speed_Steps/0", "Angle/1", "Steps/1", "Speed/1",
+                          "Speed_Steps/1"]
+        }
+
+        dumper=fileDumper(DR,fileName=str(datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3])+'_dumpFile.hdf5')
+        met4FoFpublisher = softwareSensor("192.168.0.200", 7654, 0x13380100, "EulerControal", Description)
+        def dumfileSwitcherCB(dict):
+            if dict['command']["Type"]!='Stop':
+                newGroupName=dict['command']["Type"]+'{:06d}'.format(dict['idx'])
+                dumper.switchTimeSliceGPR(newGroupName)
+            else:
+                dumper.stopDumpingAllSensors()
+
+        ec = eulerControaler(ipadress, met4FoFpublisher.sendDataMsg,dumfileSwitcherCB)
+        ec.appendCommands(cmdDF1)
+        ec.appendCommands(cmdDF2)
+        time.sleep(10)
         DataViewServerThread=threading.Thread(target=sharedMembokehDataViewThread, args=(DR.mpSensorDict,))
         DataViewServerThread.start()
-        time.sleep(10)
         dataReceiverIo_loop = IOLoop()
         dataReceiverBokeh_app = Application(FunctionHandler(make_doc))
         server = Server(
@@ -1474,7 +1547,6 @@ if __name__ == "__main__":
         print("Opening Bokeh application on http://" + str(IPAddr) + ":" + str(bokehPort) + "/")
         dataReceiverIo_loop.add_callback(server.show, "/")
         dataReceiverIo_loop.start()
-
 
     finally:
         server.stop()
