@@ -1054,7 +1054,7 @@ class Sensor:
         self.stop()
 
 class HDF5Dumper:
-    def __init__(self, dscp, file,timeSliceGPRName, hdfffilelock, bufferLen=2048, ignoreMissmatchErrors=True):
+    def __init__(self, dscp, file, timeSliceGPRName, hdfffilelock, bufferLen=32768,):
         self.dscp=dscp
         self.hdflock = hdfffilelock
         self.pushlock = threading.Lock()
@@ -1135,33 +1135,9 @@ class HDF5Dumper:
             self.msgbufferd = 0
             self.sourceGPR.finishArrayPushing()
 
-
-def startdumpingallsensorshdf(dataFile,timeSliceGPRName):
-    hdfdumplock = threading.Lock()
-    hdfdumpers = []
-    for SensorID in DR.AllSensors:
-        hdfdumpers.append(
-            HDF5Dumper(DR.AllSensors[SensorID].Description,dataFile,timeSliceGPRName, hdfdumplock,bufferLen=int(32000))
-        )
-        DR.AllSensors[SensorID].SetCallback(hdfdumpers[-1].pushmsg)
-    return hdfdumpers, dataFile
-
-def stopdumpingallsensorshdf(dumperlist, dumpfile):
-    for SensorID in DR.AllSensors:
-        DR.AllSensors[SensorID].UnSetCallback()
-    for dumper in dumperlist:
-        print("closing"+str(dumper))
-        dumper.wirteRemainingToHDF()
-        dumper.dataFile.flush()
-        del dumper
-
-
-    #for dumper in dumperlist:
-    #    print(str(dumper))
-
 class fileDumper:
 
-    def __init__(self,DR,fileName=None,bufferLen=int(32000)):
+    def __init__(self,DR,fileName=None,bufferLen=int(32768)):
         self.DR=DR
         self.dumpers=[]
         self.bufferLen=bufferLen
@@ -1190,6 +1166,7 @@ class fileDumper:
         elif self.state=="idle":
             warnings.warn("Dumper has no File to close!",RuntimeWarning)
     def startDumpingAllSensors(self,timeSliceGPRName):
+        #TODO make use of shared memory and improve data Dumper
         if self.state=="fileNoDump":
             for SensorID in self.DR.AllSensors:
                 self.dumpers.append(HDF5Dumper(DR.AllSensors[SensorID].Description, self.file, timeSliceGPRName, self.lock,bufferLen=self.bufferLen))
@@ -1339,69 +1316,55 @@ class viewServerPage:
             self.startTime=time.time()
             self.descriptionDict=self.page.mpSensorDict[sensorID]['descriptionDict']
             self.hiracyDict=self.page.mpSensorDict[sensorID]['hiracyDict']
-            """
-            {'Acceleration': {'copymask': array([0, 1, 2]),
-                              'PHYSICAL_QUANTITY': ['X Acceleration', 'Y Acceleration', 'Z Acceleration'],
-                              'RESOLUTION': array([65536., 65536., 65536.]),
-                              'MIN_SCALE': array([-39.22859955, -39.22859955, -39.22859955]),
-                              'MAX_SCALE': array([39.22740173, 39.22740173, 39.22740173]),
-                              'UNIT': '\\metre\\second\\tothe{-2}'},
-             'Angular_velocity': {'copymask': array([3, 4, 5]),
-                                  'PHYSICAL_QUANTITY': ['X Angular velocity',
-                                                        'Y Angular velocity',
-                                                        'Z Angular velocity'],
-                                  'RESOLUTION': array([65536., 65536., 65536.]),
-                                  'MIN_SCALE': array([-4.36338949, -4.36338949, -4.36338949]),
-                                  'MAX_SCALE': array([4.36325645, 4.36325645, 4.36325645]),
-                                  'UNIT': '\\radian\\second\\tothe{-1}'},
-             'Magnetic_flux_density': {'copymask': array([6, 7, 8]),
-                                       'PHYSICAL_QUANTITY': ['X Magnetic flux density',
-                                                             'Y Magnetic flux density',
-                                                             'Z Magnetic flux density'],
-                                       'RESOLUTION': array([65520., 65520., 65520.]),
-                                       'MIN_SCALE': array([-5890.5625, -5890.5625, -5890.5625]),
-                                       'MAX_SCALE': array([5890.5625, 5890.5625, 5890.5625]),
-                                       'UNIT': '\\micro\\tesla'},
-             'Temperature': {'copymask': array([9]),
-                             'PHYSICAL_QUANTITY': ['Temperature'],
-                             'RESOLUTION': array([65536.]),
-                             'MIN_SCALE': array([-77.20888519]),
-                             'MAX_SCALE': array([119.08009338]),
-                             'UNIT': '\\degreecelsius'}}
-            """
             self.figs={}
             self.dataSources={}
             self.plots={}
             for quantity in list(self.hiracyDict.keys()):
                 self.plots[quantity]=[]
-                self.figs[quantity]=figure(width=4000, height=300, title=quantity,output_backend="webgl")
-                dataSourceDict={'time':np.zeros(2000)}
+                self.figs[quantity]=figure(width=2000, height=300, title=quantity,output_backend="webgl")
+                dataSourceDict={'time':[]}
                 for pysicalQuant in self.hiracyDict[quantity]['PHYSICAL_QUANTITY']:
-                    dataSourceDict[pysicalQuant]=np.zeros(2000)
+                    dataSourceDict[pysicalQuant]=[]
                 self.dataSources[quantity]=ColumnDataSource(data=dataSourceDict)
                 j=0
                 for pysicalQuant in self.hiracyDict[quantity]['PHYSICAL_QUANTITY']:
                     self.plots[quantity].append(self.figs[quantity].line(x='time',y=pysicalQuant,source=self.dataSources[quantity],legend_label=pysicalQuant,color=colors[j]))
                     j=j+1
             self.widget=column(list(self.figs.values()))
+            self.firstData=True
 
         def update(self):
             self.processedPakets = copy.copy(self.timeUncerSampleNumberWIDX[-1, -1])
             packetsToPush=self.processedPakets-self.lastprocessedPakets
-            idx=np.arange(packetsToPush)+self.lastprocessedPakets
-            uinttime=np.take(self.time,idx,mode='warp')
-            uinttime-=np.uint64(self.startTime*1e9)
-            time=uinttime/1e9
-            for quantity in list(self.hiracyDict.keys()):
-                newDataSourceDict = {'time': time}
-                i=0
-                for pysicalQuant in self.hiracyDict[quantity]['PHYSICAL_QUANTITY']:
-                    dataIDX=self.hiracyDict[quantity]['copymask'][i]
-                    newDataSourceDict[pysicalQuant]=np.take(self.data[dataIDX],idx,mode='warp')
-                    i=i+1
-                self.dataSources[quantity].stream(newDataSourceDict,rollover=4000)
-            self.lastprocessedPakets=copy.copy(self.processedPakets)
-            pass
+            if self.firstData and packetsToPush>0:
+                idx=np.arange(packetsToPush)+self.lastprocessedPakets
+                uinttime=np.take(self.time,idx,mode='warp')
+                uinttime-=np.uint64(self.startTime*1e9)
+                time=uinttime/1e9
+                for quantity in list(self.hiracyDict.keys()):
+                    newDataSourceDict = {'time': time}
+                    i=0
+                    for pysicalQuant in self.hiracyDict[quantity]['PHYSICAL_QUANTITY']:
+                        dataIDX=self.hiracyDict[quantity]['copymask'][i]
+                        newDataSourceDict[pysicalQuant]=np.take(self.data[dataIDX],idx,mode='warp')
+                        i=i+1
+                    self.dataSources[quantity].data=newDataSourceDict
+                self.lastprocessedPakets=copy.copy(self.processedPakets)
+                self.firstData=False
+            if not packetsToPush==0:
+                idx=np.arange(packetsToPush)+self.lastprocessedPakets
+                uinttime=np.take(self.time,idx,mode='warp')
+                uinttime-=np.uint64(self.startTime*1e9)
+                time=uinttime/1e9
+                for quantity in list(self.hiracyDict.keys()):
+                    newDataSourceDict = {'time': time}
+                    i=0
+                    for pysicalQuant in self.hiracyDict[quantity]['PHYSICAL_QUANTITY']:
+                        dataIDX=self.hiracyDict[quantity]['copymask'][i]
+                        newDataSourceDict[pysicalQuant]=np.take(self.data[dataIDX],idx,mode='warp')
+                        i=i+1
+                    self.dataSources[quantity].stream(newDataSourceDict,rollover=100)
+                self.lastprocessedPakets=copy.copy(self.processedPakets)
 
 
     def __init__(self,mpSensorDict):
@@ -1458,7 +1421,7 @@ def sharedMembokehDataViewThread(mpSensorDict):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    bokehPort = 5110
+    bokehPort = 5147
     dataViewerIo_loop = IOLoop.current()
     dataViewerBokeh_app = Application(FunctionHandler(make_viewServerdoc))
     viewServer = Server(
@@ -1480,10 +1443,9 @@ def sharedMembokehDataViewThread(mpSensorDict):
 
 if __name__ == "__main__":
     try:
-
         DR = DataReceiver("192.168.0.200", 7654)
         bokehPort=5050
-        time.sleep(15)
+        time.sleep(20)
         dumper=fileDumper(DR)
         """
         dumper.openFile(str(time.time()).replace('.','_')+".hdf5")
@@ -1512,6 +1474,8 @@ if __name__ == "__main__":
         print("Opening Bokeh application on http://" + str(IPAddr) + ":" + str(bokehPort) + "/")
         dataReceiverIo_loop.add_callback(server.show, "/")
         dataReceiverIo_loop.start()
+
+
     finally:
         server.stop()
         dataReceiverBokeh_app.stop()
