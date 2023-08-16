@@ -340,6 +340,11 @@ class DataReceiver:
         self.stop()
         self.socket.close()
 
+    def flsuhAllQueues(self):
+        for sensorID in self.AllSensors:
+            while not self.AllSensors[sensorID].msgQueue.empty():
+                self.AllSensors[sensorID].msgQueue.get()
+
 ### classes to proces sensor descriptions
 class AliasDict(dict):
     def __init__(self, *args, **kwargs):
@@ -943,10 +948,10 @@ class Sensor:
                         if self.flags["PrintProcessedCounts"]:
                             if self.ProcessedPacekts % 100 == 0:
                                 self.updateDatarate()
-                            if self.ProcessedPacekts % 10000 == 0:
-                                print(
-                                    + hex(self.params["ID"])
-                                    + str(self.msgQueue.qsize())
+                            if self.ProcessedPacekts % 1000 == 0:
+                                print(hex(self.params["ID"])
+                                    + " "
+                                    + " {:d}".format(self.msgQueue.qsize())
                                     + " ->"
                                     + "{:.2f}".format((self.msgQueue.qsize() / self.msgQueSize) * 100)
                                     + "%"
@@ -1105,7 +1110,6 @@ class HDF5Dumper:
     def __str__(self):
         return str(self.dataFile)+" "+hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_")+' '+str(self.msgbufferd + self.bufferLen * self.chunkswritten)+ ' msg received'
     def pushmsg(self, message, Description):
-        test=10
         with self.pushlock:
             self.lastdatatime=message.unix_time*1e9+message.unix_time_nsecs#store last timestamp for consysty check of time
             self.buffer[:, self.msgbufferd] = np.array(
@@ -1198,6 +1202,8 @@ class fileDumper:
                 print("closing" + str(dumper))
                 dumper.wirteRemainingToHDF()
                 del dumper
+            for SensorID in self.DR.AllSensors:
+                self.DR.AllSensors[SensorID].startDataProcessing()
             del self.dumpers
             self.dumpers=[]
             self.file.flush()
@@ -1277,7 +1283,10 @@ class page:
             self.tableDataSource = ColumnDataSource(data=ec.commandQueue)
             self.tabColumns = [TableColumn(field=Ci, title=Ci) for Ci in self.tableDataSource.column_names]
             self.data_table = DataTable(source=self.tableDataSource, columns=self.tabColumns, width=2000, height=800)
-            self.widget=column(row(self.csvIN,self.addButton,self.flushButton),self.data_table)
+            self.newCMDtableDataSource = ColumnDataSource(data=pd.DataFrame(columns=['Type','PHI','CHI','Duration']))
+            self.newCMDtabColumns = [TableColumn(field=Ci, title=Ci) for Ci in self.newCMDtableDataSource.column_names]
+            self.newCMDdata_table = DataTable(source=self.newCMDtableDataSource, columns=self.newCMDtabColumns, width=2000, height=800)
+            self.widget=column(row(self.csvIN,self.addButton,self.flushButton),self.data_table,self.newCMDdata_table)
             self.cmdDF=None
         def appendCSVToCMDQueue(self):
             if self.newCSVData:
@@ -1285,9 +1294,13 @@ class page:
                 self.tableDataSource.data=ec.commandQueue
                 self.newCSVData=False
                 self.addButton.button_type = 'warning'
+                self.cmdDF=pd.DataFrame(columns=['Type', 'PHI', 'CHI', 'Duration'])
+                self.newCMDtableDataSource.data = self.cmdDF
+
         def readCsv(self,attr, old, new):
             try:
                 self.cmdDF=pd.read_csv(StringIO(self.csvIN.value))
+                self.newCMDtableDataSource.data=self.cmdDF
                 self.newCSVData=True
                 self.addButton.button_type='success'
             except Exception as e:
@@ -1468,7 +1481,7 @@ def sharedMembokehDataViewThread(mpSensorDict):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    bokehPort = 5164
+    bokehPort = 5173
     dataViewerIo_loop = IOLoop.current()
     dataViewerBokeh_app = Application(FunctionHandler(make_viewServerdoc))
     viewServer = Server(
@@ -1518,11 +1531,15 @@ if __name__ == "__main__":
         met4FoFpublisher = softwareSensor("192.168.0.200", 7654, 0x13380100, "EulerControal", Description)
         def dumfileSwitcherCB(dict):
             if dict['command']["Type"]!='Stop':
-                newGroupName=dict['command']["Type"]+'{:06d}'.format(dict['idx'])
-                dumper.switchTimeSliceGPR(newGroupName)
+                if dict['command']["Type"] == 'static':
+                    #DR.flsuhAllQueues()#todo MOVE TO SHARED MEMORY APROACH
+                    newGroupName=dict['command']["Type"]+'{:06d}'.format(dict['idx'])
+                    dumper.switchTimeSliceGPR(newGroupName)
+                else:
+                    dumper.stopDumpingAllSensors()
             else:
                 dumper.stopDumpingAllSensors()
-
+        time.sleep(10)
         ec = eulerControaler(ipadress, met4FoFpublisher.sendDataMsg,dumfileSwitcherCB)
         ec.appendCommands(cmdDF1)
         ec.appendCommands(cmdDF2)
