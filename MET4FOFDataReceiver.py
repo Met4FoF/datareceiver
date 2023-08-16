@@ -755,7 +755,7 @@ class Sensor:
             "callbackSet": False,
         }
         self.processData=True
-        self.params = {"ID": ID, "BufferSize": msgQueSize, "DumpFileName": ""}
+        self.params = {"ID": ID, "BufferSize": msgQueSize}
         self.bufferSize=bufferSize
         self.DescriptionsProcessed = AliasDict(
             {
@@ -1145,6 +1145,89 @@ class HDF5Dumper:
             self.msgbufferd = 0
             self.sourceGPR.finishArrayPushing()
 
+
+class SharedMemoryHDF5Dumper:
+    def __init__(self, sensor, mpSensorDict, file, timeSliceGPRName, hdfffilelock, updateRateHz=10):
+        self.sensor = sensor
+        self.mpSensorDict = mpSensorDict
+        self.dscp = self.sensor.Description
+        self.ID = self.dscp.ID
+        self.hdflock = hdfffilelock
+        self.pushlock = threading.Lock()
+        self.updateRateHz=updateRateHz
+        self.dataframindexoffset = 4
+        self.chunkswritten = 0
+        self.msgbufferd = 0
+        self.lastdatatime = 0
+        self.hieracy = Description.gethieracyasdict()
+        self.startimewritten = False
+        self.dataFile = file
+        self.Datasets = {}
+        self.shBufffLen = self.mpSensorDict[self.ID]['smBuffers']['size']
+
+        self.data_shm = shared_memory.SharedMemory(name='{:08x}'.format(self.ID) + '_data')
+        self.data = np.ndarray((16, self.shBufffLen), dtype=np.float32, buffer=self.data_shm.buf)
+
+        self.time_shm = shared_memory.SharedMemory(name='{:08x}'.format(self.ID) + '_absTime')
+        self.time = np.ndarray((self.shBufffLen,), dtype=np.uint64, buffer=self.time_shm.buf)
+
+        self.timeUncerSampleNumber_shm = shared_memory.SharedMemory(
+            name='{:08x}'.format(self.ID) + '_absTimeUncerSampleNumber')
+        self.timeUncerSampleNumberWIDX = np.ndarray((2, self.shBufffLen + 1), dtype=np.uint32,
+                                                    buffer=self.timeUncerSampleNumber_shm.buf)
+        self.timeUncerSampleNumber = self.timeUncerSampleNumberWIDX[:, :-1]
+        self.processedPakets = self.timeUncerSampleNumberWIDX[-1, -1]
+        self.lastprocessedPakets = copy.copy(self.processedPakets)
+        # chreate self.groups
+        with self.hdflock:
+            try:
+                self.rawDataGPR = self.dataFile.initRawDataGPR(groupAttrs={"creationSoftware": "Met4FoFDataReceiver"})
+                self.timeSliceGPR = self.rawDataGPR.initTimeSliceGroup(timeSliceGPRName)
+                name = '{0:0{1}X}'.format(self.dscp.ID, 8) + '_' + str(self.dscp.SensorName)
+                self.sourceGPR = self.timeSliceGPR.initSourceGroup(name)
+                names = []
+                rows = []
+                arrayMapping = {}
+                dsetAttrs = []
+                for groupname in self.hieracy.keys():
+                    dSetDSCP = self.hieracy[groupname]
+                    names.append(str(groupname))
+                    rows.append(len(dSetDSCP['copymask']))
+                    arrayMapping[str(groupname)] = np.array(dSetDSCP['copymask'])
+                    ProtobufTOHDFKeyMapping = {'pysicalQuantity': 'PHYSICAL_QUANTITY', 'unit': 'UNIT',
+                                               'resolution': 'RESOLUTION', "minRange": 'MIN_SCALE',
+                                               "maxRange": 'MAX_SCALE'}  # TODO move to HDF5Datafile.py
+                    attrs = {}
+                    for hdfKey, protoKey in ProtobufTOHDFKeyMapping.items():
+                        attrs[hdfKey] = dSetDSCP[protoKey]
+                    dsetAttrs.append(attrs)
+                self.sourceGPR.createMultiplerawDataSets(names, rows, arrayMapping, dsetAttrs, createAbsTimeBase=True)
+            except Exception as E:
+                print(E)
+
+    def __str__(self):
+        return str(self.dataFile) + " " + hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_") + ' ' + str(
+            self.msgbufferd + self.bufferLen * self.chunkswritten) + ' msg received'
+
+    def run(self):
+        while not self._stop_event.is_set():
+            time.sleep(1/self.updateRateHz)
+            self.writeDatapointsToHDF()
+    def writeDatapointsToHDF(self):
+        self.processedPakets = copy.copy(self.timeUncerSampleNumberWIDX[-1, -1])
+        packetsToPush = self.processedPakets - self.lastprocessedPakets
+        idx = np.arange(packetsToPush) + self.lastprocessedPakets
+        with self.hdflock:
+            self.sourceGPR.pushArray(np.take(self.data,idx,idxmode='warp'), absTimeArray=np.take(self.time,idx,idxmode='warp'),
+                                 absTimeUncerSampleNumberArray=np.take(self.time,idx,idxmode='warp'))
+        self.lastprocessedPakets+=packetsToPush
+
+    def wirteRemainingToHDF(self):
+        with self.hdflock:
+            self.writeDatapointsToHDF()
+            self.sourceGPR.finishArrayPushing()
+    
+
 class fileDumper:
 
     def __init__(self,DR,fileName=None,bufferLen=int(32768)):
@@ -1530,7 +1613,7 @@ if __name__ == "__main__":
         dumper=fileDumper(DR,fileName=str(datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3])+'_dumpFile.hdf5')
         met4FoFpublisher = softwareSensor("192.168.0.200", 7654, 0x13380100, "EulerControal", Description)
         def dumfileSwitcherCB(dict):
-            if dict['command']["Type"]!='Stop':
+            if dict['command']["Type"]!='stop':
                 if dict['command']["Type"] == 'static':
                     #DR.flsuhAllQueues()#todo MOVE TO SHARED MEMORY APROACH
                     newGroupName=dict['command']["Type"]+'{:06d}'.format(dict['idx'])
