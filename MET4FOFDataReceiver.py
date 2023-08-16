@@ -1065,7 +1065,7 @@ class Sensor:
         self.stop()
 
 class HDF5Dumper:
-    def __init__(self, dscp, file, timeSliceGPRName, hdfffilelock, bufferLen=32768,):
+    def __init__(self, dscp, file, timeSliceGPRName, hdfffilelock, bufferLen=32768*4,):
         self.dscp=dscp
         self.hdflock = hdfffilelock
         self.pushlock = threading.Lock()
@@ -1273,7 +1273,7 @@ class page:
         def __init__(self, page, ec):
             self.page=page
             self.ec=ec
-            self.csvIN=TextAreaInput(value="csv", title="paste csv with ; seperator")
+            self.csvIN=TextAreaInput(value="csv", title="paste csv with ; seperator",max_length=1000000)
             self.newCSVData=False
             self.csvIN.on_change("value",self.readCsv)
             self.addButton=Button(button_type="warning",label="Add Commands")
