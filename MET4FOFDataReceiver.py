@@ -1156,10 +1156,8 @@ class SharedMemoryHDF5Dumper:
         self.pushlock = threading.Lock()
         self.updateRateHz=updateRateHz
         self.dataframindexoffset = 4
-        self.chunkswritten = 0
-        self.msgbufferd = 0
         self.lastdatatime = 0
-        self.hieracy = Description.gethieracyasdict()
+        self.hieracy = self.dscp.gethieracyasdict()
         self.startimewritten = False
         self.dataFile = file
         self.Datasets = {}
@@ -1178,62 +1176,76 @@ class SharedMemoryHDF5Dumper:
         self.timeUncerSampleNumber = self.timeUncerSampleNumberWIDX[:, :-1]
         self.processedPakets = self.timeUncerSampleNumberWIDX[-1, -1]
         self.lastprocessedPakets = copy.copy(self.processedPakets)
+        self.dumping=False
+        self.dumpingStoppedWaitingForFilelock=False
         # chreate self.groups
         with self.hdflock:
             try:
                 self.rawDataGPR = self.dataFile.initRawDataGPR(groupAttrs={"creationSoftware": "Met4FoFDataReceiver"})
-                self.timeSliceGPR = self.rawDataGPR.initTimeSliceGroup(timeSliceGPRName)
-                name = '{0:0{1}X}'.format(self.dscp.ID, 8) + '_' + str(self.dscp.SensorName)
-                self.sourceGPR = self.timeSliceGPR.initSourceGroup(name)
-                names = []
-                rows = []
-                arrayMapping = {}
-                dsetAttrs = []
+                self.names = []
+                self.rows = []
+                self.arrayMapping = {}
+                self.dsetAttrs = []
                 for groupname in self.hieracy.keys():
                     dSetDSCP = self.hieracy[groupname]
-                    names.append(str(groupname))
-                    rows.append(len(dSetDSCP['copymask']))
-                    arrayMapping[str(groupname)] = np.array(dSetDSCP['copymask'])
+                    self.names.append(str(groupname))
+                    self.rows.append(len(dSetDSCP['copymask']))
+                    self.arrayMapping[str(groupname)] = np.array(dSetDSCP['copymask'])
                     ProtobufTOHDFKeyMapping = {'pysicalQuantity': 'PHYSICAL_QUANTITY', 'unit': 'UNIT',
                                                'resolution': 'RESOLUTION', "minRange": 'MIN_SCALE',
                                                "maxRange": 'MAX_SCALE'}  # TODO move to HDF5Datafile.py
-                    attrs = {}
+                    self.attrs = {}
                     for hdfKey, protoKey in ProtobufTOHDFKeyMapping.items():
-                        attrs[hdfKey] = dSetDSCP[protoKey]
-                    dsetAttrs.append(attrs)
-                self.sourceGPR.createMultiplerawDataSets(names, rows, arrayMapping, dsetAttrs, createAbsTimeBase=True)
+                        self.attrs[hdfKey] = dSetDSCP[protoKey]
+                    self.dsetAttrs.append(self.attrs)
+                self.initTimeSliceGPR(timeSliceGPRName)
             except Exception as E:
                 print(E)
+    def initTimeSliceGPR(self,timeSliceGPRName):
+        self.timeSliceGPR = self.rawDataGPR.initTimeSliceGroup(timeSliceGPRName)
+        name = '{0:0{1}X}'.format(self.dscp.ID, 8) + '_' + str(self.dscp.SensorName)
+        self.sourceGPR = self.timeSliceGPR.initSourceGroup(name)
+        self.sourceGPR.createMultiplerawDataSets(self.names, self.rows, self.arrayMapping, self.dsetAttrs, createAbsTimeBase=True)
 
     def __str__(self):
-        return str(self.dataFile) + " " + hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_") + ' ' + str(
-            self.msgbufferd + self.bufferLen * self.chunkswritten) + ' msg received'
+        return str(self.dataFile) + " " + hex(self.dscp.ID) + "_" + self.dscp.SensorName.replace(" ", "_")
 
     def run(self):
         while not self._stop_event.is_set():
-            time.sleep(1/self.updateRateHz)
-            self.writeDatapointsToHDF()
+            if not self.dumpingStoppedWaitingForFilelock and self.dumping:
+                try:
+                    self.processedPakets = copy.copy(self.timeUncerSampleNumberWIDX[-1, -1])
+                    self.writeDatapointsToHDF()
+                    time.sleep(1/self.updateRateHz)
+                except Exception as E:
+                    print(E)
     def writeDatapointsToHDF(self):
-        self.processedPakets = copy.copy(self.timeUncerSampleNumberWIDX[-1, -1])
         packetsToPush = self.processedPakets - self.lastprocessedPakets
         idx = np.arange(packetsToPush) + self.lastprocessedPakets
         with self.hdflock:
-            self.sourceGPR.pushArray(np.take(self.data,idx,idxmode='warp'), absTimeArray=np.take(self.time,idx,idxmode='warp'),
-                                 absTimeUncerSampleNumberArray=np.take(self.time,idx,idxmode='warp'))
+            self.sourceGPR.pushArray(np.take(self.data,idx,mode='warp',axis=1), absTimeArray=np.take(self.time,idx,mode='warp'),absTimeUncerSampleNumberArray=np.take(self.timeUncerSampleNumber,idx,mode='warp',axis=1))
         self.lastprocessedPakets+=packetsToPush
+        self.dumpingStoppedWaitingForFilelock=False
 
     def wirteRemainingToHDF(self):
-        with self.hdflock:
-            self.writeDatapointsToHDF()
-            self.sourceGPR.finishArrayPushing()
+        self.dumpingStoppedWaitingForFilelock=True
+        self.processedPakets = copy.copy(self.timeUncerSampleNumberWIDX[-1, -1])
+        self.writeDatapointsToHDF()
+        self.sourceGPR.finishArrayPushing()
+        self.dumpingStoppedWaitingForFilelock = False
+
+    def startDumping(self):
+        self.dumping=True
+        self.lastprocessedPakets=copy.copy(self.timeUncerSampleNumberWIDX[-1, -1])
     
+    def stopDumping(self):
+        self.dumping = False
 
 class fileDumper:
 
-    def __init__(self,DR,fileName=None,bufferLen=int(32768)):
+    def __init__(self,DR,fileName=None):
         self.DR=DR
         self.dumpers=[]
-        self.bufferLen=bufferLen
         self.groupName=None
         self.lock=threading.Lock()
         self.state="idle"
@@ -1262,33 +1274,29 @@ class fileDumper:
         #TODO make use of shared memory and improve data Dumper
         if self.state=="fileNoDump":
             for SensorID in self.DR.AllSensors:
-                self.dumpers.append(HDF5Dumper(DR.AllSensors[SensorID].Description, self.file, timeSliceGPRName, self.lock,bufferLen=self.bufferLen))
-                self.DR.AllSensors[SensorID].SetCallback(self.dumpers[-1].pushmsg)
-                self.DR.AllSensors[SensorID].startDataProcessing()
+                #def __init__(self, sensor, mpSensorDict, file, timeSliceGPRName, hdfffilelock, updateRateHz=10):
+                self.dumpers.append(SharedMemoryHDF5Dumper(DR.AllSensors[SensorID],DR.mpSensorDict, self.file, timeSliceGPRName, self.lock))
+            for dumper in self.dumpers:
+                dumper.startDumping()
             self.state="fileDump"
         self.groupName = timeSliceGPRName
     def switchTimeSliceGPR(self,timeSliceGPRName):
         if self.state=="fileDump":
             self.stopDumpingAllSensors()
             self.state == "fileNoDump"
-            self.startDumpingAllSensors(timeSliceGPRName)
+            for dumper in self.dumpers:
+                dumper.initTimeSliceGPR(timeSliceGPRName)
+            for dumper in self.dumpers:
+                dumper.startDumping()
         if self.state=="fileNoDump":
             self.startDumpingAllSensors(timeSliceGPRName)#we havent been dumping so far so just start dumping
 
     def stopDumpingAllSensors(self):
         if self.state=="fileDump":
-            for SensorID in self.DR.AllSensors:
-                self.DR.AllSensors[SensorID].stopDataProcessing()
-            for SensorID in DR.AllSensors:
-                DR.AllSensors[SensorID].UnSetCallback()
             for dumper in self.dumpers:
                 print("closing" + str(dumper))
+                dumper.stopDumping()
                 dumper.wirteRemainingToHDF()
-                del dumper
-            for SensorID in self.DR.AllSensors:
-                self.DR.AllSensors[SensorID].startDataProcessing()
-            del self.dumpers
-            self.dumpers=[]
             self.file.flush()
             self.groupName = None
             self.state="fileNoDump"
@@ -1397,10 +1405,11 @@ class page:
             self.tableDataSource.data = ec.commandQueue
 
 
-    def __init__(self,DR,dumper,eulerControaler):
+    def __init__(self,DR,dumper):
+    #def __init__(self, DR, dumper, eulerControaler):
         self.DR=DR
         self.dumper=dumper
-        self.eulerControaler=eulerControaler
+        #self.eulerControaler=eulerControaler
         self.descriptionDiv=Div(text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """,height=14)
         self.page=column(self.descriptionDiv)
         self.bokehSensorWidgets=[]
@@ -1410,16 +1419,16 @@ class page:
             self.bokehSensorWidgets.append(self.SensorBokehWidget(self,self.DR,sensorID))
             self.page.children.append(self.bokehSensorWidgets[-1].widget)
         self.DumperWidget=self.DumperBokehWidget(self,self.DR,self.dumper)
-        self.ecWidget=self.eulerControalBokehWidget(self,self.eulerControaler)
+        #self.ecWidget=self.eulerControalBokehWidget(self,self.eulerControaler)
         self.page.children.append(self.DumperWidget.widget)
-        self.page.children.append(self.ecWidget.widget)
+        #self.page.children.append(self.ecWidget.widget)
 
     def update(self):
         self.descriptionDiv.text="""<h2 style="color:#1f77b4";>Met4FoF Datareceiver IP:"""+str(self.DR.params['IP'])+":"+str(self.DR.params['Port'])+" datarate {:.2f}".format(self.DR.Datarate)+" packets/s"+"""</h2> """
         for sensorWidget in self.bokehSensorWidgets:
             sensorWidget.update()
         self.DumperWidget.update()
-        self.ecWidget.update()
+        #self.ecWidget.update()
 
 
 def make_doc(doc):
@@ -1434,7 +1443,7 @@ def make_doc(doc):
         IPAddr = socket.gethostbyname(hostname)
         logger.info("Opening Bokeh application on http://" + str(hostname) + ":5003/")
         logger.info("Opening Bokeh application on http://" + str(IPAddr) + ":5003/")
-        myPage = page(DR,dumper,ec)
+        myPage = page(DR,dumper)#myPage = page(DR,dumper,ec)
         doc.add_root(myPage.page)
         doc.title = "DR view"
         doc.add_periodic_callback(myPage.update, 1000)
@@ -1564,7 +1573,7 @@ def sharedMembokehDataViewThread(mpSensorDict):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    bokehPort = 5173
+    bokehPort = 5175
     dataViewerIo_loop = IOLoop.current()
     dataViewerBokeh_app = Application(FunctionHandler(make_viewServerdoc))
     viewServer = Server(
@@ -1586,7 +1595,7 @@ def sharedMembokehDataViewThread(mpSensorDict):
 
 if __name__ == "__main__":
     try:
-        DR = DataReceiver("192.168.0.200", 7654)
+        DR = DataReceiver("127.0.0.1", 7654)
         bokehPort=5050
 
         cmdDF1 = pd.DataFrame(data={'Type': ['static','move', 'static', 'move', 'static', 'move', 'static', ],
@@ -1615,18 +1624,22 @@ if __name__ == "__main__":
         def dumfileSwitcherCB(dict):
             if dict['command']["Type"]!='stop':
                 if dict['command']["Type"] == 'static':
-                    #DR.flsuhAllQueues()#todo MOVE TO SHARED MEMORY APROACH
+                    #DR.flsuhAllQueues()
                     newGroupName=dict['command']["Type"]+'{:06d}'.format(dict['idx'])
                     dumper.switchTimeSliceGPR(newGroupName)
                 else:
                     dumper.stopDumpingAllSensors()
             else:
                 dumper.stopDumpingAllSensors()
-        time.sleep(10)
+
+        time.sleep(5)
+        """
         ec = eulerControaler(ipadress, met4FoFpublisher.sendDataMsg,dumfileSwitcherCB)
         ec.appendCommands(cmdDF1)
         ec.appendCommands(cmdDF2)
-        time.sleep(10)
+        """
+        time.sleep(5)
+
         DataViewServerThread=threading.Thread(target=sharedMembokehDataViewThread, args=(DR.mpSensorDict,))
         DataViewServerThread.start()
         dataReceiverIo_loop = IOLoop()
