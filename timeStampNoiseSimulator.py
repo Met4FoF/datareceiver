@@ -28,6 +28,7 @@ jitterSimuLengthInS=1.0
 localFreqqCorr=True
 askforFigPickelSave=False
 #____________________ GLobal config end_____________
+r"""
 tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
 plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
@@ -59,7 +60,43 @@ plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
-figSaveCounter = 20
+"""
+
+tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
+plt.rcParams['axes.prop_cycle'] = plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
+plt.rcParams['axes.formatter.useoffset'] = False
+plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
+LANG='DE'
+if LANG=='DE':
+    import locale
+    trueFalseAnAus = {True: 'An', False: 'Aus'}
+    locale.setlocale(locale.LC_NUMERIC,"de_DE.utf8")
+    locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+    plt.rcParams['text.latex.preamble'] = r'\usepackage{icomma}\usepackage{amsmath}\boldmath' # remove nasty Space behind comma in de_DE.utf8 locale https://stackoverflow.com/questions/50657326/matplotlib-locale-de-de-latex-space-btw-decimal-separator-and-number
+    plt.rcParams['axes.formatter.use_locale'] = True
+else:
+    trueFalseAnAus = {True: 'On', False: 'Off'}
+plt.rcParams['mathtext.fontset'] = 'custom'
+plt.rcParams['mathtext.rm'] = 'NexusProSans'
+plt.rcParams['mathtext.it'] = 'NexusProSans:italic'
+plt.rcParams['mathtext.bf'] = 'NexusProSans:bold'
+plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
+plt.rc('text', usetex=True)
+plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
+plt.rc("figure", dpi=300)
+PLTSCALFACTOR = 1.5
+SMALL_SIZE = 9 * PLTSCALFACTOR
+MEDIUM_SIZE = 12 * PLTSCALFACTOR
+BIGGER_SIZE = 15 * PLTSCALFACTOR
+plt.rc("font", weight='bold') # controls default text sizes
+plt.rc("font", size=SMALL_SIZE)
+plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
+plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
+plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
+figSaveCounter = 30
 SAVEFOLDER = './images'
 SHOW=False
 
@@ -376,7 +413,7 @@ class realWordJitterGen:
                     label=r'\textbf{'+self.title+' $f_\mathrm{s}'+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }',lw=lw)
 
         if plotSincSensForLength!=None:
-            labelPrefixDict={'EN':'Sine approx. sensitivity ','DE':'Sin. Approx. Sensitivität '}
+            labelPrefixDict={'EN':'Sine approx. sensitivity ','DE':'Sinus Approximation Sensitivität '}
             if isinstance(plotSincSensForLength, list):
                 sincFreqs=np.linspace(0.0,signalFreq*0.5,num=100000,endpoint=False)
                 for length in plotSincSensForLength:
@@ -476,7 +513,7 @@ def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=jitterSimuL
     del jitter ,timeWJitter,Signal,originalTimpoints
     return st.phase(fitparams)-phi0,st.amplitude(fitparams)/A0
 
-def getmuAndSTdForFreq(testparams,numOfruns=2500):
+def getmuAndSTdForFreq(testparams,numOfruns=2000):
     freq=testparams[0]
     t_jitter=testparams[1]
     length = testparams[2]
@@ -518,6 +555,7 @@ if __name__ == "__main__":
     dataFileBMA280 = h5py.File(os.path.join(pathPrefix, 'BMA280PTB.hdf5'), 'r')
     dataFileLSM6DSRX1667Hz_9 = h5py.File(os.path.join(pathPrefix, 'LSM6DSRX_1667HZ_09.hdf5'), 'r')
     dataFileLSM6DSRX6667Hz = h5py.File(os.path.join(pathPrefix,'ST_sensor_test_6667Hz_2.hfd5'), 'r')
+    dataFileADXL355 = h5py.File(os.path.join(pathPrefix, 'ADXL355_4kHz.hfd5'), 'r')
     """
     timeDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,10000:20000].astype(np.int64)
     ticksDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,10000:20000].astype(np.int64)
@@ -569,15 +607,17 @@ if __name__ == "__main__":
     jitterGensForSimulations.append(jitterGenLSM6DSRXLongTerm)
     """
     
-    jitterGenLSM6DSRX6667Hz = realWordJitterGen(dataFileLSM6DSRX6667Hz, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX $f_\text{sNom}$=6.667~kHz}")
+    jitterGenLSM6DSRX6667Hz = realWordJitterGen(dataFileLSM6DSRX6667Hz, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX $f_\text{sNom}$ = 6.667~kHz}")
 
     jitterGensForSimulations.append(jitterGenLSM6DSRX6667Hz)
 
-    jitterGenLSMDSRX_09= realWordJitterGen(dataFileLSM6DSRX1667Hz_9,'0x60ad0000_LSM6DSRX',     r"\textbf{LSMDSRX $f_\text{sNom}$=1.667~kHz}")# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGenLSMDSRX_09= realWordJitterGen(dataFileLSM6DSRX1667Hz_9,'0x60ad0000_LSM6DSRX',     r"\textbf{LSMDSRX $f_\text{sNom}$ = 1.667~kHz}")# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
     jitterGensForSimulations.append(jitterGenLSMDSRX_09)
-
+    jitterGenADXL355= realWordJitterGen(dataFileADXL355,'0x0_ADXL_355',     r"\textbf{ADXL 355 $f_\text{sNom}$ = 4~kHz}")# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGensForSimulations.append(jitterGenADXL355)
     #jitterGensForSimulations[0].plotAllanDev()
     show=False
+
     deviationPlotlength=10
     deviationPlotlengthLong=1000
 
@@ -603,6 +643,7 @@ if __name__ == "__main__":
         saveImagePickle("Deviations with out linear Correction", axDeviationUnCorr, axDeviationUnCorr)
         saveImagePickle("Phasenoise with linear Correction", figPhaseNoise, axPhaseNoise)
         #saveImagePickle("Allan Deviation", figAllan, axAllan)
+
     """
     jitterGen2.plotDeviation(fig=figDviation,ax=axDeviation,length=150000,lw=1)
     
@@ -634,7 +675,7 @@ if __name__ == "__main__":
     #jitterGen1.plotFFT(plotPhase=False)
 
     #jitterGen1.plotPhaseNoise(plotRaw=False)
-    freqPoints=250
+    freqPoints=1000
     ampPoints=0
     SimuPoints =     ampPoints+len(jitterGensForSimulations)
     nsPreAmpStep=20
@@ -659,76 +700,85 @@ if __name__ == "__main__":
     results=np.array(results)
     bw=np.ones(SimuPoints)
 
+    def plotMagDeviations(idxs=np.arange(len(jitterGensForSimulations))):
+        fig1, ax = plt.subplots()
+        #fig1.set_figwidth(12)
+        #fig1.set_figheight(4)
+        #if LANG=='EN':
+            #fig1.suptitle(r"\textbf{Simulated time = " + str(lengthInS) + ' s, local frequency correction '+str(localFreqqCorr)+'}')
+        #if LANG=='DE':
+            #fig1.suptitle(r"\textbf{Simulationsdauer = " + str(lengthInS) + ' s, Lokalefrequenzkorrektur '+trueFalseAnAus[localFreqqCorr]+'}')
+        doFit=False
+        plotErrors=True
+        for i in idxs:
+            tmpFreqs=freqs[i * freqPoints: (i + 1) * freqPoints]
+            if i<=(len(jitterGensForSimulations)-1):
+                label = jitterGensForSimulations[i].title
+            else:
+                label=r"\textbf{\textit{simu.} $2\sigma= " + str(2*((i-1) * nsPreAmpStep)) + "$ ns}"
+            AMPS=results[i * freqPoints: (i + 1) * freqPoints,6]
+            AMPSErrorBottom = results[i * freqPoints: (i + 1) * freqPoints,4]
+            AMPSErrorTop = results[i * freqPoints: (i + 1) * freqPoints, 8]
+            AMPSError25Bottom = results[i * freqPoints: (i + 1) * freqPoints,5]
+            AMPSError75Top = results[i * freqPoints: (i + 1) * freqPoints, 7]
+            coveragenameDict={'EN':'coverage','DE':'Konfidenzinterval'}
+            if plotErrors:
+                dataPlot=ax.plot(tmpFreqs,
+                       AMPS,
+                       label=r"\textbf{Median }"+label,lw=PLTSCALFACTOR*2,color=tubscolors[i])
 
-    fig1, ax = plt.subplots()
-    #fig1.set_figwidth(12)
-    #fig1.set_figheight(4)
-    if LANG=='EN':
-        fig1.suptitle(r"\textbf{Simulated time = " + str(lengthInS) + ' s, local frequency correction '+str(localFreqqCorr)+'}')
-    if LANG=='DE':
-        fig1.suptitle(r"\textbf{Simulationsdauer = " + str(lengthInS) + ' s, Lokalefrequenzkorrektur '+trueFalseAnAus[localFreqqCorr]+'}')
-    doFit=False
-    plotErrors=True
-    for i in range(SimuPoints):
-        tmpFreqs=freqs[i * freqPoints: (i + 1) * freqPoints]
-        if i<=(len(jitterGensForSimulations)-1):
-            label = jitterGensForSimulations[i].title
-        else:
-            label=r"\textbf{\textit{simu.} $2\sigma= " + str(2*((i-1) * nsPreAmpStep)) + "$ ns}"
-        AMPS=results[i * freqPoints: (i + 1) * freqPoints,6]
-        AMPSErrorBottom = results[i * freqPoints: (i + 1) * freqPoints,4]
-        AMPSErrorTop = results[i * freqPoints: (i + 1) * freqPoints, 8]
-        AMPSError25Bottom = results[i * freqPoints: (i + 1) * freqPoints,5]
-        AMPSError75Top = results[i * freqPoints: (i + 1) * freqPoints, 7]
-        coveragenameDict={'EN':'coverage','DE':'Konfidenzinterval'}
-        if plotErrors:
-            dataPlot=ax.plot(tmpFreqs,
-                   AMPS,
-                   label=r"\textbf{Median }"+label,lw=PLTSCALFACTOR*2)
-            errorPlot2 = ax.fill_between(tmpFreqs,
-                               AMPSErrorBottom,
-                                AMPSErrorTop,
-                                label=r"\textbf{32\% - 68\% "+coveragenameDict[LANG]+" }" + str(label),
-                                color=dataPlot[0].get_color(),
-                                alpha=0.3,
-                                hatch = 'O')
-            errorPlot1 = ax.fill_between(tmpFreqs,
-                               AMPSError25Bottom,
-                                AMPSError75Top,
-                                label=r"\textbf{5\% - 95\% "+coveragenameDict[LANG]+"}"+str(label),
-                                color=dataPlot[0].get_color(),
-                                alpha=0.3,
-                                ls="--",
-                                       hatch='o')
-        else:
-            dataPlot=ax.plot(tmpFreqs,
-                   AMPS,
-                   label=label)
-        if doFit:
-            popt, pcov = curve_fit(gaus, tmpFreqs, AMPS, p0=[1, 5e5])
-            ax.plot(tmpFreqs,gaus(tmpFreqs,popt[0],popt[1]),label=r"\textbf{Fited bandwidth = "+"{:.2f}".format(abs(popt[1])/1e6)+" MHz }",color=dataPlot[-1].get_color(),ls='--')
-            bw[i]=popt[1]
-            print('______'+str(i * nsPreAmpStep)+' ns ___________')
-            print(popt)
-            print(popt[1]/(i * nsPreAmpStep*10e-9)*(i * nsPreAmpStep*10e-9))
-            print('_____________________________________________')
-    #ax[0].legend()
-    #ax[0].legend(ncol=4)
-    ax.legend(ncol=3)
-    if LANG=='EN':
-        ax.set_xlabel(r"\textbf{Simulated signal frequency in Hz}")
-        #ax[0].set_ylabel(r"$2\sigma(\hat{A})$ \textbf{in \%}")
-        ax.set_ylabel(r"$\frac{\mathbf{\hat{A}}}{\mathbf{A_{nom}}}$")
-    if LANG=='DE':
-        ax.set_xlabel(r"\textbf{Simulierte Signalfrequenz in Hz}")
-        #ax[0].set_ylabel(r"$2\sigma(\hat{A})$ \textbf{in \%}")
-        ax.set_ylabel(r"Magnitudenabweichung $\frac{\mathbf{\hat{A}}}{\mathbf{A_{nom}}}$")
-    #ax[0].grid(True)
-    ax.grid(True)
-    #fig1.tight_layout()
-    fig1.show()
+                errorPlot2 = ax.fill_between(tmpFreqs,
+                                   AMPSErrorBottom,
+                                    AMPSErrorTop,
+                                    #label=r"\textbf{32\% - 68\% "+coveragenameDict[LANG]+" }" + str(label),
+                                    color=dataPlot[0].get_color(),
+                                    alpha=0.1,
+                                    hatch = 'O')
+                errorPlot1 = ax.fill_between(tmpFreqs,
+                                   AMPSError25Bottom,
+                                    AMPSError75Top,
+                                    #label=r"\textbf{5\% - 95\% "+coveragenameDict[LANG]+" }"+str(label),
+                                    color=dataPlot[0].get_color(),
+                                    alpha=0.1,
+                                    ls="--",
+                                           hatch='o')
+
+            else:
+                dataPlot=ax.plot(tmpFreqs,
+                       AMPS,
+                       label=label)
+            if doFit:
+                popt, pcov = curve_fit(gaus, tmpFreqs, AMPS, p0=[1, 5e5])
+                ax.plot(tmpFreqs,gaus(tmpFreqs,popt[0],popt[1]),label=r"\textbf{Fited bandwidth = "+"{:.2f}".format(abs(popt[1])/1e6)+" MHz }",color=dataPlot[-1].get_color(),ls='--')
+                bw[i]=popt[1]
+                print('______'+str(i * nsPreAmpStep)+' ns ___________')
+                print(popt)
+                print(popt[1]/(i * nsPreAmpStep*10e-9)*(i * nsPreAmpStep*10e-9))
+                print('_____________________________________________')
+        #ax[0].legend()
+        #ax[0].legend(ncol=4)
+        ax.legend(ncol=3)
+        if LANG=='EN':
+            ax.set_xlabel(r"\textbf{Simulated signal frequency in Hz}")
+            #ax[0].set_ylabel(r"$2\sigma(\hat{A})$ \textbf{in \%}")
+            ax.set_ylabel(r"$\frac{\mathbf{\hat{A}}}{\mathbf{A_{nom}}}$")
+        if LANG=='DE':
+            ax.set_xlabel(r"\textbf{Simulierte Signalfrequenz in Hz}")
+            #ax[0].set_ylabel(r"$2\sigma(\hat{A})$ \textbf{in \%}")
+            ax.set_ylabel(r"\textbf{Magnitude} $\frac{\mathbf{\hat{A}}}{\mathbf{A_{nom}}}$")
+        #ax[0].grid(True)
+        ax.grid(True)
+        fig1.tight_layout()
+        fig1.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' +"Magnitude_degradation_simulation"+ str(lengthInS) + "lockalFreqKoor" +trueFalseAnAus[localFreqqCorr]+'.png'), dpi=300, bbox_inches='tight')
+        fig1.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' +"Magnitude_degradation_simulation"+ str(lengthInS) + "lockalFreqKoor" +trueFalseAnAus[localFreqqCorr]+ '.pdf') , dpi=300, bbox_inches='tight')
+        globals()['figSaveCounter'] += 1
+        fig1.show()
 
 
+    plotMagDeviations()
+    plotMagDeviations([0])
+    plotMagDeviations([0, 1, 3, 4])
+    plotMagDeviations([0, 1, 3, 4, 5])
     #fig, ax = plt.subplots(2,sharex=True)
     fig4, ax4 = plt.subplots(1)
     #fig4.set_figwidth(12)
@@ -736,7 +786,7 @@ if __name__ == "__main__":
     if LANG=='EN':
         fig4.suptitle(r"\textbf{Simulated time = " + str(lengthInS) + ' s local frequency correction '+str(localFreqqCorr)+'}')
     if LANG=='DE':
-        fig4.suptitlesuptitle(r"\textbf{Simulationsdauer = " + str(lengthInS) + ' s, Lokalefrequenzkorrektur '+trueFalseAnAus[localFreqqCorr]+'}')
+        fig4.suptitle(r"\textbf{Simulationsdauer = " + str(lengthInS) + ' s, Lokalefrequenzkorrektur '+trueFalseAnAus[localFreqqCorr]+'}')
     for i in range(SimuPoints):
         if i<=(len(jitterGensForSimulations)-1):
             label = jitterGensForSimulations[i].title
@@ -776,7 +826,7 @@ if __name__ == "__main__":
     fig4.tight_layout()
     fig4.show()
     if askforFigPickelSave:
-        saveImagePickle("Monte Carlo Amp from PhaseNoise",ax,fig1)
+        saveImagePickle("Monte Carlo Amp from PhaseNoise", ax4, fig4)
         saveImagePickle("Monte Carlo Phase from PhaseNoise", ax4, fig4)
     """
     fig2 = plt.figure()
