@@ -129,7 +129,8 @@ class Met4FOFADCCall:
         TitleExtension="",
         saveFigName=None,
         startStopFreq=None,
-        lang=LANG#'EN' or 'DE'
+        lang=LANG,#'EN' or 'DE'
+        showTitle=True
     ):
 
         BoardID = self.metadata["BordID"]
@@ -186,15 +187,18 @@ class Met4FOFADCCall:
             lableMeasVals=r"\textbf{Mesured Values"
             axisCapRelMag=r"Relative magnitude $|S|$"
             labelFreq=r"\textbf{Frequency $f$ in Hz"
+        if showTitle:
             title=r"\textbf{Transfer function of "+ str(Channel)+ " of Board with ID"+ hex(int(BoardID/65536))+ TitleExtension
+            Fig.suptitle(title)
         elif 'DE':
-            labelInterpol = r"\textbf{Interpoliert}"
-            lableMeasVals = r"\textbf{Messwerte}"
+            labelInterpol = r"\textbf{interpoliert}"
+            lableMeasVals = r"\textbf{gemessen}"
             axisCapRelMag = r"$|S(\omega)|$"
             labelFreq = r"\textbf{Frequenz }$f$ \textbf{in Hz}"
             labelPhase = r"$\varphi(\omega)$ in °"
+        if showTitle:
             title=r"\textbf{"+str(Channel)+"Transferfunction DAU ID "+ hex(int(BoardID/65536))+'}'+ TitleExtension
-        Fig.suptitle(title)
+            Fig.suptitle(title)
         ax1.plot(XInterPol, interPolAmp,ls='dotted',label=labelInterpol + LabelExtension)
         lastcolor = ax1.get_lines()[-1].get_color()
         ax1.fill_between(
@@ -246,9 +250,9 @@ class Met4FOFADCCall:
             if LANG == 'DE':
                 locale.setlocale(locale.LC_NUMERIC, "de_DE.utf8")
                 locale.setlocale(locale.LC_ALL, "de_DE.utf8")
-            Fig.savefig(saveFigName+".svg",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.5)
-            Fig.savefig(saveFigName + ".png",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.5)
-            Fig.savefig(saveFigName + ".pdf",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.5)
+            Fig.savefig(saveFigName+".svg",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.0)
+            Fig.savefig(saveFigName + ".png",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.0)
+            Fig.savefig(saveFigName + ".pdf",dpi=Fig.dpi, bbox_inches='tight', pad_inches=0.0)
         Fig.show()
         return Fig, [ax1, ax2]
 
@@ -438,12 +442,12 @@ if __name__ == "__main__":
     ADCTF19V5 =  Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_19V5_1HZ_1MHZ.json'])
     ADCTF1V95 =  Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_1V95_1HZ_1MHZ.json'])
     ADCTF0V195 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_V195_1HZ_1MHZ.json'])
-    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0.195~V}',lang='DE')
-    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1.95~V}',lang='DE')
-    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19.5~V}', lang='DE', saveFigName='ADCTF1MHz')
-    Fig2, axs2=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0.195~V}',lang='DE',startStopFreq=[10,1000])
-    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1.95~V}',lang='DE',startStopFreq=[10,1000])
-    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig2, ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19.5~V}', lang='DE', saveFigName='ADCTF1KHz',startStopFreq=[10,1000])
+    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0,195~V$_{\mathrm{pp}}$}',lang='DE',showTitle=False)
+    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1,95~V$_{\mathrm{pp}}$}',lang='DE',showTitle=False)
+    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19,5~V$_{\mathrm{pp}}$}', lang='DE', saveFigName='ADCTF1MHz',showTitle=False)
+    Fig2, axs2=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0,195~V$_{\mathrm{pp}}$}',lang='DE',startStopFreq=[10,1000],showTitle=False)
+    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1,95~V$_{\mathrm{pp}}$}',lang='DE',startStopFreq=[10,1000],showTitle=False)
+    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig2, ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19,5~V$_{\mathrm{pp}}$}', lang='DE', saveFigName='ADCTF1KHz',startStopFreq=[10,1000],showTitle=False)
 
     #Fig2, axs2=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE',startStopFreq=[1,10000])
     #ADCTF.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=100, PlotType="log",LabelExtension=r'~19.5~V' ,lang='DE',saveFigName='ADCTFZoom',startStopFreq=[1,10000])
