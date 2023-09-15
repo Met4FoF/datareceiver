@@ -415,7 +415,7 @@ class realWordJitterGen:
         if plotSincSensForLength!=None:
             labelPrefixDict={'EN':'Sine approx. sensitivity ','DE':'Sinus Approximation Sensitivität '}
             if isinstance(plotSincSensForLength, list):
-                sincFreqs=np.linspace(0.0,signalFreq*0.5,num=100000,endpoint=False)
+                sincFreqs=np.linspace(-signalFreq*0.5,signalFreq*0.5,num=100001,endpoint=True)
                 for length in plotSincSensForLength:
                     WindowAmps = abs(np.sinc(sincFreqs * length))
                     if unit == 'dBc':
@@ -424,7 +424,7 @@ class realWordJitterGen:
                     line=ax.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}')
                     line[0].set_zorder(-1)
             if isinstance(plotSincSensForLength, dict):
-                sincFreqs=np.linspace(0.0,plotSincSensForLength['maxFreq'],num=100000,endpoint=False)
+                sincFreqs=np.linspace(-plotSincSensForLength['maxFreq'],plotSincSensForLength['maxFreq'],num=100001,endpoint=True)
                 for length in plotSincSensForLength['length']:
                     WindowAmps = abs(np.sinc(sincFreqs * length))
                     if unit == 'dBc':
@@ -629,7 +629,7 @@ if __name__ == "__main__":
     figDviationFull, axDeviationFull = jitterGensForSimulations[0].plotDeviation(unit='ms',lengthInS=deviationPlotlengthLong,plotInSamples=True)
     figDviationUnCorr, axDeviationUnCorr = jitterGensForSimulations[0].plotDeviation(lengthInS=deviationPlotlength,correctLinFreqDrift=False,unit='ms',plotInSamples=True)
     figPhaseNoise, axPhaseNoise = jitterGensForSimulations[0].plotPhaseNoise(signalFreq=500)
-    figPhaseNoiseZoom, axPhaseNoiseZoom = jitterGensForSimulations[0].plotPhaseNoise(signalFreq=500,xLims=[0,1.5])
+    figPhaseNoiseZoom, axPhaseNoiseZoom = jitterGensForSimulations[0].plotPhaseNoise(signalFreq=500,xLims=[-1.5,1.5])
     #figAllan, axAllan = jitterGensForSimulations[0].plotAllanDev()
     for i in range(len(jitterGensForSimulations)-1):
         if i==len(jitterGensForSimulations)-2:
@@ -640,10 +640,10 @@ if __name__ == "__main__":
         jitterGensForSimulations[i+1].plotDeviation(fig=figDviationUnCorr, axs=axDeviationUnCorr, lengthInS=deviationPlotlength,show=show,correctLinFreqDrift=False,save=show,unit='ms',plotInSamples=True)
         if show==False:
             jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise,signalFreq=500,show=show, save=show)
-            jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoiseZoom, ax=axPhaseNoiseZoom, signalFreq=500,show=show, save=show,xLims=[0,1.5])
+            jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoiseZoom, ax=axPhaseNoiseZoom, signalFreq=500,show=show, save=show,xLims=[-1.5,1.5])
         else:
             jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise,signalFreq=500,show=show, save=show,)
-            jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoiseZoom, ax=axPhaseNoiseZoom,signalFreq=500, show=show, save=show, plotSincSensForLength={'length': [1, 10, 100],'maxFreq': 1.5},xLims=[0,1.5])
+            jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoiseZoom, ax=axPhaseNoiseZoom,signalFreq=500, show=show, save=show, plotSincSensForLength={'length': [1, 10, 100],'maxFreq': 1.5},xLims=[-1.5,1.5])
     if askforFigPickelSave:
         saveImagePickle("Deviations with linear Correction",figDviation,axDeviation)
         saveImagePickle("Deviations with out linear Correction", axDeviationUnCorr, axDeviationUnCorr)
