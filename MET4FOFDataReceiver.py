@@ -31,7 +31,6 @@ import h5py
 # for live plotting
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas
 
 # proptobuff message encoding
 from google.protobuf.internal.encoder import _VarintBytes
@@ -337,7 +336,6 @@ class DataReceiver:
         None.
 
         """
-        self.stop()
         self.socket.close()
 
     def flsuhAllQueues(self):
@@ -571,7 +569,7 @@ class SensorDescription:
         return self.Channels[key]
 
     def __repr__(self):
-        return "Descripton of " + self.SensorName + hex(self.ID)
+        return "Descripton of" + self.SensorName + hex(self.ID)
 
     def asDict(self):
         """
@@ -590,15 +588,6 @@ class SensorDescription:
                 {self.Channels[key]["CHID"]: self.Channels[key].Description}
             )
         return ReturnDict
-
-    def asDataFrame(self):
-        pdSeries=[]
-        for key in self.Channels:
-                pdSeries.append(pd.Series(self.Channels[key].Description,name=self.Channels[key].Description["CHID"]))
-        df=pandas.DataFrame(pdSeries)
-        print(df)
-        return df
-
 
     def getUnits(self):
         units = {}
