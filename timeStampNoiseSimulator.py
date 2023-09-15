@@ -372,7 +372,7 @@ class realWordJitterGen:
         if plotTimeDevs:
             figTimeDev,axTimeDev=plt.subplots()
         #ax.set_yscale('log')
-        freqs = np.fft.rfftfreq(fftlength, d=1/sampleFreq)
+        freqs = np.fft.fftshift(np.fft.fftfreq(fftlength, d=1/sampleFreq))
         sliceFFTResultsAbs=np.zeros([nnumOFSlices,freqs.size])
         correctedFreqs=np.zeros(nnumOFSlices)
         for i in range(nnumOFSlices):
@@ -384,33 +384,33 @@ class realWordJitterGen:
                 DeltaFreq=slopeDeltaT/self.deltaT
                 correctedTimes=tmp-(np.arange(tmp.size)*(self.deltaT))*slopeDeltaT-offset
                 correcedFreq=sampleFreq + DeltaFreq
-                simuSin=np.cos(correctedTimes*(correcedFreq)*2*np.pi)
-                fftresult = np.fft.rfft(simuSin)
+                simuSin=np.cos(correctedTimes*(correcedFreq)*2*np.pi)+1j*np.sin(correctedTimes*(correcedFreq)*2*np.pi)
+                fftresult = np.fft.fftshift(np.fft.fft(simuSin))
                 sliceFFTResultsAbs[i]=abs(fftresult)
                 if plotTimeDevs:
                     axTimeDev.plot(correctedTimes,label=r'\textbf{'+self.title+' Slice'+str(i)+'}',lw=lw)
                 correctedFreqs[i]=correcedFreq
             else:
-                simuSin=np.cos(tmp*sampleFreq*2*np.pi)
-                fftresult = np.fft.rfft(simuSin)
+                simuSin=np.cos(tmp*sampleFreq*2*np.pi)+1j*np.sin(tmp*sampleFreq*2*np.pi)
+                fftresult = np.fft.fftshift(np.fft.fft(simuSin))
                 sliceFFTResultsAbs[i]=abs(fftresult)
                 if plotTimeDevs:
                     axTimeDev.plot(tmp,lw=lw)
-            print('SUM:' + str(np.sum(sliceFFTResultsAbs[i])))
+            print('SUM:' + str(np.sum(sliceFFTResultsAbs[i])/fftlength))
         if samplefreqCorr=='local':
             self.fs=np.mean(correctedFreqs)
             self.fs_std=np.std(correctedFreqs)
         sampleFrequFloat=uncertainties.ufloat(self.fs,self.fs_std*2)
         if unit=='dBc':
             psdMean=np.mean((sliceFFTResultsAbs ** 2) * (1 / (sampleFreq * fftlength)),axis=0)
-            psdMean[1:-1]=psdMean[1:-1]*2
+            psdMean=psdMean*2
             p=ax.plot((freqs/(sampleFreq))*signalFreq, 10*np.log10(gaussian_filter(psdMean,filterWidth)),
-                    label=r'\textbf{'+self.title+' $f_\mathrm{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }',lw=lw)
+                    label=r'\textbf{'+self.title,lw=lw)#+ $f_\mathrm{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }'
         else:
             psdMean=np.mean((sliceFFTResultsAbs ** 2) * (1 / (sampleFreq * fftlength)),axis=0)
-            psdMean[1:-1]=psdMean[1:-1]*2
+            psdMean=psdMean*2
             p=ax.plot((freqs/(sampleFreq))*signalFreq, gaussian_filter(np.mean((sliceFFTResultsAbs)/fftlength,axis=0),filterWidth),
-                    label=r'\textbf{'+self.title+' $f_\mathrm{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }',lw=lw)
+                    label=r'\textbf{'+self.title,lw=lw)#+' $f_\mathrm{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }'
 
         if plotSincSensForLength!=None:
             labelPrefixDict={'EN':'Sine approx. sensitivity ','DE':'Sinus Approximation Sensitivität '}
@@ -420,7 +420,6 @@ class realWordJitterGen:
                     WindowAmps = abs(np.sinc(sincFreqs * length))
                     if unit == 'dBc':
                         WindowAmps=10 * np.log10(WindowAmps)
-
                     line=ax.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}')
                     line[0].set_zorder(-1)
             if isinstance(plotSincSensForLength, dict):
@@ -482,7 +481,7 @@ class realWordJitterGen:
             globals()['figSaveCounter']+=1
         return fig,ax
 
-
+    """
     def plotAllanDev(self,fig=None,ax=None,show=False):
         if fig==None and ax==None:
             fig, ax = plt.subplots()
@@ -498,6 +497,7 @@ class realWordJitterGen:
             ax.set_ylabel(r'\textbf{Relative Allan deviation $\sigma(\tau)$ in cycles}')
             fig.show()
         return fig,ax
+    """
 
 def generateFitWithPhaseNoise(freq,fs=1000,t_jitter=100e-9,lengthInS=jitterSimuLengthInS,A0=1,phi0=0,linearFreqCorrection=localFreqqCorr):
     #TODO change interface
@@ -630,6 +630,7 @@ if __name__ == "__main__":
     figDviationUnCorr, axDeviationUnCorr = jitterGensForSimulations[0].plotDeviation(lengthInS=deviationPlotlength,correctLinFreqDrift=False,unit='ms',plotInSamples=True)
     figPhaseNoise, axPhaseNoise = jitterGensForSimulations[0].plotPhaseNoise(signalFreq=500)
     figPhaseNoiseZoom, axPhaseNoiseZoom = jitterGensForSimulations[0].plotPhaseNoise(signalFreq=500,xLims=[-1.5,1.5])
+    figPhaseNoiseZoomZoom, axPhaseNoiseZoomZoom = jitterGensForSimulations[0].plotPhaseNoise(signalFreq=500, xLims=[-0.2, 0.2])
     #figAllan, axAllan = jitterGensForSimulations[0].plotAllanDev()
     for i in range(len(jitterGensForSimulations)-1):
         if i==len(jitterGensForSimulations)-2:
@@ -641,9 +642,15 @@ if __name__ == "__main__":
         if show==False:
             jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise,signalFreq=500,show=show, save=show)
             jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoiseZoom, ax=axPhaseNoiseZoom, signalFreq=500,show=show, save=show,xLims=[-1.5,1.5])
+            jitterGensForSimulations[i + 1].plotPhaseNoise(fig=figPhaseNoiseZoomZoom, ax=axPhaseNoiseZoomZoom, signalFreq=500,
+                                                           show=show, save=show, xLims=[-0.2, 0.2])
         else:
             jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise,signalFreq=500,show=show, save=show,)
             jitterGensForSimulations[i+1].plotPhaseNoise(fig=figPhaseNoiseZoom, ax=axPhaseNoiseZoom,signalFreq=500, show=show, save=show, plotSincSensForLength={'length': [1, 10, 100],'maxFreq': 1.5},xLims=[-1.5,1.5])
+            jitterGensForSimulations[i + 1].plotPhaseNoise(fig=figPhaseNoiseZoomZoom, ax=axPhaseNoiseZoomZoom, signalFreq=500,
+                                                           show=show, save=show,
+                                                           plotSincSensForLength={'length': [1, 10, 100],
+                                                                                  'maxFreq': 1.5}, xLims=[-0.2, 0.2])
     if askforFigPickelSave:
         saveImagePickle("Deviations with linear Correction",figDviation,axDeviation)
         saveImagePickle("Deviations with out linear Correction", axDeviationUnCorr, axDeviationUnCorr)
