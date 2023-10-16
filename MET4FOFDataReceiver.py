@@ -81,6 +81,25 @@ bufferDtype=np.dtype([('absTime','u8'),
                       ('Data_14','f4'),
                       ('Data_15','f4'),
                       ('Data_16','f4')])
+
+
+def get_id_from_protobuf_msg(data):
+    # The first byte in the message contains the field number and wire type.
+    # For field number 1 and wire type 0 (varint), this byte should be 0x08.
+    if data[0] != 0x08:
+        raise ValueError("Unexpected field number or wire type")
+
+    # The ID field is a varint, so we need to decode it.
+    id_value = 0
+    shift = 0
+    for byte in data[1:]:
+        id_value |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            # This was the last byte of the varint.
+            break
+        shift += 7
+
+    return id_value
 class DataReceiver:
     """Class for handlig the incomming UDP Packets and spwaning sensor Tasks and sending the Protobuff Messages over an queue to the Sensor Task
 
@@ -208,8 +227,6 @@ class DataReceiver:
             data, addr = self.socket.recvfrom(1500)  # buffer size is 1024 bytes
             wasValidData = False
             wasValidDescription = False
-            ProtoData = messages_pb2.DataMessage()
-            ProtoDescription = messages_pb2.DescriptionMessage()
             SensorID = 0
             BytesProcessed = 4  # we need an offset of 4 sice
             if data[:4] == b"DATA":
@@ -218,11 +235,9 @@ class DataReceiver:
                     BytesProcessed = new_pos
                     try:
                         msg_buf = data[new_pos : new_pos + msg_len]
-                        #TODO performace improvement don't clall  ProtoData.ParseFromString(msg_buf) just get the id out of the str since its fixed position and length
-                        ProtoData.ParseFromString(msg_buf)
                         wasValidData = True
-                        SensorID = ProtoData.id
-                        message = {"ProtMsg": copy.deepcopy(ProtoData), "Type": "Data"}
+                        SensorID = get_id_from_protobuf_msg(msg_buf)
+                        message = {"ProtMsg": copy.deepcopy(msg_buf), "Type": "Data"}
                         BytesProcessed += msg_len
                     except:
                         pass  # ? no exception for wrong data type !!
@@ -282,11 +297,9 @@ class DataReceiver:
                     BytesProcessed = new_pos
                     try:
                         msg_buf = data[new_pos : new_pos + msg_len]
-                        ProtoDescription.ParseFromString(msg_buf)
-                        # print(msg_buf)
                         wasValidData = True
-                        SensorID = ProtoDescription.id
-                        message = {"ProtMsg": ProtoDescription, "Type": "Description"}
+                        SensorID = get_id_from_protobuf_msg(msg_buf)
+                        message = {"ProtMsg": copy.deepcopy(msg_buf), "Type": "Data"}
                         BytesProcessed += msg_len
                     except:
                         pass  # ? no exception for wrong data type !!
@@ -822,7 +835,8 @@ class Sensor:
                     message = self.msgQueue.get(timeout=0.1)
                     self.timeoutOccured = False
                     if message["Type"] == "Description":
-                        Description = message["ProtMsg"]
+                        ProtoDescription = messages_pb2.DescriptionMessage()
+                        Description = ProtoDescription.ParseFromString(message["ProtMsg"])
                         try:
                             if (
                                 not any(self.DescriptionsProcessed.values())
@@ -911,7 +925,8 @@ class Sensor:
                             traceback.print_exc(file=sys.stdout)
                             print("-" * 60)
                     if message["Type"] == "Data":
-                        msg=message['ProtMsg']
+                        ProtoData = messages_pb2.DataMessage()
+                        msg = ProtoData.ParseFromString(message["ProtMsg"])
                         with self.mpDataLock:
                             self.sMabsTimeUncerSampleNumberArray[-1,-1]=self.ProcessedPacekts
                             self.sMabsTimeArray[self.ProcessedPacekts%self.bufferSize]=np.uint64(np.uint64(msg.unix_time) * np.uint64(1000000000)) + np.uint64(msg.unix_time_nsecs)
