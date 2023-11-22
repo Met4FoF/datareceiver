@@ -2,6 +2,8 @@ import os
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from brokenaxes import brokenaxes
 import sinetools.SineTools as st
 from multiprocessing import Pool
 from contextlib import closing
@@ -20,7 +22,7 @@ import h5py as h5py
 #import h5pickle as h5py
 import functools
 #import allantools
-
+import sineTools2 as st2
 #____________________ GLobal config begin_____________
 # jitterGensForSimulations=manager.list()
 jitterGensForSimulations = []
@@ -84,7 +86,7 @@ plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
 plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
-PLTSCALFACTOR = 2
+PLTSCALFACTOR = 1
 SMALL_SIZE = 9 * PLTSCALFACTOR
 MEDIUM_SIZE = 12 * PLTSCALFACTOR
 BIGGER_SIZE = 15 * PLTSCALFACTOR
@@ -544,11 +546,101 @@ def getmuAndSTdForFreq(testparams,numOfruns=200):
            phasePercentiles[3],\
            phasePercentiles[4]
 
+class SineExcitationExperemeint:
+    def __init__(self,dataFile,idx,sensor='0xbccb0000_MPU_9250',qunatity='Acceleration',mainAxis=2):
+        self.experimentIDX=idx
+        self.dataFile=dataFile
+        self.sensorStartIDX=self.dataFile['EXPERIMENTS/Sine excitation']["{:05d}".format(idx)+'Sine_Excitation'][sensor].attrs['Start_index']
+        self.sensorStopIDX=self.dataFile['EXPERIMENTS/Sine excitation']["{:05d}".format(idx)+'Sine_Excitation'][sensor].attrs['Stop_index']
+        self.data=self.dataFile['RAWDATA'][sensor][qunatity][:,self.sensorStartIDX:self.sensorStopIDX]
+        self.reltime=self.dataFile['RAWDATA'][sensor]['Absolutetime'][0,self.sensorStartIDX:self.sensorStopIDX]
+        self.reltime=self.reltime-self.reltime[0]
+        self.reltime=self.reltime.astype(float)/1e9
+        self.fs=self.reltime.size/self.reltime[-1]
+        self.deltaT=1/self.fs
+        self.freq=self.dataFile['EXPERIMENTS/Sine excitation']["{:05d}".format(idx)+'Sine_Excitation'][sensor][qunatity]['Sin_Fit_freq'][:,0][2]
+        abcw=st2.fourparsinefit(self.data[mainAxis,:],self.reltime,self.freq)
+        self.actualFreq=abcw[3]
+        self.gernerateFFT()
+        self.generateMultiSineFit()
+        print("INIT DONE")
+
+    def gernerateFFT(self):
+        self.fft=2*np.fft.rfft(self.data[:,:],axis=1)/self.data.shape[1]
+        self.fftFreqs=np.fft.rfftfreq(self.data.shape[1],d=self.deltaT)
+
+    def generateMultiSineFit(self,numeLinesAround=10,numOverTones=10):
+        self.numeLinesAround=numeLinesAround
+        self.numOverTones=numOverTones
+        self.binwidth=self.fftFreqs[1]-self.fftFreqs[0]
+        freqs = []
+        for k in range(numOverTones):
+            freqs.append((np.arange(numeLinesAround * 2 + 1) - numeLinesAround) * self.binwidth + self.actualFreq * (k + 1))
+        self.multisineFitFreqs = np.array(freqs).flatten()
+        multiSineParams = []
+        multiSineParamsABC = []
+        for i in range(self.data.shape[0]):
+            abc=st2.multi_threeparsinefit(self.data[i,:],self.reltime,self.multisineFitFreqs)
+            multiSineParamsABC.append(abc)
+            fitResult = st2.multi_complex(abc)
+            multiSineParams.append(fitResult)
+        self.multiSineFitresults=np.array(multiSineParams)
+
+    def plotFFTandSineFit(self,axisToPlot=[2]):
+        fig=plt.figure()
+        gs = gridspec.GridSpec(len(axisToPlot)*2,1)
+        #fig,ax=plt.subplots(len(axisToPlot)*2)
+        ax=[]
+        bax=[]
+        baxXlims=[]
+        for i in range(self.numOverTones):
+            start = i * (2 * self.numeLinesAround + 1)
+            stop = (i + 1) * (2 * self.numeLinesAround + 1)
+            baxXlims.append([self.multisineFitFreqs[start],self.multisineFitFreqs[stop-1]])
+        for i in range(len(axisToPlot)):
+            ax.append(plt.subplot(gs[i*2,0]))
+            bax.append(brokenaxes(xlims=baxXlims,subplot_spec=gs[i*2+1,0],fig=fig))
+        for i,idx in enumerate(axisToPlot):
+            ax[i].semilogy(self.fftFreqs[1:],np.abs(self.fft[idx,1:]))
+            bax[i].plot(self.fftFreqs[1:],np.abs(self.fft[idx,1:]))
+        minFFT=np.power(10,np.floor(np.log10(np.min(np.abs(self.fft[axisToPlot,1:])))))
+        maxFFT=np.power(10,np.ceil(np.log10(np.max(np.abs(self.fft[axisToPlot,1:])))))
+        minSine=np.power(10,np.floor(np.log10(np.min(np.abs(self.multiSineFitresults[axisToPlot,:])))))
+        maxSine=np.power(10,np.ceil(np.log10(np.max(np.abs(self.multiSineFitresults[axisToPlot,:])))))
+        min=np.min([minFFT,minSine])
+        max=np.max([maxFFT,maxSine])
+        for i,idx in enumerate(axisToPlot):
+            ax[i].grid()
+            ax[i].set_ylim([min,max])
+            bax[i].set_ylim([min,max])
+        for j,jdx in enumerate(axisToPlot):
+            for i in range(self.numOverTones):
+                start = i * (2 * self.numeLinesAround + 1)
+                stop = (i + 1) * (2 * self.numeLinesAround + 1)
+                ax[j].semilogy(self.multisineFitFreqs[start:stop],
+                               abs(self.multiSineFitresults[jdx][start:stop]), lw=1)
+                bax[j].plot(self.multisineFitFreqs,
+                               abs(self.multiSineFitresults[jdx]), lw=1)
+        for i, idx in enumerate(axisToPlot):
+            for axis in bax[i].axs:
+                axis.set_yscale('log')
+                axis.grid(True)
+                labels = [label.get_text() for label in axis.get_xticklabels()]
+                axis.set_xticklabels(labels, rotation=90)
+        fig.show()
+
+
 
 if __name__ == "__main__":
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL, "de_DE.utf8")
     manager = mp.Manager()
+    measurmentFIle=h5py.File(r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250PTB_v5(2).hdf5",'r')
+    #hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
+    leadSensorname = '0x1fe40000_MPU_9250'
+    #measurmentFIle = h5py.File('/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250CEM(2)(copy).hdf5','r')
+    sineES=SineExcitationExperemeint(measurmentFIle,14,sensor='0x1fe40000_MPU_9250')
+    sineES.plotFFTandSineFit()
     WORKER_NUMBER = 12
     # dataFile = h5py.File('/home/benedikt/Downloads/jitter_recording.hfd5', 'r')
     # sensorName = '0x39f50100_STM32_GPIO_Input'
