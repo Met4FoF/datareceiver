@@ -15,6 +15,7 @@ from scipy.optimize import curve_fit
 from scipy.signal import correlate
 from scipy.signal import correlation_lags
 from scipy.ndimage import gaussian_filter
+import scipy as sp
 import uncertainties
 from tools.figPickel import saveImagePickle
 #from mpi4py import MPI #multiprocessing read
@@ -562,14 +563,36 @@ class SineExcitationExperemeint:
         abcw=st2.fourparsinefit(self.data[mainAxis,:],self.reltime,self.freq)
         self.actualFreq=abcw[3]
         self.gernerateFFT()
+        self.generateInterpolatedFFT()
         self.generateMultiSineFit()
         print("INIT DONE")
 
-    def gernerateFFT(self):
-        self.fft=2*np.fft.rfft(self.data[:,:],axis=1)/self.data.shape[1]
-        self.fftFreqs=np.fft.rfftfreq(self.data.shape[1],d=self.deltaT)
+    def gernerateFFT(self,disableLowLeakageCutting=False):
+        lengthmax=self.data.shape[1]
+        lengthToTest=int(lengthmax/2)+np.arange(int(lengthmax/2))
+        fftbinwidth=self.fs/lengthToTest
+        nonIntPeriodFraction=self.actualFreq % fftbinwidth
+        self.numPointsToUse=lengthToTest[np.argmin(nonIntPeriodFraction)]
+        if disableLowLeakageCutting:
+            self.numPointsToUse=lengthmax
+        self.fft=2*np.fft.rfft(self.data[:,:self.numPointsToUse],axis=1)/self.numPointsToUse
+        self.fftFreqs=np.fft.rfftfreq(self.numPointsToUse,d=self.deltaT)
 
-    def generateMultiSineFit(self,numeLinesAround=10,numOverTones=10):
+    def generateInterpolatedFFT(self,interpolationFactor=10,interpolations=[]):#interpolations=[ "linear", "nearest", "slinear", "quadratic", "cubic", "previous", "next"]
+        numAxis=self.data.shape[0]
+        aqTimes=np.linspace(self.reltime[0],self.reltime[self.numPointsToUse-1],num=self.numPointsToUse*interpolationFactor)
+        self.interpolatedFFTresults={}
+        for interpolatorKind in interpolations:
+            print("Interpolating with "+interpolatorKind)
+            result=[]
+            for i in range(numAxis):
+                interpolator=sp.interpolate.interp1d(self.reltime,self.data[i,:],kind=interpolatorKind)
+                interpolatedData=interpolator(aqTimes)
+                result.append(2*np.fft.rfft(interpolatedData)/interpolatedData.size)
+            self.interpolatedFFTresults[interpolatorKind]=np.array(result)
+        self.interpolatedFFTFreqs=np.fft.rfftfreq(aqTimes.size,d=self.deltaT/interpolationFactor)
+
+    def generateMultiSineFit(self,numeLinesAround=20,numOverTones=6):
         self.numeLinesAround=numeLinesAround
         self.numOverTones=numOverTones
         self.binwidth=self.fftFreqs[1]-self.fftFreqs[0]
@@ -586,23 +609,51 @@ class SineExcitationExperemeint:
             multiSineParams.append(fitResult)
         self.multiSineFitresults=np.array(multiSineParams)
 
-    def plotFFTandSineFit(self,axisToPlot=[2]):
+    def plotFFTandSineFit(self,axisToPlot=[2],plotQoutient=False,markerSize=1):
+        def find_nearest_indices(long_vector, short_vector):
+            # Compute the absolute differences using broadcasting
+            diffs = np.abs(long_vector[:, np.newaxis] - short_vector)
+
+            # Find the indices of the minimum differences
+            nearest_indices = np.argmin(diffs, axis=0)
+
+            return nearest_indices
+
         fig=plt.figure()
-        gs = gridspec.GridSpec(len(axisToPlot)*2,1)
-        #fig,ax=plt.subplots(len(axisToPlot)*2)
-        ax=[]
-        bax=[]
+        if plotQoutient:
+            gs = gridspec.GridSpec(len(axisToPlot)*3,1)
+            ax=[]
+            bax=[]
+            baxQuatient=[]
+            idxOffset=1
+        else:
+            gs = gridspec.GridSpec(len(axisToPlot)*2,1)
+            ax=[]
+            bax=[]
+            idxOffset=0
+        numPlotsPerQuant=2+idxOffset
         baxXlims=[]
         for i in range(self.numOverTones):
             start = i * (2 * self.numeLinesAround + 1)
             stop = (i + 1) * (2 * self.numeLinesAround + 1)
             baxXlims.append([self.multisineFitFreqs[start],self.multisineFitFreqs[stop-1]])
         for i in range(len(axisToPlot)):
-            ax.append(plt.subplot(gs[i*2,0]))
-            bax.append(brokenaxes(xlims=baxXlims,subplot_spec=gs[i*2+1,0],fig=fig))
+            ax.append(plt.subplot(gs[i*numPlotsPerQuant,0]))
+            bax.append(brokenaxes(xlims=baxXlims,subplot_spec=gs[i*numPlotsPerQuant+1,0],fig=fig))
+            if plotQoutient:
+                baxQuatient.append(brokenaxes(xlims=baxXlims, subplot_spec=gs[i * numPlotsPerQuant + 2, 0], fig=fig))
+        for interpolMethod in self.interpolatedFFTresults.keys():
+            for i, idx in enumerate(axisToPlot):
+                ax[i].semilogy(self.interpolatedFFTFreqs[1:], np.abs(self.interpolatedFFTresults[interpolMethod][idx, 1:]),label=r'\textbf{FFT '+interpolMethod+'zeitbereichs Interpolation}',alpha=0.5,lw=1)
+                lastplot=bax[i].semilogy(self.interpolatedFFTFreqs[1:], np.abs(self.interpolatedFFTresults[interpolMethod][idx, 1:]),label=r'\textbf{FFT '+interpolMethod+'zeitbereichs Interpolation}',alpha=0.5,lw=1)
+                #bax[i].scatter(self.interpolatedFFTFreqs[1:],
+                #                np.abs(self.interpolatedFFTresults[interpolMethod][idx, 1:]), label=interpolMethod,
+                #                alpha=0.5, lw=1,color=lastplot[0][0].get_color(),markersize=markerSize)
         for i,idx in enumerate(axisToPlot):
-            ax[i].semilogy(self.fftFreqs[1:],np.abs(self.fft[idx,1:]))
-            bax[i].plot(self.fftFreqs[1:],np.abs(self.fft[idx,1:]))
+            ax[i].semilogy(self.fftFreqs[1:],np.abs(self.fft[idx,1:]),label=r'\textbf{FFT keine zeitbereichs Interpolation}',lw=1)
+            bax[i].plot(self.fftFreqs[1:],np.abs(self.fft[idx,1:]),label=r'\textbf{FFT keine zeitbereichs Interpolation}',lw=1, marker='o',markersize=markerSize)
+            #bax[i].scatter(self.fftFreqs[1:], np.abs(self.fft[idx, 1:]), label='FFT keine zeitbereichs Interpolation',
+            #            lw=1,color=lastplot[0][0].get_color(),markersize=markerSize)
         minFFT=np.power(10,np.floor(np.log10(np.min(np.abs(self.fft[axisToPlot,1:])))))
         maxFFT=np.power(10,np.ceil(np.log10(np.max(np.abs(self.fft[axisToPlot,1:])))))
         minSine=np.power(10,np.floor(np.log10(np.min(np.abs(self.multiSineFitresults[axisToPlot,:])))))
@@ -610,6 +661,7 @@ class SineExcitationExperemeint:
         min=np.min([minFFT,minSine])
         max=np.max([maxFFT,maxSine])
         for i,idx in enumerate(axisToPlot):
+            ax[i].set_xlim([self.fftFreqs[1],self.fftFreqs[-1]])
             ax[i].grid()
             ax[i].set_ylim([min,max])
             bax[i].set_ylim([min,max])
@@ -617,16 +669,39 @@ class SineExcitationExperemeint:
             for i in range(self.numOverTones):
                 start = i * (2 * self.numeLinesAround + 1)
                 stop = (i + 1) * (2 * self.numeLinesAround + 1)
-                ax[j].semilogy(self.multisineFitFreqs[start:stop],
-                               abs(self.multiSineFitresults[jdx][start:stop]), lw=1)
-                bax[j].plot(self.multisineFitFreqs,
-                               abs(self.multiSineFitresults[jdx]), lw=1)
+                if i==0:
+                    firstPlot=ax[j].semilogy(self.multisineFitFreqs[start:stop],
+                                abs(self.multiSineFitresults[jdx][start:stop]), lw=1, marker='o',label=r'\textbf{Multisinus Approximation}',markersize=markerSize)
+                else:
+                    ax[j].semilogy(self.multisineFitFreqs[start:stop],
+                                abs(self.multiSineFitresults[jdx][start:stop]), lw=1, marker='o',markersize=markerSize,color=firstPlot[0].get_color())
+            bax[j].plot(self.multisineFitFreqs,abs(self.multiSineFitresults[jdx]), lw=1, marker='o',markersize=markerSize)
+            #bax[j].scatter(self.multisineFitFreqs,abs(self.multiSineFitresults[jdx]), lw=1)
+            if plotQoutient:
+                nearestIDX=find_nearest_indices(self.fftFreqs,self.multisineFitFreqs)
+                quotients=self.fft[jdx,nearestIDX]/self.multiSineFitresults[jdx,:]
+                baxQuatient[j].plot(self.multisineFitFreqs,abs(quotients),lw=1, marker='o',markersize=markerSize)
+
         for i, idx in enumerate(axisToPlot):
             for axis in bax[i].axs:
                 axis.set_yscale('log')
                 axis.grid(True)
-                labels = [label.get_text() for label in axis.get_xticklabels()]
-                axis.set_xticklabels(labels, rotation=90)
+                #labels = [label.get_text() for label in axis.get_xticklabels()]
+                #axis.set_xticklabels(labels, rotation=90)
+        for axis in ax:
+            axis.legend()
+            axis.set_ylabel(r"\textbf{Amplitude}")
+        for axis in bax:
+            axis.set_ylabel(r"\textbf{Amplitude}")
+        if plotQoutient:
+            for axis in baxQuatient:
+                #axis.set_yscale('log')
+                axis.grid()
+                axis.set_ylabel(r"\textbf{Amplitude FFT/Fit}")
+            baxQuatient[-1].set_xlabel(r"\textbf{Frequenz in Hz }")
+        else:
+            bax[-1].set_xlabel(r"\textbf{Frequenz in Hz}")
+        #fig.tight_layout()
         fig.show()
 
 
@@ -635,11 +710,13 @@ if __name__ == "__main__":
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL, "de_DE.utf8")
     manager = mp.Manager()
-    measurmentFIle=h5py.File(r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250PTB_v5(2).hdf5",'r')
+    measurmentFIle=h5py.File(r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250PTB_v5(2)(copy).hdf5",'r')
+    leadSensorname='0x1fe40000_MPU_9250'
+    #measurmentFIle=h5py.File(r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/BMA280PTB.hdf5",'r')
     #hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
-    leadSensorname = '0x1fe40000_MPU_9250'
+    #leadSensorname = '0x1fe40000_BMA_280'
     #measurmentFIle = h5py.File('/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250CEM(2)(copy).hdf5','r')
-    sineES=SineExcitationExperemeint(measurmentFIle,14,sensor='0x1fe40000_MPU_9250')
+    sineES=SineExcitationExperemeint(measurmentFIle,11,sensor=leadSensorname)
     sineES.plotFFTandSineFit()
     WORKER_NUMBER = 12
     # dataFile = h5py.File('/home/benedikt/Downloads/jitter_recording.hfd5', 'r')

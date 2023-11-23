@@ -39,6 +39,7 @@ from met4fofhdftools import (
 import scipy
 from scipy.spatial.transform import Rotation as R
 import figPickel as fp
+import matplotlib.ticker as ticker
 
 askForFigSave=False
 #defaultPlotSelection={'numRows':2,'qunatiesToPlot':['Voltage','Acceleration','Temperature']}
@@ -577,6 +578,8 @@ class sineexcitation(experiment):
                 # print(self.Data[sensor][dataset]['FFT_max_freq'])
         self.flags["FFT Calculated"] = True
 
+
+
     def do3paramsinefits(self, freqs, periods=10,sensorsToFit=None,datasetsToFit=None):
         if not self.flags["FFT Calculated"]:
             self.dofft()
@@ -668,6 +671,81 @@ class sineexcitation(experiment):
                     )  # bias=True Nomation With N like np.std
         self.flags["Sine fit calculated"] = True
         return
+
+    def doMultiSineFit(self,numeLinesAround=10,numOverTones=10):
+        for sensor in self.met4fofdatafile.sensordatasets:
+            idxs = self.idxs[sensor]
+            points = idxs[1] - idxs[0]
+            time = self.datafile[self.dataGroupName + sensor + "/" + "Absolutetime"][
+                0, idxs[0] : idxs[1]
+            ]
+            reltime = time.astype("int64") - self.timepoints[0].astype("int64")
+            reltime=reltime.astype(float)/1e9
+            binwidth= 2*np.mean(np.diff(self.runtimeData[sensor]['RFFT Frequencys']))
+
+            for dataset in self.met4fofdatafile.sensordatasets[sensor]:
+
+                data = self.datafile[self.dataGroupName + sensor + "/" + dataset][
+                    :, idxs[0] : idxs[1]
+                ]
+                multiSineParams = []
+                multiSineParamsABC = []
+                for i in range(data.shape[0]):
+                    centerFreq=self.data[sensor][dataset]["Sin_Fit_freq"][i]
+                    freqs = []
+                    for k in range(numOverTones):
+                        freqs.append((np.arange(numeLinesAround * 2 + 1) - numeLinesAround) * binwidth + centerFreq * (k+1))
+                    freqs=np.array(freqs).flatten()
+                    self.runtimeData[sensor][dataset]["multi Sine Fit Freqs"]=freqs
+                    abc=st.multi_threeparsinefit(data[i,:],reltime,np.array(freqs))
+                    multiSineParamsABC.append(abc)
+                    fitResult=st.multi_complex(abc)
+                    multiSineParams.append(fitResult)
+                self.runtimeData[sensor][dataset]["MultiSine"]=np.array(multiSineParams)
+                print("DEBUG")
+                # print(self.Data[sensor][dataset]['FFT_max_freq'])
+        self.flags["FFT Calculated"] = True
+
+    def plotFFTMultsineComparison(self,sensor='0x1fe40000_MPU_9250',dataset='Acceleration',numOverTones=10,numeLinesAround=10,interpolations=[ "linear", "nearest", "slinear", "quadratic", "cubic", "previous", "next"]):
+        numAxis=self.runtimeData[sensor][dataset]['RFFT'].shape[0]
+        idxs = self.idxs[sensor]
+        data = self.datafile[self.dataGroupName + sensor + "/" + dataset][
+               :, idxs[0]: idxs[1]
+               ]
+        time = self.datafile[self.dataGroupName + sensor + "/" + "Absolutetime"][
+               0, idxs[0]: idxs[1]
+               ]
+        reltime = time.astype("int64") - self.timepoints[0].astype("int64")
+        reltime = reltime / 1e9
+        interpolatedFFTresults={}
+        aqTimes=np.linspace(reltime[0],reltime[-1],num=data.shape[1])
+        for interpolatorKind in interpolations:
+            print("Interpolating with "+interpolatorKind)
+            result=[]
+            for i in range(numAxis):
+                interpolator=scipy.interpolate.interp1d(reltime,data[i,:],kind=interpolatorKind)
+                interpolatedData=interpolator(aqTimes)
+                result.append(np.fft.rfft(interpolatedData))
+            interpolatedFFTresults[interpolatorKind]=np.array(result)
+        fig,ax=plt.subplots(numAxis,sharex=True)
+        for j in range(numAxis):
+            ax[j].semilogy(self.runtimeData[sensor]['RFFT Frequencys'][1:],abs(self.runtimeData[sensor][dataset]['RFFT'][j][1:])/self.runtimeData[sensor][dataset]['RFFT'][j].size,lw=1)
+            for i in range(numOverTones):
+                start=i*(2*numeLinesAround+1)
+                stop=(i+1)*(2*numeLinesAround+1)
+                ax[j].semilogy(self.runtimeData[sensor][dataset]['multi Sine Fit Freqs'][start:stop],abs(self.runtimeData[sensor][dataset]['MultiSine'][j][start:stop]),lw=1)
+                for interpolatorKind in interpolations:
+                    ax[j].semilogy(self.runtimeData[sensor]['RFFT Frequencys'][1:],abs(interpolatedFFTresults[interpolatorKind][j][1:])/interpolatedFFTresults[interpolatorKind][j].size,lw=1,label=interpolatorKind,ls='--')
+            ax[j].grid(True, which="both", ls="-")
+            # Set minor ticks on y-axis
+            #ax[j].yaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs='auto'))
+
+            # Optional: Customize the appearance of ticks
+            #ax[j].tick_params(axis='y', which='minor', length=4)
+        fig.show()
+        print("DEBUG")
+        print("DEBUG")
+
 
     def getFreqOffSetFromSineFitPhaseSlope(self,sensor,dataset,axis):
         sineparams = self.data[sensor][dataset]["SinParams"][axis]
@@ -1644,7 +1722,7 @@ def processdata(i):
     sys.stdout.flush()
     times = mpdata["movementtimes"][i]
     refidx = int(mpdata["refidx"][i])
-    #print("DONE i=" + str(i) + "refidx=" + str(refidx))
+    print("DONE i=" + str(i) + "refidx=" + str(refidx))
     times[0] += mpdata['startCutOutns']
     times[1] -= mpdata['endCutOutns']
     experiment = sineexcitation(
@@ -1656,18 +1734,18 @@ def processdata(i):
     sys.stdout.flush()
     # print(experiment)
     sys.stdout.flush()
-
     start = time.time()
-
     experiment.dofft()
     #axisfreqs=mpdata['hdfinstance'].hdffile['REFERENCEDATA/Acceleration_refference']['Frequency']['value'][:, refidx]
     #axisfreqs=axisfreqs[axisfreqs != 0]#remove zero elements
     axisfreqs = mpdata["uniquexfreqs"]
-    experiment.do3paramsinefits(axisfreqs, periods=10)
+    #experiment.do3paramsinefits(axisfreqs, periods=10)
     experiment.do3paramsinefits(axisfreqs, periods=10, sensorsToFit=[mpdata['ADCName']], datasetsToFit=['Voltage'])
     #experiment.plotsinefitParams()
     deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope(mpdata['ADCName'],'Voltage',mpdata['AnalogrefChannel'])
     experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
+    experiment.doMultiSineFit()
+    #experiment.plotFFTMultsineComparison()
     #experiment.plotsinefitParams(meanPhase=True)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
@@ -1682,19 +1760,17 @@ def processdata(i):
         )
     except ValueError:
         print("Calculation at experminet index i "+str(i)+" invalide")
-    #print("DONE i=" + str(i) + "refidx=" + str(refidx))
+    print("DONE i=" + str(i) + "refidx=" + str(refidx))
     return experiment
 
 
 
 if __name__ == "__main__":
+    """
     hdffilename = r"/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
     datafile = h5py.File(hdffilename, "r+")
     plotRAWTFUncerComps(datafile, type='Phase', sensorName='0x1fe40000_MPU_9250', startIDX=0, stopIDX=17, title='Uncertainty of the phases components PTB measurments', zoom=2, lang='EN', zoomPlotPos=[0.2, 0.6, 0.2, 0.2])
-
-
-
-
+    
     datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Sample_number'].shape
     board1SN = datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Sample_number'][0, :]
     board1SNDelta=board1SN-board1SN[0]
@@ -1708,6 +1784,7 @@ if __name__ == "__main__":
     b2DifFromCount=board2TimesDelta -1e6*board2SNDelta
     plt.plot(b1DifFromCount[:-10000])
     plt.plot(b2DifFromCount[:-10000])
+    """
     plt.rc('font', family='serif')
     plt.rc('text', usetex=True)
     plt.rcParams['text.latex.preamble'] = [r'\usepackage{sfmath} \boldmath']
@@ -1732,18 +1809,18 @@ if __name__ == "__main__":
     is3DPrcoessing = False
     start = time.time()
     #CEM Filename and sensor Name
-    DataSettype = 'CEM1D'
-    leadSensorname = '0xbccb0000_MPU_9250'
-    hdffilename = r"/home/benedikt/data/IMUPTBCEM/CEM/MPU9250CEM.hdf5"
+    #DataSettype = 'CEM1D'
+    #leadSensorname = '0xbccb0000_MPU_9250'
+    #hdffilename = r"/home/benedikt/data/IMUPTBCEM/CEM/MPU9250CEM.hdf5"
     #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280CEM.hdf5"
     #leadSensorname = '0xbccb0000_BMA_280'
     #is1DPrcoessing=True
 
     #PTB Filename and sensor Name
-    #DataSettype = 'PTB1D'
-    #hdffilename = r"/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
+    DataSettype = 'PTB1D'
+    hdffilename = r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250PTB_v5(2).hdf5"
     #hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
-    #leadSensorname = '0x1fe40000_MPU_9250'
+    leadSensorname = '0x1fe40000_MPU_9250'
 
     #hdffilename = r"/media/benedikt/nvme/data/BMACEMPTB/BMA280PTB.hdf5"
     #leadSensorname = '0x1fe40000_BMA_280'
@@ -1807,7 +1884,12 @@ if __name__ == "__main__":
         unicefreqs = np.unique(freqs, axis=0)
         mpdata['uniquexfreqs'] = unicefreqs
         i=np.arange(numofexperiemnts)
-        results=process_map(processdata, i, max_workers=15)
+        i=np.arange(4)
+        #results=process_map(processdata, i, max_workers=6)
+        results=[processdata(10)]
+        print("DONE")
+        for res in results:
+            res.plotFFTMultsineComparison()
         #i = np.array(18)
         #results = np.array(processdata(i))
         freqs = np.zeros(numofexperiemnts)
