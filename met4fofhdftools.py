@@ -11,7 +11,7 @@ import os
 import warnings
 from tools.adccaldata import Met4FOFADCCall as Met4FOFADCCall
 
-uncerval = np.dtype([("value", np.float), ("uncertainty", np.float)])
+uncerval = np.dtype([("value", float), ("uncertainty", float)])
 
 def copyHFDatrrs(source, dest):
     for key in list(source.attrs.keys()):

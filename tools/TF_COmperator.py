@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 import os
+import colorsys
 from uncertainties import unumpy, ufloat
 from uncertainties.umath import *  # sin(), etc.
 tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
@@ -24,9 +25,9 @@ plt.rcParams['mathtext.it'] = 'NexusProSans:italic'
 plt.rcParams['mathtext.bf'] = 'NexusProSans:bold'
 plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
-plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
+plt.rc("figure", figsize=[20,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
-PLTSCALFACTOR = 1.5
+PLTSCALFACTOR = 2.5
 SMALL_SIZE = 9 * PLTSCALFACTOR
 MEDIUM_SIZE = 12 * PLTSCALFACTOR
 BIGGER_SIZE = 15 * PLTSCALFACTOR
@@ -41,13 +42,26 @@ plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 figSaveCounter = 0
 SAVEFOLDER = './tf_images'
 SHOW=False
+
+def modify_color(color):
+    r, g, b = color
+    # Convert RGB to HSV
+    hsv = colorsys.rgb_to_hsv(r, g, b)
+
+    # Modify the saturation and value
+    hsv = (hsv[0], max(hsv[1] / 2, 0), min(hsv[2] * 2, 1.0))
+
+    # Convert HSV back to RGB
+    rgb = colorsys.hsv_to_rgb(hsv[0], hsv[1], hsv[2])
+
+    return rgb
 def generateWigthedMeanFromArrays(values,uncers):
     mean = np.average(values, weights=1 / (uncers ** 2), axis=0)
     valMinusMean = values - np.tile(mean, (values.shape[0], 1))
     std=np.sqrt(np.average(valMinusMean**2,weights=1 / (uncers ** 2),axis=0))
     return mean,std
 
-def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='Uncertainty of the phases components CEM measurments',zoom=False,lang=LANG,zoomPlotPos=[0.2, 0.65, 0.2, 0.2]):
+def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',startIDX=0,stopIDX=17,title='',zoom=False,lang=LANG,zoomPlotPos=[0.2, 0.65, 0.2, 0.2],widthFactor=0.8,ylim=None):
     freqs=datafile['RAWTRANSFERFUNCTION/'+sensorName+'/Acceleration/Acceleration']['Excitation_frequency']['value'][startIDX:stopIDX]
     uncersToPlot={}
     phaseGroupNames=['Phase','SSU_ADC_Phase','REF_Phase','Delta_DUTSNYC_Phase','DUT_SNYNC_Phase','DUT_Phase']
@@ -94,6 +108,18 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
                 'Excitation_amplitude': '',
                 'Magnitude': ''
              }
+    """
+    hatches={'Delta_DUTSNYC_Phase':"O.",
+                'SSU_ADC_Phase':"|",
+                'REF_Phase': "/",
+                'DUT_Phase':"o",
+                'DUT_SNYNC_Phase':"O",
+                'Phase':"|/o.",
+                'DUT_amplitude': '|',
+                'Excitation_amplitude': '-',
+                'Magnitude': '+'
+             }
+    """
     if type=='Phase':
         for pGN in phaseGroupNames:
             phaseUncerData=datafile['RAWTRANSFERFUNCTION/' + sensorName + '/Acceleration/Acceleration'][pGN]['uncertainty'][
@@ -117,27 +143,27 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     ax.set_axisbelow(True)
     ax.grid(axis='y',linestyle='dashed')
     i=0
-    overAllWidth=0.8
+    overAllWidth=widthFactor
     if type=='Mag':
         GroupNamesNestingDict=magGroupNamesNestingDict
     if type=='Phase':
         GroupNamesNestingDict = phaseGroupNamesNestingDict
     for comp,uncerKey0 in enumerate(GroupNamesNestingDict.keys()):
-        ax.bar(idxs, uncersToPlot[uncerKey0], align='edge', label=labels[uncerKey0],width=overAllWidth, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0],color=colors[uncerKey0])
+        ax.bar(idxs, uncersToPlot[uncerKey0], align='edge', label=labels[uncerKey0],width=overAllWidth, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0],color=colors[uncerKey0],edgecolor=modify_color(colors[uncerKey0]))
         firstlevelKeyNum=len(GroupNamesNestingDict[uncerKey0].keys())
         #TODO remove this dirty hacking and replace with propper recursion !!!!
         if firstlevelKeyNum>0:
-            width=1/(firstlevelKeyNum+2)*overAllWidth
-            offset=1/(firstlevelKeyNum+1)*overAllWidth
+            width=(1/(firstlevelKeyNum)*overAllWidth)*widthFactor
+            offset=((1/(firstlevelKeyNum)*overAllWidth)-width)/(widthFactor*2)
             for comp1,uncerKey1 in enumerate(GroupNamesNestingDict[uncerKey0].keys()):
-                pos1=idxs+offset+width*comp1
-                ax.bar(pos1,uncersToPlot[uncerKey1], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1],color=colors[uncerKey1])
+                pos1=idxs+(offset*(comp1+1))+width*comp1
+                ax.bar(pos1,uncersToPlot[uncerKey1], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1],color=colors[uncerKey1],edgecolor=modify_color(colors[uncerKey1]))
                 try:
                     secondlevelKeyNum = len(GroupNamesNestingDict[uncerKey0][uncerKey1].keys())
-                    secondwidth = width / (secondlevelKeyNum+ 1)*overAllWidth
-                    secondoffset = 1 / (2*4 * (secondlevelKeyNum+ 1))*overAllWidth
+                    secondwidth = (1 / (secondlevelKeyNum) * width) * widthFactor
+                    secondoffset = ((1 / (secondlevelKeyNum) * width) - secondwidth)/(widthFactor*2)
                     for comp2, uncerKey2 in enumerate(GroupNamesNestingDict[uncerKey0][uncerKey1].keys()):
-                        ax.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2],color=colors[uncerKey2])
+                        ax.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2],color=colors[uncerKey2],edgecolor=modify_color(colors[uncerKey2]))
                 except AttributeError:
                     pass # None has no keys we dont ne to go an level deeper
 
@@ -184,21 +210,21 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
         ax2.set_ylim([0,ylim])
         for comp,uncerKey0 in enumerate(phaseGroupNamesNestingDict.keys()):
             idxs=0
-            ax2.bar(idxs, uncersToPlot[uncerKey0][zoom], align='edge', label=labels[uncerKey0],width=1, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0],color=colors[uncerKey0])
+            ax2.bar(idxs, uncersToPlot[uncerKey0][zoom], align='edge', label=labels[uncerKey0],width=1, alpha=alphas[uncerKey0], hatch=hatches[uncerKey0],color=colors[uncerKey0],edgecolor=modify_color(colors[uncerKey0]))
             firstlevelKeyNum=len(phaseGroupNamesNestingDict[uncerKey0].keys())
             #TODO remove this dirty hacking and replace with propper recursion !!!!
             if firstlevelKeyNum>0:
-                width=1/(firstlevelKeyNum+1)
-                offset=1/(2*(firstlevelKeyNum+1))
+                width = (1 / (firstlevelKeyNum) * overAllWidth) * widthFactor
+                offset = ((1 / (firstlevelKeyNum) * overAllWidth) - width) / (widthFactor * 2)
                 for comp1,uncerKey1 in enumerate(phaseGroupNamesNestingDict[uncerKey0].keys()):
                     pos1=idxs+offset+width*comp1
-                    ax2.bar(pos1,uncersToPlot[uncerKey1][zoom], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1],color=colors[uncerKey1])
+                    ax2.bar(pos1,uncersToPlot[uncerKey1][zoom], align='edge',width=width, label=labels[uncerKey1], alpha=alphas[uncerKey1], hatch=hatches[uncerKey1],color=colors[uncerKey1],edgecolor=modify_color(colors[uncerKey1]))
                     try:
                         secondlevelKeyNum = len(phaseGroupNamesNestingDict[uncerKey0][uncerKey1].keys())
-                        secondwidth = width / (secondlevelKeyNum+ 1)
-                        secondoffset = 1 / (2*4 * (secondlevelKeyNum+ 1))
+                        secondwidth = (1 / (secondlevelKeyNum) * width) * widthFactor
+                        secondoffset = ((1 / (secondlevelKeyNum) * width) - secondwidth) / (widthFactor * 2)
                         for comp2, uncerKey2 in enumerate(phaseGroupNamesNestingDict[uncerKey0][uncerKey1].keys()):
-                            ax2.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2][zoom], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2],color=colors[uncerKey2])
+                            ax2.bar(pos1+secondoffset+secondwidth*comp2, uncersToPlot[uncerKey2][zoom], align='edge', width=secondwidth, label=labels[uncerKey2], alpha=alphas[uncerKey2], hatch=hatches[uncerKey2],color=colors[uncerKey2],edgecolor=modify_color(colors[uncerKey2]))
                     except AttributeError:
                         pass # None has no keys we dont ne to go an level deeper
         ax2.ticklabel_format(axis='y', scilimits=[-2, 2])
@@ -229,6 +255,8 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             #ax2.set_ylabel(r'$^\circ$')
         """
     ax.legend(loc='upper right')
+    if ylim!=None:
+        ax.set_ylim([0,ylim])
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL,"de_DE.utf8")
     fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2)+'_'+str(type)+'_uncerComps.png'), dpi=300,bbox_inches='tight')
@@ -600,14 +628,14 @@ if __name__ == "__main__":
 
     #hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
     leadSensorname = '0x1fe40000_MPU_9250'
-    CEMhdffilename = r"/home/benedikt/data/IMUPTBCEM/MPU9250CEM_v5.hdf5"
+    CEMhdffilename = r"/home/seeger01/data/IMUPTBCEM/MPU9250CEM_v5.hdf5"
     CEMSensorname = '0xbccb0000_MPU_9250'
     CEMdatafile = h5py.File(CEMhdffilename, "r")
     CEMTFDIct={'style':'CEM',
                'dataFile':CEMdatafile,
                'sensorName':CEMSensorname}
-    PTBhdffilename = r"/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
-    PTBPlattendatafilename = r"/home/benedikt/data/IMUPTBCEM/MPU9250_Platten.hdf5"
+    PTBhdffilename = r"/home/seeger01/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
+    PTBPlattendatafilename = r"/home/seeger01/data/IMUPTBCEM/MPU9250_Platten.hdf5"
     PTBSensorname = '0x1fe40000_MPU_9250'
     PTBdatafile = h5py.File(PTBhdffilename, "r")
     PTBPlattendatafile=h5py.File(PTBPlattendatafilename,'r')
@@ -650,10 +678,10 @@ if __name__ == "__main__":
     plotTFCOmparison(TFDict, uncerType='typeA', titleExpansion='MPU9250 Unsicherheit, TypA',excludeFromMean=[r'\textbf{PTB, erste Messung}'])
     plotTFCOmparison(TFDict, uncerType='CMC', titleExpansion='MPU9250 Unsicherheit, CMC',excludeFromMean=[r'\textbf{PTB, erste Messung}'])
 
-    plotRAWTFUncerComps(PTBdatafile, type='Phase', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A Unsicherheitskomponenten PTB Messungen, Phase', zoom=False, lang=LANG)
-    plotRAWTFUncerComps(PTBdatafile, type='Mag', sensorName=PTBSensorname, startIDX=0, stopIDX=17, title='Typ A Unsicherheitskomponenten PTB Messungen, Magnitude', zoom=False, lang=LANG)
-    plotRAWTFUncerComps(CEMdatafile, type='Phase', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A Unsicherheitskomponenten CEM Messungen, Phase', zoom=False, lang=LANG)
-    plotRAWTFUncerComps(CEMdatafile, type='Mag', sensorName=CEMSensorname, startIDX=2, stopIDX=19, title='Typ A Unsicherheitskomponenten CEM Messungen, Magnitude', zoom=False, lang=LANG)
+    plotRAWTFUncerComps(PTBdatafile, type='Phase', sensorName=PTBSensorname, startIDX=0, stopIDX=17,  zoom=False, lang=LANG,ylim=0.75)#title='Typ A Unsicherheitskomponenten PTB Messungen, Phase'
+    plotRAWTFUncerComps(PTBdatafile, type='Mag', sensorName=PTBSensorname, startIDX=0, stopIDX=17, zoom=False, lang=LANG,ylim=1.8)#title='Typ A Unsicherheitskomponenten PTB Messungen, Magnitude'
+    plotRAWTFUncerComps(CEMdatafile, type='Phase', sensorName=CEMSensorname, startIDX=2, stopIDX=19, zoom=False, lang=LANG,ylim=0.75)#title='Typ A Unsicherheitskomponenten CEM Messungen, Phase'
+    plotRAWTFUncerComps(CEMdatafile, type='Mag', sensorName=CEMSensorname, startIDX=2, stopIDX=19, zoom=False, lang=LANG,ylim=1.8)#title='Typ A Unsicherheitskomponenten CEM Messungen, Magnitude'
     """
     PTBSensorname = '0x1fe40000_BMA_280'
     CEMSensorname = '0xbccb0000_BMA_280'

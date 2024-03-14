@@ -1745,7 +1745,7 @@ def processdata(i):
     deltaF=experiment.getFreqOffSetFromSineFitPhaseSlope(mpdata['ADCName'],'Voltage',mpdata['AnalogrefChannel'])
     experiment.do3paramsinefits(axisfreqs+deltaF, periods=10)
     experiment.doMultiSineFit()
-    #experiment.plotFFTMultsineComparison()
+    experiment.plotFFTMultsineComparison()
     #experiment.plotsinefitParams(meanPhase=True)
     end = time.time()
     # print("Sin Fit Time "+str(end - start))
@@ -1766,11 +1766,11 @@ def processdata(i):
 
 
 if __name__ == "__main__":
-    """
-    hdffilename = r"/home/benedikt/data/IMUPTBCEM/PTB/MPU9250PTB.hdf5"
+
+    hdffilename = r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250PTB_v5(2)(copy).hdf5"
     datafile = h5py.File(hdffilename, "r+")
     plotRAWTFUncerComps(datafile, type='Phase', sensorName='0x1fe40000_MPU_9250', startIDX=0, stopIDX=17, title='Uncertainty of the phases components PTB measurments', zoom=2, lang='EN', zoomPlotPos=[0.2, 0.6, 0.2, 0.2])
-    
+    """
     datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Sample_number'].shape
     board1SN = datafile['RAWDATA/0x39f50100_STM32_GPIO_Input/Sample_number'][0, :]
     board1SNDelta=board1SN-board1SN[0]
