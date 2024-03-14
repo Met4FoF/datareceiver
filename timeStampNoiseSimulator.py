@@ -1,8 +1,10 @@
 import os
 import numpy as np
 import copy
+import json
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.ticker import AutoMinorLocator, MultipleLocator,LogLocator
 from brokenaxes import brokenaxes
 import sinetools.SineTools as st
 from multiprocessing import Pool
@@ -28,48 +30,29 @@ import sineTools2 as st2
 # jitterGensForSimulations=manager.list()
 jitterGensForSimulations = []
 jitterSimuLengthInS=1.0
-localFreqqCorr=False
+localFreqqCorr=True
 askforFigPickelSave=False
-#____________________ GLobal config end_____________
-r"""
-tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
-plt.rcParams['axes.prop_cycle'] = plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
-plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
-LANG='DE'
-if LANG=='DE':
-    import locale
-    trueFalseAnAus = {True: 'An', False: 'Aus'}
-    locale.setlocale(locale.LC_NUMERIC,"de_DE.utf8")
-    locale.setlocale(locale.LC_ALL,"de_DE.utf8")
-    plt.rcParams['text.latex.preamble'] = r'\usepackage{icomma}\usepackage{amsmath}\boldmath' # remove nasty Space behind comma in de_DE.utf8 locale https://stackoverflow.com/questions/50657326/matplotlib-locale-de-de-latex-space-btw-decimal-separator-and-number
-    plt.rcParams['axes.formatter.use_locale'] = True
-plt.rcParams['mathtext.fontset'] = 'custom'
-plt.rcParams['mathtext.rm'] = 'NexusProSans'
-plt.rcParams['mathtext.it'] = 'NexusProSans:italic'
-plt.rcParams['mathtext.bf'] = 'NexusProSans:bold'
-plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
-plt.rc('text', usetex=True)
-plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
-plt.rc("figure", dpi=300)
-PLTSCALFACTOR = 1
-SMALL_SIZE = 9 * PLTSCALFACTOR
-MEDIUM_SIZE = 12 * PLTSCALFACTOR
-BIGGER_SIZE = 15 * PLTSCALFACTOR
-plt.rc("font", weight='bold') # controls default text sizes
-plt.rc("font", size=SMALL_SIZE)
-plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
-plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
-plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
-"""
+
+lineSyles=[
+     ('loosely dotted',        (0, (1, 10))),
+     ('dotted',                (0, (1, 1))),
+     ('densely dotted',        (0, (1, 1))),
+     ('long dash with offset', (5, (10, 3))),
+     ('loosely dashed',        (0, (5, 10))),
+     ('dashed',                (0, (5, 5))),
+     ('densely dashed',        (0, (5, 1))),
+     ('loosely dashdotted',    (0, (3, 10, 1, 10))),
+     ('dashdotted',            (0, (3, 5, 1, 5))),
+     ('densely dashdotted',    (0, (3, 1, 1, 1))),
+     ('dashdotdotted',         (0, (3, 5, 1, 5, 1, 5))),
+     ('loosely dashdotdotted', (0, (3, 10, 1, 10, 1, 10))),
+     ('densely dashdotdotted', (0, (3, 1, 1, 1, 1, 1)))]
 
 tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
 plt.rcParams['axes.formatter.useoffset'] = False
 plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
-LANG='DE'
+LANG='EN'
 if LANG=='DE':
     import locale
     trueFalseAnAus = {True: 'An', False: 'Aus'}
@@ -87,7 +70,7 @@ plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
 plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
-PLTSCALFACTOR = 1
+PLTSCALFACTOR = 3
 SMALL_SIZE = 9 * PLTSCALFACTOR
 MEDIUM_SIZE = 12 * PLTSCALFACTOR
 BIGGER_SIZE = 15 * PLTSCALFACTOR
@@ -99,8 +82,8 @@ plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE*0.66)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
-figSaveCounter = 30
-SAVEFOLDER = './images'
+figSaveCounter = 70
+SAVEFOLDER = './imagesIMEKO2024'
 SHOW=False
 
 
@@ -201,14 +184,11 @@ class realWordJitterGen:
         print("Test")
 
 
-
-    def plotDeviation(self,fig=None,axs=None,lengthInS=None,show=False,lw=PLTSCALFACTOR,correctLinFreqDrift=True,plotInSamples=False,save=False,unit='ns',ylim=None):
+    def plotDeviation(self,fig=None,axs=None,lengthInS=None,show=False,lw=PLTSCALFACTOR,correctLinFreqDrift=True,plotInSamples=False,save=False,unit='ns',ylim=None,dataStartOffset=None,addLabel=True):
         salefactorFromeUnit={'ns':1e9,r'\textmu s':1e6,'ms':1e3,'s':1}
         yScaleFactor=salefactorFromeUnit[unit]
         if fig==None and axs==None:
             fig,ax=plt.subplots()
-            #fig.set_figwidth(12)
-            #fig.set_figheight(4)
             axs = [ax]
             if plotInSamples:
                 ax2 = ax.twinx()# axis for deviation in samples
@@ -226,14 +206,13 @@ class realWordJitterGen:
             tmp=self.deviationFromNominal[:length]
             correctedTimeDev=tmp-np.arange(length)*(tmp[-1]/(length-1))-tmp[0]
             correctedTime=self.expectedTime[:length]-np.arange(length)*(tmp[-1]/(length-1))
-            line=ax.plot(correctedTime, correctedTimeDev * yScaleFactor, label=self.title, lw=lw)
+            line=ax.plot(correctedTime, correctedTimeDev * yScaleFactor, label=self.title if addLabel else "", lw=lw)
             if plotInSamples:
-                ax2.plot(correctedTime, correctedTimeDev/self.deltaT, label=self.title, lw=lw/2,color=line[0].get_color(),ls=':')
+                ax2.plot(correctedTime, correctedTimeDev/self.deltaT, label=self.title if addLabel else "", lw=lw,color=line[0].get_color(),ls=':')
         else:
-            line=ax.plot(self.expectedTime[:length], self.deviationFromNominal[:length]*yScaleFactor, label=self.title,lw=lw)
+            line=ax.plot(self.expectedTime[:length], self.deviationFromNominal[:length]*yScaleFactor, label=self.title if addLabel else "",lw=lw)
             if plotInSamples:
-                ax2.plot(self.expectedTime[:length], self.deviationFromNominal[:length] / self.deltaT, label=self.title, lw=lw/2, color=line[0].get_color(),ls=':')
-        #ax.plot(np.arange(self.interpolatedDeviationFromNominal.size)*self.deltaT,self.interpolatedDeviationFromNominal)
+                ax2.plot(self.expectedTime[:length], self.deviationFromNominal[:length] / self.deltaT, label=self.title if addLabel else "", lw=lw, color=line[0].get_color(),ls=':')
         if show or save:
             if LANG=='EN':
                 #fig.suptitle(r"\textbf{Time deviation  sampling frequency correction "+ str(correctLinFreqDrift))
@@ -273,6 +252,108 @@ class realWordJitterGen:
             fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' + str(lengthInS) +'s_'+'Corr_'+trueFalseAnAus[correctLinFreqDrift]+'_uncerComps.pdf'), dpi=300, bbox_inches='tight')
             globals()['figSaveCounter'] += 1
         return fig,axs
+
+    def plotDeviation2(self, fig=None, axs=None, lengthInS=None, show=False, lw=PLTSCALFACTOR, correctLinFreqDrift=True,
+                   plotInSamples=False, save=False, unit='ns', ylim=None,plotInSamplesAxis=False,alpha=0.5):
+        salefactorFromeUnit = {'ns': 1e9, r'\textmu s': 1e6, 'ms': 1e3, 's': 1}
+        yScaleFactor = salefactorFromeUnit[unit]
+        if fig == None and axs == None:
+            fig, ax = plt.subplots()
+            axs = [ax]
+            if plotInSamples or plotInSamplesAxis:
+                ax2 = ax.twinx()  # axis for deviation in samples
+                axs = [ax, ax2]
+        else:
+            if isinstance(axs,list):
+                axs=axs
+            else:
+                try:
+                    ax = axs[0]
+                except:
+                    if isinstance(axs, plt.Axes):
+                        # so we have goten only one axis so we need to create a second one
+                        ax2 = axs.twinx()
+                        ax=axs
+                        axs = [ax, ax2]
+
+                    else:
+                        raise ValueError("No valid axis object")
+            if plotInSamples or plotInSamplesAxis:
+                ax2 = axs[1]
+        color = next(ax._get_lines.prop_cycler)['color']
+        # calculate segments
+        segment_length = int(lengthInS * self.fs) if lengthInS is not None else self.expectedTime.size
+        num_segments = int(np.ceil(self.expectedTime.size / segment_length))
+        slopes=np.zeros(num_segments)
+        for segment_idx in range(num_segments):
+            segment_start = segment_idx * segment_length
+            segment_end = min((segment_idx + 1) * segment_length, self.expectedTime.size)
+            timeDev = self.deviationFromNominal[segment_start:segment_end]
+            times = self.expectedTime[segment_start:segment_end] - self.expectedTime[segment_start]
+            if correctLinFreqDrift:
+                slope = (timeDev[-1] - timeDev[0]) / times[-1]
+                slopes[segment_idx]=slope
+                correctedTimeDev = timeDev - slope * times - timeDev[0]
+                line = ax.plot(times, correctedTimeDev * yScaleFactor, label=self.title if segment_idx == 0 else "", lw=lw,color=color,alpha=alpha)
+                if plotInSamples:
+                    ax2.plot(times, correctedTimeDev / self.deltaT, label=self.title if segment_idx == 0 else "", lw=lw,
+                             color=color, ls=':',alpha=alpha)
+            else:
+                line = ax.plot(self.expectedTime[segment_start:segment_end] - self.expectedTime[segment_start],
+                               self.deviationFromNominal[segment_start:segment_end] * yScaleFactor,
+                               label=self.title if segment_idx == 0 else "", lw=lw,color=color,alpha=alpha)
+                if plotInSamples:
+                    ax2.plot(self.expectedTime[segment_start:segment_end] - self.expectedTime[segment_start],
+                             self.deviationFromNominal[segment_start:segment_end] / self.deltaT,
+                             label=self.title if segment_idx == 0 else "", lw=lw, color=color, ls=':',alpha=alpha)
+        if show or save:
+            if LANG == 'EN':
+                # fig.suptitle(r"\textbf{Time deviation  sampling frequency correction "+ str(correctLinFreqDrift))
+                ax.set_xlabel(r"\textbf{Relative time in s}")
+                ax.set_ylabel(r"\textbf{Time deviation in " + unit + "}")
+            if LANG == 'DE':
+                # fig.suptitle(r"\textbf{Abtastzeitabweichungen Frequenzkorrektur "+ trueFalseAnAus[correctLinFreqDrift])
+                ax.set_xlabel(r"\textbf{Relative Zeit in s}")
+                ax.set_ylabel(r"\textbf{Zeitabweichung in " + unit + "}")
+            ax.ticklabel_format(axis='both', style='plain')
+            ax.legend(loc='upper left', ncol=2)
+            if plotInSamples or plotInSamplesAxis:
+                if LANG == 'EN':
+                    ax2.set_ylabel(r"\textbf{Time deviation in} $\Delta t=\frac{1}{\overline{f_\text{s}}}$")
+                if LANG == 'DE':
+                    ax2.set_ylabel(r"\textbf{Zeitabweichung in} $\Delta t=\frac{1}{\overline{f_\text{s}}}$")
+                """
+                yMinMax = np.array([1e100, 1e-100])
+                for line in ax2.lines:
+                    yMinMax[0] = np.min([yMinMax[0], np.min(line.get_ydata())])
+                    yMinMax[1] = np.max([yMinMax[1], np.max(line.get_ydata())])
+                yMinMax = yMinMax * 1.1  # scale to have 5% border maybe 10
+                lengthAbsMax = np.max(abs(np.array(ax.get_ylim())))
+                lengthSamplesAbsMax = np.max(abs(yMinMax))
+                ax.set_ylim([-lengthAbsMax, lengthAbsMax])
+                ax2.set_ylim([-lengthSamplesAbsMax, lengthSamplesAbsMax])
+                # ax2.legend(loc='upper right')
+                ax2.spines['right'].set(ls=':')
+                ax.spines['right'].set(ls=':')
+                # align_yaxis(ax, 0.0, ax2, 0.0)
+                """
+            ax.grid()
+        if plotInSamplesAxis and not plotInSamples:
+            timeUnitsPerDT=self.deltaT*yScaleFactor
+            axs[1].set_ylim(axs[0].get_ylim()[0] /timeUnitsPerDT, axs[0].get_ylim()[1] / timeUnitsPerDT)
+        if show:
+            # fig.tight_layout()
+            fig.show()
+        if save:
+            fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' + str(
+                lengthInS) + 's_' + 'TimeDev_Corr_ ' + trueFalseAnAus[correctLinFreqDrift] + '_TimeDevitions.png'), dpi=300,
+                        bbox_inches='tight')
+            fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' + str(
+                lengthInS) + 's_' + 'TimeDev_Corr_' + trueFalseAnAus[correctLinFreqDrift] + '_uncerComps.pdf'), dpi=300,
+                        bbox_inches='tight')
+            globals()['figSaveCounter'] += 1
+        return fig, axs
+
     def getrandomDeviations(self,length,reytryes=1000):
         isContinousDataSliceRetryCount=0
         while isContinousDataSliceRetryCount<reytryes:
@@ -299,7 +380,7 @@ class realWordJitterGen:
         deltaT=1/sampleFreq
         lag=correlation_lags(tmp.size,tmp.size)*deltaT
         ax.plot(lag,akf,label=r'\textbf{\textbf{Aufgeizeichneter \textit{Jitter}}}')
-        ax.plot(lag, akf_gausNoise, label=r'\textbf{Nomalverteilter Jitter} $\sigma = '+str(self.std)+'~\mathrm{ns}$')
+        ax.plot(lag, akf_gausNoise, label=r'\textbf{Nomalverteilter Jitter} $\sigma = '+str(self.std)+'~\text{ns}$')
         ax.set_xlabel(r'\textbf{Zeitverschiebungen} $\tau$ \textbf{in } s')
         ax.set_ylabel(r'\textbf{Autokorrelations Funktion} $AKF$ \textbf{in } R.U s')
         ax.grid()
@@ -341,9 +422,9 @@ class realWordJitterGen:
         axs[0].plot(freqs, np.mean(sliceFFTResultsAbsSqared,axis=0),
                     label=r'\textbf{Mittelwert aufgeizeichneter \textit{Jitter}}', color='tab:blue')
         axs[0].plot(freqs, np.ones(freqs.size) * np.mean(abs2(fft_QuantNoise)*scale),label=r'\textbf{Gleich verteiltes Quantisierungs Rauschen Interval '+"%.2f" % ((1/108e6)*1e9)+' ns }',color='tab:orange')
-        axs[0].plot(freqs, np.ones(freqs.size) * np.mean(abs2(fft_gausNoise)*scale),label=r'\textbf{Nomalverteilter Jitter} $\sigma = 43~\mathrm{ns}$',color='tab:red')
+        axs[0].plot(freqs, np.ones(freqs.size) * np.mean(abs2(fft_gausNoise)*scale),label=r'\textbf{Nomalverteilter Jitter} $\sigma = 43~\text{ns}$',color='tab:red')
 
-        axs[0].set_ylabel(r'\textbf{Jitter~PSD in $\frac{{\mathrm{ns}}^2}{\mathrm{Hz}}$')
+        axs[0].set_ylabel(r'\textbf{Jitter~PSD in $\frac{{\text{ns}}^2}{\text{Hz}}$')
         axs[0].grid()
         axs[0].legend(ncol=2)
         if plotPhase:
@@ -351,7 +432,7 @@ class realWordJitterGen:
             axs[1].set_ylabel(r'\textbf{\textit{unwrapped} Phase}\\ $\varphi$ \textbf{in} rad')
             axs[1].plot(freqs,np.unwrap(np.angle(fft_gausNoise)),label=r'\textbf{Gleich verteiltes Quantisierungs Rauschen Interval '+"%.2f" % ((1/108e6)*1e9)+' ns }',color='tab:orange')
             axs[1].plot( freqs,np.unwrap(np.angle(fft_QuantNoise)),
-                    label=r'\textbf{Nomalverteiltes Rauschen} $\sigma = 43~\mathrm{ns}$',color='tab:red')
+                    label=r'\textbf{Nomalverteiltes Rauschen} $\sigma = 43~\text{ns}$',color='tab:red')
             axs[1].legend(ncol=2)
             axs[1].set_xlabel(r'\textbf{Frequenz $f$ in Hz}')
             axs[1].grid()
@@ -408,17 +489,17 @@ class realWordJitterGen:
             psdMean=np.mean((sliceFFTResultsAbs ** 2) * (1 / (sampleFreq * fftlength)),axis=0)
             psdMean=psdMean*2
             p=axs.plot((freqs/(sampleFreq))*signalFreq, 10*np.log10(gaussian_filter(psdMean,filterWidth)),
-                    label=r'\textbf{'+self.title,lw=lw)#+ $f_\mathrm{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }'
+                    label=r'\textbf{'+self.title,lw=lw)#+ $f_\text{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }'
         else:
             psdMean=np.mean((sliceFFTResultsAbs ** 2) * (1 / (sampleFreq * fftlength)),axis=0)
             psdMean=psdMean*2
             p=axs.plot((freqs/(sampleFreq))*signalFreq, gaussian_filter(np.mean((sliceFFTResultsAbs)/fftlength,axis=0),filterWidth),
-                    label=r'\textbf{'+self.title,lw=lw)#+' $f_\mathrm{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }'
+                    label=r'\textbf{'+self.title,lw=lw)#+' $f_\text{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }'
 
         if plotSincSensForLength!=None:
             labelPrefixDict={'EN':'Sine approx. sensitivity ','DE':'Sinus Approximation Sensitivität '}
             if isinstance(plotSincSensForLength, list):
-                sincFreqs=np.linspace(-signalFreq*0.5,signalFreq*0.5,num=100001,endpoint=True)
+                sincFreqs=np.linspace(-signalFreq*0.5,signalFreq*0.5,num=100000,endpoint=True)
                 for length in plotSincSensForLength:
                     WindowAmps = abs(np.sinc(sincFreqs * length))
                     if unit == 'dBc':
@@ -426,13 +507,26 @@ class realWordJitterGen:
                     line=axs.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}')
                     line[0].set_zorder(-1)
             if isinstance(plotSincSensForLength, dict):
-                sincFreqs=np.linspace(-plotSincSensForLength['maxFreq'],plotSincSensForLength['maxFreq'],num=100001,endpoint=True)
-                for length in plotSincSensForLength['length']:
-                    WindowAmps = abs(np.sinc(sincFreqs * length))
-                    if unit == 'dBc':
-                        WindowAmps=10 * np.log10(WindowAmps)
-                    line=axs.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5)
-                    line[0].set_zorder(-1)
+                if 'poles' in plotSincSensForLength.keys():
+                    numPoles=plotSincSensForLength['poles']
+                    for length in plotSincSensForLength['length']:
+                        maxfreq=numPoles*1/length
+                        minFreq=-maxfreq
+                        sincFreqs=np.linspace(minFreq,maxfreq,num=100000,endpoint=True)
+                        WindowAmps = abs(np.sinc(sincFreqs * length))
+                        if unit == 'dBc':
+                            WindowAmps=10 * np.log10(WindowAmps)
+                        line=axs.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5)
+                        line[0].set_zorder(-1)
+                else:
+                    sincFreqs=np.linspace(-plotSincSensForLength['maxFreq'],plotSincSensForLength['maxFreq'],num=100000,endpoint=True)
+                    for length in plotSincSensForLength['length']:
+                        WindowAmps = abs(np.sinc(sincFreqs * length))
+                        if unit == 'dBc':
+                            WindowAmps=10 * np.log10(WindowAmps)
+                        line=axs.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5)
+                        line[0].set_zorder(-1)
+
         if plotRaw:
             for i in range(nnumOFSlices):
                 if unit == 'dBc':
@@ -443,14 +537,14 @@ class realWordJitterGen:
         if show:
             if unit !='dBc':
                 if LANG=='EN':
-                    axs.set_ylabel(r'\textbf{Phase noise amplitude in $\frac{\mathrm{A.U.}^2}{\mathrm{Hz}}$')
+                    axs.set_ylabel(r'\textbf{Phase noise amplitude in $\frac{\text{A.U.}^2}{\text{Hz}}$')
                 if LANG=='DE':
-                    axs.set_ylabel(r'\textbf{Phasenrauschen Amplitude in $\frac{\mathrm{A.U.}^2}{\mathrm{Hz}}$')
+                    axs.set_ylabel(r'\textbf{Phasenrauschamplitude in $\frac{\text{A.U.}^2}{\text{Hz}}$')
             else:
                 if LANG == 'EN':
-                    axs.set_ylabel(r'\textbf{Phase noise power density in} $\frac{\mathrm{dBC}}{\mathrm{Hz}}$')
+                    axs.set_ylabel(r'\textbf{Phase noise power density in} $\frac{\text{dBC}}{\text{Hz}}$')
                 if LANG == 'DE':
-                    axs.set_ylabel(r'\textbf{Phasenrauschen in} $\frac{\mathrm{dBC}}{\mathrm{Hz}}$')
+                    axs.set_ylabel(r'\textbf{Phasenrauschleistungsdichte in} $\frac{\text{dBC}}{\text{Hz}}$')
             if signalFreq!=1.0:
                 if LANG == 'EN':
                     axs.set_xlabel(r'\textbf{Offset~frequency to '+str(signalFreq)+' Hz Signal in Hz}')
@@ -458,9 +552,9 @@ class realWordJitterGen:
                     axs.set_xlabel(r'\textbf{Frequenzdifferenz zu einem ' + locale.format_string('%g',signalFreq) + ' Hz Signal in Hz}')
             else:
                 if LANG== 'EN':
-                    axs.set_xlabel(r'$\frac{{Offset~frequency}}{Signal~frequency}$ \textbf{in} $\frac{\mathrm{Hz}}{\mathrm{Hz}}$')
+                    axs.set_xlabel(r'$\frac{{\text{\textbf{Offset~frequency}}}}{\text{\textbf{Signal~frequency}}}$ \textbf{in} $\frac{\text{Hz}}{\text{Hz}}$')
                 if LANG== 'DE':
-                    axs.set_xlabel(r'$\frac{{Frequenzdifferenz}}{Signalfrequenz}$ \textbf{in} $\frac{\mathrm{Hz}}{\mathrm{Hz}}$')
+                    axs.set_xlabel(r'$\frac{{\text{\textbf{Frequenzdifferenz}}}}{\text{\textbf{Signalfrequenz}}}$ \textbf{in} $\frac{\text{Hz}}{\text{Hz}}$')
             axs.grid(True, which="both")
             axs.legend(ncol=2)
             #ax.set_ylim([-220,0])
@@ -532,10 +626,15 @@ def getmuAndSTdForFreq(testparams,numOfruns=200):
         FitPhases[i],FitMags[i]=generateFitWithPhaseNoise(freq,t_jitter=t_jitter,lengthInS=length)
     ampPercentiles=np.percentile(FitMags, np.array([5,32,50,68,95]))
     phasePercentiles=np.percentile(FitPhases, np.array([5,32,50,68,95]))
-    return np.std(FitPhases),\
-           np.mean(FitPhases),\
-           np.std(FitMags),\
-           np.mean(FitMags),\
+    stdPhase=np.std(FitPhases)
+    meanPhase=np.mean(FitPhases)
+    stdMag=np.std(FitMags)
+    meanMag=np.mean(FitMags)
+    del FitPhases,FitMags
+    return stdPhase,\
+           meanPhase,\
+           stdMag,\
+           meanMag,\
            ampPercentiles[0],\
            ampPercentiles[1],\
            ampPercentiles[2],\
@@ -547,8 +646,17 @@ def getmuAndSTdForFreq(testparams,numOfruns=200):
            phasePercentiles[3],\
            phasePercentiles[4]
 
+
+
+def find_nearest_indices(long_vector, short_vector):
+    # Compute the absolute differences using broadcasting
+    diffs = np.abs(long_vector[:, np.newaxis] - short_vector)
+    # Find the indices of the minimum differences
+    nearest_indices = np.argmin(diffs, axis=0)
+    return nearest_indices
+
 class SineExcitationExperemeint:
-    def __init__(self,dataFile,idx,sensor='0xbccb0000_MPU_9250',qunatity='Acceleration',mainAxis=2):
+    def __init__(self,dataFile,idx,sensor='0xbccb0000_MPU_9250',qunatity='Acceleration',mainAxis=2,interpolations=[],interpolationFactors=[]):
         self.experimentIDX=idx
         self.dataFile=dataFile
         self.sensorStartIDX=self.dataFile['EXPERIMENTS/Sine excitation']["{:05d}".format(idx)+'Sine_Excitation'][sensor].attrs['Start_index']
@@ -563,40 +671,62 @@ class SineExcitationExperemeint:
         abcw=st2.fourparsinefit(self.data[mainAxis,:],self.reltime,self.freq)
         self.actualFreq=abcw[3]
         self.gernerateFFT()
-        self.generateInterpolatedFFT()
+        self.interPolationFactors=interpolationFactors
+        self.interpolations=interpolations
+        self.generateInterpolatedFFT()#interpolations=[ "linear", "nearest", "slinear", "quadratic", "cubic", "previous", "next"]
         self.generateMultiSineFit()
+        self.name='MultiSineFFTComp_'+self.dataFile['RAWDATA'][sensor].attrs['Sensor_name'].replace(' ','_')+'_Exp_'+str(idx)+'_Axis_'+str(mainAxis)+'_freq_'+f'{self.freq:.2f}'+"_Hz"
+        self.getSNR()
         print("INIT DONE")
 
-    def gernerateFFT(self,disableLowLeakageCutting=False):
+
+    def gernerateFFT(self):
         lengthmax=self.data.shape[1]
         lengthToTest=int(lengthmax/2)+np.arange(int(lengthmax/2))
         fftbinwidth=self.fs/lengthToTest
         nonIntPeriodFraction=self.actualFreq % fftbinwidth
         self.numPointsToUse=lengthToTest[np.argmin(nonIntPeriodFraction)]
-        if disableLowLeakageCutting:
-            self.numPointsToUse=lengthmax
-        self.fft=2*np.fft.rfft(self.data[:,:self.numPointsToUse],axis=1)/self.numPointsToUse
-        self.fftFreqs=np.fft.rfftfreq(self.numPointsToUse,d=self.deltaT)
+        self.fftLowLeak=2*np.fft.rfft(self.data[:,:self.numPointsToUse],axis=1)/self.numPointsToUse
+        self.fftFreqslowLeak=np.fft.rfftfreq(self.numPointsToUse,d=self.deltaT)
+        self.fft=2*np.fft.rfft(self.data[:,:],axis=1)/lengthmax
+        self.fftFreqs=np.fft.rfftfreq(lengthmax,d=self.deltaT)
 
-    def generateInterpolatedFFT(self,interpolationFactor=10,interpolations=[]):#interpolations=[ "linear", "nearest", "slinear", "quadratic", "cubic", "previous", "next"]
-        numAxis=self.data.shape[0]
-        aqTimes=np.linspace(self.reltime[0],self.reltime[self.numPointsToUse-1],num=self.numPointsToUse*interpolationFactor)
-        self.interpolatedFFTresults={}
-        for interpolatorKind in interpolations:
-            print("Interpolating with "+interpolatorKind)
-            result=[]
-            for i in range(numAxis):
-                interpolator=sp.interpolate.interp1d(self.reltime,self.data[i,:],kind=interpolatorKind)
-                interpolatedData=interpolator(aqTimes)
-                result.append(2*np.fft.rfft(interpolatedData)/interpolatedData.size)
-            self.interpolatedFFTresults[interpolatorKind]=np.array(result)
-        self.interpolatedFFTFreqs=np.fft.rfftfreq(aqTimes.size,d=self.deltaT/interpolationFactor)
+    def generateInterpolatedFFT(self):#interpolations=[ "linear", "nearest", "slinear", "quadratic", "cubic", "previous", "next"]
+        self.interpolatedFFTFreqsLowLeak={}
+        self.interpolatedFFTFreqs={}
+        self.interpolatedFFTLowLeak={}
+        self.interpolatedFFT={}
+        for interpolationFactor in self.interPolationFactors:
+            numAxis=self.data.shape[0]
+            aqTimesLowLeak=np.linspace(self.reltime[0],self.reltime[self.numPointsToUse-1],num=self.numPointsToUse*interpolationFactor)
+            self.interpolatedFFTFreqsLowLeak[interpolationFactor] = np.fft.rfftfreq(aqTimesLowLeak.size, d=self.deltaT / interpolationFactor)
+            self.interpolatedFFTLowLeak[interpolationFactor]={}
+            for interpolatorKind in self.interpolations:
+                print("Interpolating with "+str(interpolationFactor)+" times "+interpolatorKind)
+                result=[]
+                for i in range(numAxis):
+                    interpolator=sp.interpolate.interp1d(self.reltime,self.data[i,:],kind=interpolatorKind)
+                    interpolatedData=interpolator(aqTimesLowLeak)
+                    result.append(2*np.fft.rfft(interpolatedData)/interpolatedData.size)
+                self.interpolatedFFTLowLeak[interpolationFactor][interpolatorKind]=np.array(result)
 
-    def generateMultiSineFit(self,numeLinesAround=20,numOverTones=6):
+            aqTimes = np.linspace(self.reltime[0], self.reltime[-1],num=self.reltime.size * interpolationFactor)
+            self.interpolatedFFTFreqs[interpolationFactor] = np.fft.rfftfreq(aqTimes.size, d=self.deltaT / interpolationFactor)
+            self.interpolatedFFT[interpolationFactor] = {}
+            for interpolatorKind in self.interpolations:
+                result=[]
+                for i in range(numAxis):
+                    interpolator=sp.interpolate.interp1d(self.reltime,self.data[i,:],kind=interpolatorKind)
+                    interpolatedData=interpolator(aqTimes)
+                    result.append(2*np.fft.rfft(interpolatedData)/interpolatedData.size)
+                self.interpolatedFFT[interpolationFactor][interpolatorKind]=np.array(result)
+
+    def generateMultiSineFit(self,numeLinesAround=100,numOverTones=5):
         self.numeLinesAround=numeLinesAround
         self.numOverTones=numOverTones
         self.binwidth=self.fftFreqs[1]-self.fftFreqs[0]
         freqs = []
+        freqs.append((np.arange(2*numeLinesAround+1)+1)*self.binwidth)
         for k in range(numOverTones):
             freqs.append((np.arange(numeLinesAround * 2 + 1) - numeLinesAround) * self.binwidth + self.actualFreq * (k + 1))
         self.multisineFitFreqs = np.array(freqs).flatten()
@@ -609,15 +739,30 @@ class SineExcitationExperemeint:
             multiSineParams.append(fitResult)
         self.multiSineFitresults=np.array(multiSineParams)
 
-    def plotFFTandSineFit(self,axisToPlot=[2],plotQoutient=False,markerSize=1):
-        def find_nearest_indices(long_vector, short_vector):
-            # Compute the absolute differences using broadcasting
-            diffs = np.abs(long_vector[:, np.newaxis] - short_vector)
+    def getSNR(self,axis=2):
+        refIDX=self.numeLinesAround * 3 + 1
+        referenceAMP=abs(self.multiSineFitresults[axis, refIDX])
+        referenceN=(np.sum(abs(self.multiSineFitresults[axis, refIDX-self.numeLinesAround:refIDX+self.numeLinesAround+1]))-referenceAMP)/(2*self.numeLinesAround)# we have the ref include so substract it
+        self.referenceFFTFreqsForSNR=self.multisineFitFreqs[refIDX-self.numeLinesAround:refIDX+self.numeLinesAround+1]
+        self.fitSNR=referenceAMP/referenceN
+        print("SineFit SNR is "+str(self.fitSNR))
+        self.FFTSNR={}
+        for interpolationFactor in self.interPolationFactors:
+            self.FFTSNR[interpolationFactor]={}
+            for interpolatorKind in self.interpolations:
+                idxs=find_nearest_indices(self.interpolatedFFTFreqsLowLeak[interpolationFactor],self.referenceFFTFreqsForSNR)
+                centerIDX=idxs[self.numeLinesAround]
+                spectralData=abs(self.interpolatedFFTLowLeak[interpolationFactor][interpolatorKind][axis, centerIDX - self.numeLinesAround:centerIDX+self.numeLinesAround + 1])
+                fftAMP = abs(spectralData[self.numeLinesAround])
+                fftN = (np.sum(abs(self.interpolatedFFTLowLeak[interpolationFactor][interpolatorKind][axis, centerIDX - self.numeLinesAround:centerIDX+self.numeLinesAround + 1])) - fftAMP)/(2*self.numeLinesAround)
+                SNR=fftAMP/fftN
+                self.FFTSNR[interpolationFactor][interpolatorKind]=SNR
+                print("SNR for "+str(interpolationFactor)+" times "+interpolatorKind+" is "+str(SNR))
+        result={'sineSNR':self.fitSNR,'FFTSNR':self.FFTSNR,'freq':self.freq,'actualFreq':self.actualFreq}
+        json.dump(result,open('SNRParams/'+self.name+'SNR_params.json','w'))
+        return result
 
-            # Find the indices of the minimum differences
-            nearest_indices = np.argmin(diffs, axis=0)
-
-            return nearest_indices
+    def plotFFTandSineFit(self,axisToPlot=[2],plotQoutient=False,markerSize=1,plotHighLeak=False,filterWidth=1):
 
         fig=plt.figure()
         if plotQoutient:
@@ -633,7 +778,7 @@ class SineExcitationExperemeint:
             idxOffset=0
         numPlotsPerQuant=2+idxOffset
         baxXlims=[]
-        for i in range(self.numOverTones):
+        for i in range(self.numOverTones+1):
             start = i * (2 * self.numeLinesAround + 1)
             stop = (i + 1) * (2 * self.numeLinesAround + 1)
             baxXlims.append([self.multisineFitFreqs[start],self.multisineFitFreqs[stop-1]])
@@ -642,18 +787,11 @@ class SineExcitationExperemeint:
             bax.append(brokenaxes(xlims=baxXlims,subplot_spec=gs[i*numPlotsPerQuant+1,0],fig=fig))
             if plotQoutient:
                 baxQuatient.append(brokenaxes(xlims=baxXlims, subplot_spec=gs[i * numPlotsPerQuant + 2, 0], fig=fig))
-        for interpolMethod in self.interpolatedFFTresults.keys():
-            for i, idx in enumerate(axisToPlot):
-                ax[i].semilogy(self.interpolatedFFTFreqs[1:], np.abs(self.interpolatedFFTresults[interpolMethod][idx, 1:]),label=r'\textbf{FFT '+interpolMethod+'zeitbereichs Interpolation}',alpha=0.5,lw=1)
-                lastplot=bax[i].semilogy(self.interpolatedFFTFreqs[1:], np.abs(self.interpolatedFFTresults[interpolMethod][idx, 1:]),label=r'\textbf{FFT '+interpolMethod+'zeitbereichs Interpolation}',alpha=0.5,lw=1)
-                #bax[i].scatter(self.interpolatedFFTFreqs[1:],
-                #                np.abs(self.interpolatedFFTresults[interpolMethod][idx, 1:]), label=interpolMethod,
-                #                alpha=0.5, lw=1,color=lastplot[0][0].get_color(),markersize=markerSize)
         for i,idx in enumerate(axisToPlot):
-            ax[i].semilogy(self.fftFreqs[1:],np.abs(self.fft[idx,1:]),label=r'\textbf{FFT keine zeitbereichs Interpolation}',lw=1)
-            bax[i].plot(self.fftFreqs[1:],np.abs(self.fft[idx,1:]),label=r'\textbf{FFT keine zeitbereichs Interpolation}',lw=1, marker='o',markersize=markerSize)
-            #bax[i].scatter(self.fftFreqs[1:], np.abs(self.fft[idx, 1:]), label='FFT keine zeitbereichs Interpolation',
-            #            lw=1,color=lastplot[0][0].get_color(),markersize=markerSize)
+            ax[i].semilogy(self.fftFreqs[1:],sp.ndimage.gaussian_filter1d(np.abs(self.fft[idx,1:]),filterWidth),label=r'\textbf{FFT  high \textit{spectral leakage}}',lw=1)
+            bax[i].plot(self.fftFreqs[1:],np.abs(self.fft[idx,1:]),label=r'\textbf{FFT high \textit{spectral leakage}}',lw=1, marker='o',markersize=markerSize)
+            ax[i].semilogy(self.fftFreqslowLeak[1:],sp.ndimage.gaussian_filter1d(np.abs(self.fftLowLeak[idx,1:]),filterWidth),label=r'\textbf{DFT low \textit{spectral leakage}}',lw=1)
+            bax[i].plot(self.fftFreqslowLeak[1:],np.abs(self.fftLowLeak[idx,1:]),label=r'\textbf{DFT low \textit{spectral leakage}}',lw=1, marker='o',markersize=markerSize)
         minFFT=np.power(10,np.floor(np.log10(np.min(np.abs(self.fft[axisToPlot,1:])))))
         maxFFT=np.power(10,np.ceil(np.log10(np.max(np.abs(self.fft[axisToPlot,1:])))))
         minSine=np.power(10,np.floor(np.log10(np.min(np.abs(self.multiSineFitresults[axisToPlot,:])))))
@@ -662,7 +800,8 @@ class SineExcitationExperemeint:
         max=np.max([maxFFT,maxSine])
         for i,idx in enumerate(axisToPlot):
             ax[i].set_xlim([self.fftFreqs[1],self.fftFreqs[-1]])
-            ax[i].grid()
+            ax[i].grid(True,which="major", axis="both",ls="-",lw=PLTSCALFACTOR)
+            ax[i].grid(True, which="minor", axis="both", ls="--", lw=0.25*PLTSCALFACTOR,c='grey')
             ax[i].set_ylim([min,max])
             bax[i].set_ylim([min,max])
         for j,jdx in enumerate(axisToPlot):
@@ -671,38 +810,70 @@ class SineExcitationExperemeint:
                 stop = (i + 1) * (2 * self.numeLinesAround + 1)
                 if i==0:
                     firstPlot=ax[j].semilogy(self.multisineFitFreqs[start:stop],
-                                abs(self.multiSineFitresults[jdx][start:stop]), lw=1, marker='o',label=r'\textbf{Multisinus Approximation}',markersize=markerSize)
+                                abs(self.multiSineFitresults[jdx][start:stop]), lw=1,label=r'\textbf{Multi sine approximation}')
                 else:
                     ax[j].semilogy(self.multisineFitFreqs[start:stop],
-                                abs(self.multiSineFitresults[jdx][start:stop]), lw=1, marker='o',markersize=markerSize,color=firstPlot[0].get_color())
+                                abs(self.multiSineFitresults[jdx][start:stop]), lw=1,color=firstPlot[0].get_color())
             bax[j].plot(self.multisineFitFreqs,abs(self.multiSineFitresults[jdx]), lw=1, marker='o',markersize=markerSize)
-            #bax[j].scatter(self.multisineFitFreqs,abs(self.multiSineFitresults[jdx]), lw=1)
             if plotQoutient:
                 nearestIDX=find_nearest_indices(self.fftFreqs,self.multisineFitFreqs)
                 quotients=self.fft[jdx,nearestIDX]/self.multiSineFitresults[jdx,:]
                 baxQuatient[j].plot(self.multisineFitFreqs,abs(quotients),lw=1, marker='o',markersize=markerSize)
+        for i, interPolFactor in enumerate(self.interpolatedFFT.keys()):
+            for interpolMethod in self.interpolatedFFT[interPolFactor].keys():
+                for j, idx in enumerate(axisToPlot):
+
+                    pointsToPlotLowLeak = int(self.interpolatedFFTFreqsLowLeak[interPolFactor].size / interPolFactor) - 1
+                    lastNormalPlot = ax[j].semilogy(self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
+                                   sp.ndimage.gaussian_filter1d(abs(self.interpolatedFFTLowLeak[interPolFactor][interpolMethod][idx, 1:pointsToPlotLowLeak]),filterWidth),
+                                   label=r'\textbf{FFT '+str(interPolFactor)+' times ' + interpolMethod + ' Interpolation low Leak}', alpha=0.5, lw=1,
+                                   ls=lineSyles[1 + (i % len(lineSyles))][1])
+
+                    lastBrokenPlot = bax[j].semilogy(self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
+                                    np.abs(self.interpolatedFFTLowLeak[interPolFactor][interpolMethod][idx, 1:pointsToPlotLowLeak]),
+                                    label=r'\textbf{FFT '+str(interPolFactor)+' times ' + interpolMethod + ' Interpolation low Leak}', alpha=0.5, lw=1,
+                                    ls=lineSyles[1 + (i % len(lineSyles))][1])
+                    if plotHighLeak:
+                        pointsToPlot = int(self.interpolatedFFTFreqs[interPolFactor].size / interPolFactor) - 1
+                        ax[j].semilogy(self.interpolatedFFTFreqs[interPolFactor][1:pointsToPlot],
+                                                        sp.ndimage.gaussian_filter1d(np.abs(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]),filterWidth),
+                                                        label=r'\textbf{FFT '+str(interPolFactor)+' times '+ interpolMethod + ' Interpolation}', alpha=0.5,
+                                                        lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1], color=lastNormalPlot[-1].get_color())
+                        bax[j].semilogy(self.interpolatedFFTFreqs[interPolFactor][1:pointsToPlot],
+                                                         np.abs(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]),
+                                                         label=r'\textbf{FFT '+str(interPolFactor)+' times ' + interpolMethod + ' Interpolation}', alpha=0.5,
+                                                         lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1], color=lastBrokenPlot[0][-1].get_color())
 
         for i, idx in enumerate(axisToPlot):
-            for axis in bax[i].axs:
+            for j,axis in enumerate(bax[i].axs):
                 axis.set_yscale('log')
-                axis.grid(True)
-                #labels = [label.get_text() for label in axis.get_xticklabels()]
-                #axis.set_xticklabels(labels, rotation=90)
+                axis.yaxis.set_minor_locator(LogLocator(base=10, subs='auto'))
+                axis.grid(True, which="minor", axis="both", ls="--", lw=0.25*PLTSCALFACTOR,c='grey')
+                axis.grid(True, which="major", axis="both",ls="-",lw=PLTSCALFACTOR)
+                if j!=0:
+                    axis.set_yticklabels([])
+                    #axis.set_yticks([])
         for axis in ax:
             axis.legend()
-            axis.set_ylabel(r"\textbf{Amplitude}")
+            axis.set_ylabel(r"\textbf{Amplitude in} $\frac{\text{m}}{\text{s}^2}$")
+
         for axis in bax:
-            axis.set_ylabel(r"\textbf{Amplitude}")
+            axis.set_ylabel(r"\textbf{Amplitude in} $\frac{\text{m}}{\text{s}^2}$")
         if plotQoutient:
-            for axis in baxQuatient:
-                #axis.set_yscale('log')
-                axis.grid()
-                axis.set_ylabel(r"\textbf{Amplitude FFT/Fit}")
-            baxQuatient[-1].set_xlabel(r"\textbf{Frequenz in Hz }")
+            for j,axis in enumerate(baxQuatient):
+                axis.grid(True,which="both", axis="both",ls="-")
+                axis.set_ylabel(r"\textbf{Amplitude FFT/Fit in R. U.}")
+                if j!=0:
+                    axis.set_yticklabels([])
+                    #axis.set_yticks([])
+            baxQuatient[-1].set_xlabel(r"\textbf{Frequency in Hz }")
         else:
-            bax[-1].set_xlabel(r"\textbf{Frequenz in Hz}")
-        #fig.tight_layout()
+            bax[-1].set_xlabel(r"\textbf{Frequency in Hz}")
+        fig.savefig(SAVEFOLDER+self.name + ".svg")
+        fig.savefig(SAVEFOLDER+self.name+".pdf")
+        fig.savefig(SAVEFOLDER+self.name+".png")
         fig.show()
+
 
 
 
@@ -710,18 +881,10 @@ if __name__ == "__main__":
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL, "de_DE.utf8")
     manager = mp.Manager()
+
     measurmentFIle=h5py.File(r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250PTB_v5(2)(copy).hdf5",'r')
-    leadSensorname='0x1fe40000_MPU_9250'
-    #measurmentFIle=h5py.File(r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/BMA280PTB.hdf5",'r')
-    #hdffilename = r"/home/benedikt/data/MPU9250_PTB_Reproduktion_platten/usedRuns/MPU9250_Platten.hdf5"
-    #leadSensorname = '0x1fe40000_BMA_280'
     #measurmentFIle = h5py.File('/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250CEM(2)(copy).hdf5','r')
-    sineES=SineExcitationExperemeint(measurmentFIle,11,sensor=leadSensorname)
-    sineES.plotFFTandSineFit()
-    WORKER_NUMBER = 12
-    # dataFile = h5py.File('/home/benedikt/Downloads/jitter_recording.hfd5', 'r')
-    # sensorName = '0x39f50100_STM32_GPIO_Input'
-    sensorName = '0x60ad0100_STM32_GPIO_Input'
+    leadSensorname='0x1fe40000_MPU_9250'
     pathPrefix = r'/home/seeger01/tmp'
     dataFileEXTREF = h5py.File(os.path.join(pathPrefix, 'extRev_single_GPS_1KHz_Edges.hfd5'), 'r')
     #dataFileLSM6DSRX = h5py.File(os.path.join(pathPrefix, 'ST_sensor_test_1667Hz_noTimeGlittCorr.hfd5'), 'r')
@@ -731,7 +894,29 @@ if __name__ == "__main__":
     dataFileLSM6DSRX1667Hz_9 = h5py.File(os.path.join(pathPrefix, 'LSM6DSRX_1667HZ_09.hdf5'), 'r')
     dataFileLSM6DSRX6667Hz = h5py.File(os.path.join(pathPrefix,'ST_sensor_test_6667Hz_2.hfd5'), 'r')
     dataFileADXL355 = h5py.File(os.path.join(pathPrefix, 'ADXL355_4kHz.hfd5'), 'r')
+    jitterGenMPU9250 = realWordJitterGen(dataFileMPU9250, '0x1fe40000_MPU_9250',
+                                         r"\textbf{MPU 9250 $f_\text{sNom}$ = 1~kHz}")  # $f_s=$ \textbf{1001.0388019191 Hz}")
+    jitterGenBMA280= realWordJitterGen(dataFileBMA280,'0x1fe40000_BMA_280',     r"\textbf{BMA 280 $f_\text{sNom}$ = 2~kHz}",offset=[int(1.7e6),2048])# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGensForSimulations.append(jitterGenBMA280)
+    jitterGenMPU9250.plotDeviation2(lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=0.33)
+
+    jitterGenBMA280.plotDeviation2( lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True,unit=r'ms', plotInSamplesAxis=True, alpha=0.2)
+    def processfitCOmparison(idx):
+        sinEX=SineExcitationExperemeint(measurmentFIle, idx, sensor=leadSensorname)
+        sinEX.plotFFTandSineFit()
+        snrParams=sinEX.getSNR()
+        return snrParams
+    snrParams=process_map(processfitCOmparison, np.array(range(len(measurmentFIle['EXPERIMENTS']['Sine excitation'].keys())-116))+116, max_workers=8)
+
+    sineESs=[]
+    SNRS=[]            
+    for i in [11]:
+        sineESs.append(SineExcitationExperemeint(measurmentFIle, i, sensor=leadSensorname))
+        sineESs[-1].plotFFTandSineFit()
+        SNRS.append(sineESs[-1].getSNR())
+    print("Debug")
     """
+    WORKER_NUMBER = 12
     timeDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,10000:20000].astype(np.int64)
     ticksDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,10000:20000].astype(np.int64)
     ticksDiffDF1=ticksDiffDF1-ticksDiffDF1[0]
@@ -831,13 +1016,44 @@ if __name__ == "__main__":
         {
             'type': 'deviation',
             'unit': 'ms',
+            'lengthInS': 100.0,
+            'correctLinFreqDrift': False,
+            'plotInSamples': True
+        },
+        {
+            'type': 'deviation',
+            'unit': 'ms',
             'lengthInS': 10.0,
             'correctLinFreqDrift': False,
             'plotInSamples': True
         },
         {
             'type': 'phaseNoise',
-            'signalFreq': 500
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 63
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 63,
+            'xLims': [-1, 1]
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 63,
+            'xLims': [-1, 1],
+            'plotSincSensForLength': {'length': [1.0, 10, 100], 'maxFreq': 0.2}
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 63,
+            'xLims': [-1, 1],
+            'plotSincSensForLength': {'length': [1.0,10, 30], 'poles':3}
+        },
+        {
+        'type': 'phaseNoise',
+        'signalFreq': 500
         },
         {
             'type': 'phaseNoise',
@@ -857,6 +1073,10 @@ if __name__ == "__main__":
         },
         {
             'type': 'phaseNoise',
+            'xLims': [-0.2/100, 0.2/100]
+        },
+        {
+            'type': 'phaseNoise',
             'signalFreq': 500,
             'xLims': [-0.2, 0.2],
             'plotSincSensForLength': {'length':[1.0, 10, 100],'maxFreq':0.2}
@@ -865,6 +1085,12 @@ if __name__ == "__main__":
             'type': 'phaseNoise',
             'signalFreq': 500,
             'xLims': [-0.2, 0.2],
+            'unit': 'A.U'
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 63,
+            'xLims': [-1, 1],
             'unit': 'A.U'
         },
         {
@@ -904,11 +1130,11 @@ if __name__ == "__main__":
     jitterGenLSM6DSRX.plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, plotRaw=False)
     jitterGenLSM6DSRX6667Hz.plotPhaseNoise(fig=figPhaseNoise, ax=axPhaseNoise, plotRaw=False)
     """
-    freqPoints=1000
+    freqPoints=250
     ampPoints=0
     SimuPoints =     ampPoints+len(jitterGensForSimulations)
     nsPreAmpStep=20
-    lengthInS=10
+    lengthInS=100
     freqs=np.zeros(freqPoints * SimuPoints)
     noiseLevel=np.zeros(freqPoints * SimuPoints)
     runNoiselevel=np.append(np.flip(np.arange(len(jitterGensForSimulations)) - (len(jitterGensForSimulations)-1)), np.array(np.arange(SimuPoints - 2) + 1) * nsPreAmpStep * 10e-9)
@@ -1057,6 +1283,7 @@ if __name__ == "__main__":
         saveImagePickle("Monte Carlo Amp from PhaseNoise", ax4, fig4)
         saveImagePickle("Monte Carlo Phase from PhaseNoise", ax4, fig4)
     """
+    """
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, projection='3d')
     surf=ax2.plot_trisurf(freqs, noiseLevel, results[:, 0],cmap=cm.coolwarm)
@@ -1129,5 +1356,5 @@ if __name__ == "__main__":
     ax[1].grid(True)
     fig3.tight_layout()
     fig3.show()
-    """
+    
     print("Hello")
