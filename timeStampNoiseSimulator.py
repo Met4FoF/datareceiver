@@ -49,7 +49,7 @@ lineSyles=[
      ('densely dashdotdotted', (0, (3, 1, 1, 1, 1, 1)))]
 
 tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
-plt.rcParams['axes.prop_cycle'] = plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
+plt.rcParams['axes.prop_cycle'] = colorCycler=plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
 plt.rcParams['axes.formatter.useoffset'] = False
 plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
 LANG='EN'
@@ -61,7 +61,12 @@ if LANG=='DE':
     plt.rcParams['text.latex.preamble'] = r'\usepackage{icomma}\usepackage{amsmath}\boldmath' # remove nasty Space behind comma in de_DE.utf8 locale https://stackoverflow.com/questions/50657326/matplotlib-locale-de-de-latex-space-btw-decimal-separator-and-number
     plt.rcParams['axes.formatter.use_locale'] = True
 else:
+    import locale
     trueFalseAnAus = {True: 'On', False: 'Off'}
+    plt.rcParams['text.latex.preamble'] = r'\usepackage{icomma}\usepackage{amsmath}\boldmath' # remove nasty Space behind comma in de_DE.utf8 locale https://stackoverflow.com/questions/50657326/matplotlib-locale-de-de-latex-space-btw-decimal-separator-and-number
+    locale.setlocale(locale.LC_NUMERIC,"en_US.utf8")
+    locale.setlocale(locale.LC_ALL,"en_US.utf8")
+    plt.rcParams['axes.formatter.use_locale'] = True
 plt.rcParams['mathtext.fontset'] = 'custom'
 plt.rcParams['mathtext.rm'] = 'NexusProSans'
 plt.rcParams['mathtext.it'] = 'NexusProSans:italic'
@@ -184,77 +189,8 @@ class realWordJitterGen:
         print("Test")
 
 
-    def plotDeviation(self,fig=None,axs=None,lengthInS=None,show=False,lw=PLTSCALFACTOR,correctLinFreqDrift=True,plotInSamples=False,save=False,unit='ns',ylim=None,dataStartOffset=None,addLabel=True):
-        salefactorFromeUnit={'ns':1e9,r'\textmu s':1e6,'ms':1e3,'s':1}
-        yScaleFactor=salefactorFromeUnit[unit]
-        if fig==None and axs==None:
-            fig,ax=plt.subplots()
-            axs = [ax]
-            if plotInSamples:
-                ax2 = ax.twinx()# axis for deviation in samples
-                axs=[ax,ax2]
-        else:
-            ax=axs[0]
-            if plotInSamples:
-                ax2=axs[1]
-        if lengthInS ==None:
-            length=self.expectedTime.size
-        else:
-            length=int(lengthInS*self.fs)
-
-        if correctLinFreqDrift:
-            tmp=self.deviationFromNominal[:length]
-            correctedTimeDev=tmp-np.arange(length)*(tmp[-1]/(length-1))-tmp[0]
-            correctedTime=self.expectedTime[:length]-np.arange(length)*(tmp[-1]/(length-1))
-            line=ax.plot(correctedTime, correctedTimeDev * yScaleFactor, label=self.title if addLabel else "", lw=lw)
-            if plotInSamples:
-                ax2.plot(correctedTime, correctedTimeDev/self.deltaT, label=self.title if addLabel else "", lw=lw,color=line[0].get_color(),ls=':')
-        else:
-            line=ax.plot(self.expectedTime[:length], self.deviationFromNominal[:length]*yScaleFactor, label=self.title if addLabel else "",lw=lw)
-            if plotInSamples:
-                ax2.plot(self.expectedTime[:length], self.deviationFromNominal[:length] / self.deltaT, label=self.title if addLabel else "", lw=lw, color=line[0].get_color(),ls=':')
-        if show or save:
-            if LANG=='EN':
-                #fig.suptitle(r"\textbf{Time deviation  sampling frequency correction "+ str(correctLinFreqDrift))
-                ax.set_xlabel(r"\textbf{Relative time in s}")
-                ax.set_ylabel(r"\textbf{Time deviation in "+unit+"}")
-            if LANG=='DE':
-                #fig.suptitle(r"\textbf{Abtastzeitabweichungen Frequenzkorrektur "+ trueFalseAnAus[correctLinFreqDrift])
-                ax.set_xlabel(r"\textbf{Relative Zeit in s}")
-                ax.set_ylabel(r"\textbf{Zeitabweichung in "+unit+"}")
-            ax.ticklabel_format(axis='both',style='plain')
-            ax.legend(loc='upper left',ncol=2)
-            if plotInSamples:
-                if LANG == 'EN':
-                    ax2.set_ylabel(r"\textbf{Time deviation in samples}")
-                if LANG == 'DE':
-                    ax2.set_ylabel(r"\textbf{Zeitabweichung in} $\Delta t=\frac{1}{f_\text{s}}$")
-                yMinMax=np.array([1e100,1e-100])
-                for line in ax2.lines:
-                    yMinMax[0]=np.min([yMinMax[0],np.min(line.get_ydata())])
-                    yMinMax[1] = np.max([yMinMax[1], np.max(line.get_ydata())])
-                yMinMax=yMinMax*1.1#scale to have 5% border maybe 10
-                lengthAbsMax=np.max(abs(np.array(ax.get_ylim())))
-                lengthSamplesAbsMax=np.max(abs(yMinMax))
-                ax.set_ylim([-lengthAbsMax,lengthAbsMax])
-                ax2.set_ylim([-lengthSamplesAbsMax, lengthSamplesAbsMax])
-                #ax2.legend(loc='upper right')
-                ax2.spines['right'].set(ls=':')
-                ax.spines['right'].set(ls=':')
-                #align_yaxis(ax, 0.0, ax2, 0.0)
-            ax.grid()
-
-        if show:
-            #fig.tight_layout()
-            fig.show()
-        if save:
-            fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' + str(lengthInS) +'s_'+'Corr_ '+trueFalseAnAus[correctLinFreqDrift]+'_TimeDevitions.png'), dpi=300, bbox_inches='tight')
-            fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' + str(lengthInS) +'s_'+'Corr_'+trueFalseAnAus[correctLinFreqDrift]+'_uncerComps.pdf'), dpi=300, bbox_inches='tight')
-            globals()['figSaveCounter'] += 1
-        return fig,axs
-
-    def plotDeviation2(self, fig=None, axs=None, lengthInS=None, show=False, lw=PLTSCALFACTOR, correctLinFreqDrift=True,
-                   plotInSamples=False, save=False, unit='ns', ylim=None,plotInSamplesAxis=False,alpha=0.5):
+    def plotDeviation(self, fig=None, axs = None, lengthInS=None, show=False, lw=PLTSCALFACTOR, correctLinFreqDrift=True,
+                   plotInSamples=False, save=False, unit='ns', ylim=None,plotInSamplesAxis=False,alpha=0.5,color=None,maxSegments=1e4):
         salefactorFromeUnit = {'ns': 1e9, r'\textmu s': 1e6, 'ms': 1e3, 's': 1}
         yScaleFactor = salefactorFromeUnit[unit]
         if fig == None and axs == None:
@@ -267,23 +203,19 @@ class realWordJitterGen:
             if isinstance(axs,list):
                 axs=axs
             else:
-                try:
-                    ax = axs[0]
-                except:
-                    if isinstance(axs, plt.Axes):
-                        # so we have goten only one axis so we need to create a second one
-                        ax2 = axs.twinx()
-                        ax=axs
-                        axs = [ax, ax2]
-
-                    else:
-                        raise ValueError("No valid axis object")
-            if plotInSamples or plotInSamplesAxis:
-                ax2 = axs[1]
-        color = next(ax._get_lines.prop_cycler)['color']
+                if isinstance(axs, plt.Axes):
+                    # so we have goten only one axis so we need to create a second one
+                    ax2 = axs.twinx()
+                    axOld=axs
+                    axs = [axOld, ax2]
+                else:
+                    raise ValueError("No valid axis object")
+        if color is None:
+            #No color was set so we will take the next color for this axis
+            color = next(axs[0]._get_lines.prop_cycler)['color']
         # calculate segments
         segment_length = int(lengthInS * self.fs) if lengthInS is not None else self.expectedTime.size
-        num_segments = int(np.ceil(self.expectedTime.size / segment_length))
+        num_segments = int(np.min([(int(np.ceil(self.expectedTime.size / segment_length))),maxSegments]))# limit to maxSegments to prevent memory overloading
         slopes=np.zeros(num_segments)
         for segment_idx in range(num_segments):
             segment_start = segment_idx * segment_length
@@ -294,34 +226,35 @@ class realWordJitterGen:
                 slope = (timeDev[-1] - timeDev[0]) / times[-1]
                 slopes[segment_idx]=slope
                 correctedTimeDev = timeDev - slope * times - timeDev[0]
-                line = ax.plot(times, correctedTimeDev * yScaleFactor, label=self.title if segment_idx == 0 else "", lw=lw,color=color,alpha=alpha)
+                line = axs[0].plot(times, correctedTimeDev * yScaleFactor, label=self.title if segment_idx == 0 else "", lw=lw,color=color,alpha=alpha)
                 if plotInSamples:
-                    ax2.plot(times, correctedTimeDev / self.deltaT, label=self.title if segment_idx == 0 else "", lw=lw,
+                    axs[1].plot(times, correctedTimeDev / self.deltaT, label=self.title if segment_idx == 0 else "", lw=lw,
                              color=color, ls=':',alpha=alpha)
             else:
-                line = ax.plot(self.expectedTime[segment_start:segment_end] - self.expectedTime[segment_start],
+                line = axs[0].plot(self.expectedTime[segment_start:segment_end] - self.expectedTime[segment_start],
                                self.deviationFromNominal[segment_start:segment_end] * yScaleFactor,
                                label=self.title if segment_idx == 0 else "", lw=lw,color=color,alpha=alpha)
                 if plotInSamples:
-                    ax2.plot(self.expectedTime[segment_start:segment_end] - self.expectedTime[segment_start],
+                    axs[1].plot(self.expectedTime[segment_start:segment_end] - self.expectedTime[segment_start],
                              self.deviationFromNominal[segment_start:segment_end] / self.deltaT,
                              label=self.title if segment_idx == 0 else "", lw=lw, color=color, ls=':',alpha=alpha)
         if show or save:
             if LANG == 'EN':
                 # fig.suptitle(r"\textbf{Time deviation  sampling frequency correction "+ str(correctLinFreqDrift))
-                ax.set_xlabel(r"\textbf{Relative time in s}")
-                ax.set_ylabel(r"\textbf{Time deviation in " + unit + "}")
+                axs[0].set_xlabel(r"\textbf{Relative time in s}")
+                axs[0].set_ylabel(r"\textbf{Time deviation in " + unit + "}")
             if LANG == 'DE':
                 # fig.suptitle(r"\textbf{Abtastzeitabweichungen Frequenzkorrektur "+ trueFalseAnAus[correctLinFreqDrift])
-                ax.set_xlabel(r"\textbf{Relative Zeit in s}")
-                ax.set_ylabel(r"\textbf{Zeitabweichung in " + unit + "}")
-            ax.ticklabel_format(axis='both', style='plain')
-            ax.legend(loc='upper left', ncol=2)
+                axs[0].set_xlabel(r"\textbf{Relative Zeit in s}")
+                axs[0].set_ylabel(r"\textbf{Zeitabweichung in " + unit + "}")
+            for ax in axs:
+                ax.ticklabel_format(axis='both', style='plain')
+            axs[0].legend(loc='upper left', ncol=2)
             if plotInSamples or plotInSamplesAxis:
                 if LANG == 'EN':
-                    ax2.set_ylabel(r"\textbf{Time deviation in} $\Delta t=\frac{1}{\overline{f_\text{s}}}$")
+                    axs[1].set_ylabel(r"\textbf{Time deviation in} $\Delta t=\frac{1}{\overline{f_\text{s}}}$")
                 if LANG == 'DE':
-                    ax2.set_ylabel(r"\textbf{Zeitabweichung in} $\Delta t=\frac{1}{\overline{f_\text{s}}}$")
+                    axs[1].set_ylabel(r"\textbf{Zeitabweichung in} $\Delta t=\frac{1}{\overline{f_\text{s}}}$")
                 """
                 yMinMax = np.array([1e100, 1e-100])
                 for line in ax2.lines:
@@ -337,8 +270,9 @@ class realWordJitterGen:
                 ax.spines['right'].set(ls=':')
                 # align_yaxis(ax, 0.0, ax2, 0.0)
                 """
-            ax.grid()
+            axs[0].grid()
         if plotInSamplesAxis and not plotInSamples:
+            # to get the time dev in samples we just rescale the limits of the axis and let mpl do the rest this will only work for one axis
             timeUnitsPerDT=self.deltaT*yScaleFactor
             axs[1].set_ylim(axs[0].get_ylim()[0] /timeUnitsPerDT, axs[0].get_ylim()[1] / timeUnitsPerDT)
         if show:
@@ -350,6 +284,10 @@ class realWordJitterGen:
                         bbox_inches='tight')
             fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' + str(
                 lengthInS) + 's_' + 'TimeDev_Corr_' + trueFalseAnAus[correctLinFreqDrift] + '_uncerComps.pdf'), dpi=300,
+                        bbox_inches='tight')
+            globals()['figSaveCounter'] += 1
+            fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' + str(
+                lengthInS) + 's_' + 'TimeDev_Corr_' + trueFalseAnAus[correctLinFreqDrift] + '_uncerComps.svg'), dpi=300,
                         bbox_inches='tight')
             globals()['figSaveCounter'] += 1
         return fig, axs
@@ -424,7 +362,7 @@ class realWordJitterGen:
         axs[0].plot(freqs, np.ones(freqs.size) * np.mean(abs2(fft_QuantNoise)*scale),label=r'\textbf{Gleich verteiltes Quantisierungs Rauschen Interval '+"%.2f" % ((1/108e6)*1e9)+' ns }',color='tab:orange')
         axs[0].plot(freqs, np.ones(freqs.size) * np.mean(abs2(fft_gausNoise)*scale),label=r'\textbf{Nomalverteilter Jitter} $\sigma = 43~\text{ns}$',color='tab:red')
 
-        axs[0].set_ylabel(r'\textbf{Jitter~PSD in $\frac{{\text{ns}}^2}{\text{Hz}}$')
+        axs[0].set_ylabel(r'\textbf{Jitter~PSD in $\frac{{\text{\textbf{ns}}}^2}{\text{\textbf{Hz}}}$')
         axs[0].grid()
         axs[0].legend(ncol=2)
         if plotPhase:
@@ -455,7 +393,7 @@ class realWordJitterGen:
             #fig.subplots_adjust(bottom=0.15)
         if plotTimeDevs:
             figTimeDev,axTimeDev=plt.subplots()
-        #ax.set_yscale('log')
+
         freqs = np.fft.fftshift(np.fft.fftfreq(fftlength, d=1/sampleFreq))
         sliceFFTResultsAbs=np.zeros([nnumOFSlices,freqs.size])
         correctedFreqs=np.zeros(nnumOFSlices)
@@ -495,8 +433,9 @@ class realWordJitterGen:
             psdMean=psdMean*2
             p=axs.plot((freqs/(sampleFreq))*signalFreq, gaussian_filter(np.mean((sliceFFTResultsAbs)/fftlength,axis=0),filterWidth),
                     label=r'\textbf{'+self.title,lw=lw)#+' $f_\text{s} = '+' {:.1u}'.format(sampleFrequFloat).replace('+/-',r'\pm')+'$ Hz }'
-
         if plotSincSensForLength!=None:
+            #create shadow axis to optain second legend
+            axSincSens=axs.twinx()
             labelPrefixDict={'EN':'Sine approx. sensitivity ','DE':'Sinus Approximation Sensitivität '}
             if isinstance(plotSincSensForLength, list):
                 sincFreqs=np.linspace(-signalFreq*0.5,signalFreq*0.5,num=100000,endpoint=True)
@@ -504,7 +443,7 @@ class realWordJitterGen:
                     WindowAmps = abs(np.sinc(sincFreqs * length))
                     if unit == 'dBc':
                         WindowAmps=10 * np.log10(WindowAmps)
-                    line=axs.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}')
+                    line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',color=axs._get_lines.get_next_color())
                     line[0].set_zorder(-1)
             if isinstance(plotSincSensForLength, dict):
                 if 'poles' in plotSincSensForLength.keys():
@@ -516,7 +455,7 @@ class realWordJitterGen:
                         WindowAmps = abs(np.sinc(sincFreqs * length))
                         if unit == 'dBc':
                             WindowAmps=10 * np.log10(WindowAmps)
-                        line=axs.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5)
+                        line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5,color=axs._get_lines.get_next_color())
                         line[0].set_zorder(-1)
                 else:
                     sincFreqs=np.linspace(-plotSincSensForLength['maxFreq'],plotSincSensForLength['maxFreq'],num=100000,endpoint=True)
@@ -524,8 +463,10 @@ class realWordJitterGen:
                         WindowAmps = abs(np.sinc(sincFreqs * length))
                         if unit == 'dBc':
                             WindowAmps=10 * np.log10(WindowAmps)
-                        line=axs.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5)
+                        line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5,color=axs._get_lines.get_next_color())
                         line[0].set_zorder(-1)
+            axSincSens.set_ylim(axs.get_ylim()) #scale axis like the original
+            axSincSens.get_yaxis().set_visible(False)# deactivate gost axis visibility
 
         if plotRaw:
             for i in range(nnumOFSlices):
@@ -534,17 +475,17 @@ class realWordJitterGen:
                 if unit == 'A.U':
                     axs.plot((freqs / sampleFreq) * signalFreq, sliceFFTResultsAbs[i], alpha=1 / nnumOFSlices, color=p[0].get_color(), lw=lw)  # label=r'\textbf{'+self.title+'}'
 
-        if show:
+        if show or save:
             if unit !='dBc':
                 if LANG=='EN':
-                    axs.set_ylabel(r'\textbf{Phase noise amplitude in $\frac{\text{A.U.}^2}{\text{Hz}}$')
+                    axs.set_ylabel(r'\textbf{Phase noise amplitude in $\frac{\text{\textbf{A. U.}}^2}{\text{\textbf{Hz}}}$')
                 if LANG=='DE':
-                    axs.set_ylabel(r'\textbf{Phasenrauschamplitude in $\frac{\text{A.U.}^2}{\text{Hz}}$')
+                    axs.set_ylabel(r'\textbf{Phasenrauschamplitude in $\frac{\text{\textbf{A. U.}}^2}{\text{\textbf{Hz}}}$')
             else:
                 if LANG == 'EN':
-                    axs.set_ylabel(r'\textbf{Phase noise power density in} $\frac{\text{dBC}}{\text{Hz}}$')
+                    axs.set_ylabel(r'\textbf{Phase noise PSD in} $\frac{\text{\textbf{dBC}}}{\text{\textbf{Hz}}}$')
                 if LANG == 'DE':
-                    axs.set_ylabel(r'\textbf{Phasenrauschleistungsdichte in} $\frac{\text{dBC}}{\text{Hz}}$')
+                    axs.set_ylabel(r'\textbf{Phasenrauschleistungsdichte in} $\frac{\text{\textbf{{dBC}}}{\text{\textbf{Hz}}}$')
             if signalFreq!=1.0:
                 if LANG == 'EN':
                     axs.set_xlabel(r'\textbf{Offset~frequency to '+str(signalFreq)+' Hz Signal in Hz}')
@@ -552,11 +493,15 @@ class realWordJitterGen:
                     axs.set_xlabel(r'\textbf{Frequenzdifferenz zu einem ' + locale.format_string('%g',signalFreq) + ' Hz Signal in Hz}')
             else:
                 if LANG== 'EN':
-                    axs.set_xlabel(r'$\frac{{\text{\textbf{Offset~frequency}}}}{\text{\textbf{Signal~frequency}}}$ \textbf{in} $\frac{\text{Hz}}{\text{Hz}}$')
+                    axs.set_xlabel(r'$\frac{{\text{\textbf{Offset~frequency}}}}{\text{\textbf{Signal~frequency}}}$ \textbf{in} $\frac{\text{\textbf{Hz}}}{\text{\textbf{Hz}}}$')
                 if LANG== 'DE':
-                    axs.set_xlabel(r'$\frac{{\text{\textbf{Frequenzdifferenz}}}}{\text{\textbf{Signalfrequenz}}}$ \textbf{in} $\frac{\text{Hz}}{\text{Hz}}$')
+                    axs.set_xlabel(r'$\frac{{\text{\textbf{Frequenzdifferenz}}}}{\text{\textbf{Signalfrequenz}}}$ \textbf{in} $\frac{\text{\textbf{Hz}}}{\text{\textbf{Hz}}}$')
             axs.grid(True, which="both")
-            axs.legend(ncol=2)
+            axs.legend(ncol=1,loc='upper left')
+            try:
+                axSincSens.legend(ncol=1, loc='upper right')
+            except:
+                pass
             #ax.set_ylim([-220,0])
             #fig.tight_layout()
             fig.show()
@@ -567,6 +512,10 @@ class realWordJitterGen:
             figTimeDev.show()
         if xLims is not None:
             axs.set_xlim(xLims)
+            try:
+                axSincSens.set_xlim(xLims)
+            except:
+                pass
         if save:
 
             try:
@@ -575,6 +524,7 @@ class realWordJitterGen:
                 paramsStr = "None"
             fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' +'sincSens_'+paramsStr+'_PhaseNoise.png'), dpi=300, bbox_inches='tight')
             fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' +'sincSens_'+paramsStr+'_PhaseNoise.pdf'), dpi=300, bbox_inches='tight')
+            fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2) + '_' + 'sincSens_' + paramsStr + '_PhaseNoise.svg'), dpi=300, bbox_inches='tight')
             globals()['figSaveCounter']+=1
         return fig,axs
 
@@ -894,13 +844,52 @@ if __name__ == "__main__":
     dataFileLSM6DSRX1667Hz_9 = h5py.File(os.path.join(pathPrefix, 'LSM6DSRX_1667HZ_09.hdf5'), 'r')
     dataFileLSM6DSRX6667Hz = h5py.File(os.path.join(pathPrefix,'ST_sensor_test_6667Hz_2.hfd5'), 'r')
     dataFileADXL355 = h5py.File(os.path.join(pathPrefix, 'ADXL355_4kHz.hfd5'), 'r')
-    jitterGenMPU9250 = realWordJitterGen(dataFileMPU9250, '0x1fe40000_MPU_9250',
-                                         r"\textbf{MPU 9250 $f_\text{sNom}$ = 1~kHz}")  # $f_s=$ \textbf{1001.0388019191 Hz}")
-    jitterGenBMA280= realWordJitterGen(dataFileBMA280,'0x1fe40000_BMA_280',     r"\textbf{BMA 280 $f_\text{sNom}$ = 2~kHz}",offset=[int(1.7e6),2048])# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
-    jitterGensForSimulations.append(jitterGenBMA280)
-    jitterGenMPU9250.plotDeviation2(lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=0.33)
 
-    jitterGenBMA280.plotDeviation2( lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True,unit=r'ms', plotInSamplesAxis=True, alpha=0.2)
+
+    jitterGen1 = realWordJitterGen(dataFileINTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{DAU Timestamping Phasenoise}")  # nominalfreq=1000)
+    jitterGensForSimulations.append(jitterGen1)
+
+    jitterGenMPU9250 = realWordJitterGen(dataFileMPU9250, '0x1fe40000_MPU_9250',r"\textbf{IMU $f_\text{sNom}$ = 1~kHz}")  # $f_s=$ \textbf{1001.0388019191 Hz}")
+    jitterGensForSimulations.append(jitterGenMPU9250)
+
+    jitterGenBMA280 = realWordJitterGen(dataFileBMA280, '0x1fe40000_BMA_280',r"\textbf{Accelerometer $f_\text{sNom}$ = 2~kHz}", offset=[int(1.7e6),2048])  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGensForSimulations.append(jitterGenBMA280)
+
+    """
+    jitterGen2 = realWordJitterGen(dataFileINTREF, '0x60ad0100_STM32_GPIO_Input',r"\textbf{Board 2 int. clock}",offset=[0,5000000])#nominalfreq=1000)
+    jitterGensForSimulations.append(jitterGen2)
+
+    jitterGen3 = realWordJitterGen(dataFileEXTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{Board 1 ext. clock")# 1000 Hz}")#nominalfreq=1000)
+    jitterGensForSimulations.append(jitterGen3)
+
+    jitterGen4 = realWordJitterGen(dataFileEXTREF, '0x60ad0100_STM32_GPIO_Input',r"\textbf{Board 2 ext. clock}")#nominalfreq=1000)
+    jitterGensForSimulations.append(jitterGen4)
+    """
+    """
+    jitterGenLSM6DSRX = realWordJitterGen(dataFileLSM6DSRX, '0x60ad0000_LSM6DSRX', r"\textbf{LSM6DSRX $f_s$=1.667~kHz}")
+    jitterGensForSimulations.append(jitterGenLSM6DSRX)
+
+    #jitterGenLSM6DSRXPolled2KHz = realWordJitterGen(dataFileLSM6DSRX, '0x60ad0000_LSM6DSRX', r"\textbf{LSM6DSRX polled}", pollingFreq=2000.0)
+    #jitterGensForSimulations.append(jitterGenLSM6DSRXPolled2KHz)
+
+    jitterGenLSM6DSRXLongTerm = realWordJitterGen(dataFileLSM6DSRXlongTerm, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX long observation time}")
+    jitterGensForSimulations.append(jitterGenLSM6DSRXLongTerm)
+    
+    jitterGenLSM6DSRX6667Hz = realWordJitterGen(dataFileLSM6DSRX6667Hz, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX $f_\text{sNom}$ = 6.667~kHz}")
+    jitterGensForSimulations.append(jitterGenLSM6DSRX6667Hz)
+
+    jitterGenLSMDSRX_09 = realWordJitterGen(dataFileLSM6DSRX1667Hz_9, '0x60ad0000_LSM6DSRX',r"\textbf{LSMDSRX $f_\text{sNom}$ = 1.667~kHz}")  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGensForSimulations.append(jitterGenLSMDSRX_09)
+    
+    jitterGenADXL355 = realWordJitterGen(dataFileADXL355, '0x0_ADXL_355',r"\textbf{ADXL 355 $f_\text{sNom}$ = 4~kHz}")  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGensForSimulations.append(jitterGenADXL355)
+    """
+
+    jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=0.33,color=tubscolors[1])
+
+    jitterGenBMA280.plotDeviation( lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True,unit=r'ms', plotInSamplesAxis=True, alpha=0.2,color=tubscolors[2])
+
+    """
     def processfitCOmparison(idx):
         sinEX=SineExcitationExperemeint(measurmentFIle, idx, sensor=leadSensorname)
         sinEX.plotFFTandSineFit()
@@ -915,8 +904,10 @@ if __name__ == "__main__":
         sineESs[-1].plotFFTandSineFit()
         SNRS.append(sineESs[-1].getSNR())
     print("Debug")
-    """
+    
     WORKER_NUMBER = 12
+    """
+    """
     timeDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,10000:20000].astype(np.int64)
     ticksDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,10000:20000].astype(np.int64)
     ticksDiffDF1=ticksDiffDF1-ticksDiffDF1[0]
@@ -929,52 +920,9 @@ if __name__ == "__main__":
     ticksDiffDF3=dataFile3['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,10013:20013].astype(np.int64)-dataFile3['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,12020:22020].astype(np.int64)
     ticksDiffDF2=ticksDiffDF2-np.mean(ticksDiffDF3)
     """
-    jitterGen1 = realWordJitterGen(dataFileINTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{DAU 1 int. Oszillator}")#nominalfreq=1000)
-    #jitterGen1.plotAllanDev()
-    jitterGensForSimulations.append(jitterGen1)
 
-    """
-    jitterGen2 = realWordJitterGen(dataFileINTREF, '0x60ad0100_STM32_GPIO_Input',r"\textbf{Board 2 int. clock}",offset=[0,5000000])#nominalfreq=1000)
-    jitterGensForSimulations.append(jitterGen2)
-
-
-
-    jitterGen3 = realWordJitterGen(dataFileEXTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{Board 1 ext. clock")# 1000 Hz}")#nominalfreq=1000)
-    jitterGensForSimulations.append(jitterGen3)
-    
-
-
-    jitterGen4 = realWordJitterGen(dataFileEXTREF, '0x60ad0100_STM32_GPIO_Input',r"\textbf{Board 2 ext. clock}")#nominalfreq=1000)
-    jitterGensForSimulations.append(jitterGen4)
-    
-    """
-    jitterGenMPU9250 = realWordJitterGen(dataFileMPU9250,'0x1fe40000_MPU_9250',r"\textbf{MPU 9250 $f_\text{sNom}$ = 1~kHz}")# $f_s=$ \textbf{1001.0388019191 Hz}")
-    jitterGensForSimulations.append(jitterGenMPU9250)
-
-    jitterGenBMA280= realWordJitterGen(dataFileBMA280,'0x1fe40000_BMA_280',     r"\textbf{BMA 280 $f_\text{sNom}$ = 2~kHz}",offset=[int(1.7e6),2048])# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
-    jitterGensForSimulations.append(jitterGenBMA280)
-
-    """
-    jitterGenLSM6DSRX = realWordJitterGen(dataFileLSM6DSRX, '0x60ad0000_LSM6DSRX', r"\textbf{LSM6DSRX $f_s$=1.667~kHz}")
-    jitterGensForSimulations.append(jitterGenLSM6DSRX)
-    
-    #jitterGenLSM6DSRXPolled2KHz = realWordJitterGen(dataFileLSM6DSRX, '0x60ad0000_LSM6DSRX', r"\textbf{LSM6DSRX polled}", pollingFreq=2000.0)
-    #jitterGensForSimulations.append(jitterGenLSM6DSRXPolled2KHz)
-    
-    jitterGenLSM6DSRXLongTerm = realWordJitterGen(dataFileLSM6DSRXlongTerm, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX long observation time}")
-    jitterGensForSimulations.append(jitterGenLSM6DSRXLongTerm)
-    """
-    
-    jitterGenLSM6DSRX6667Hz = realWordJitterGen(dataFileLSM6DSRX6667Hz, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX $f_\text{sNom}$ = 6.667~kHz}")
-
-    jitterGensForSimulations.append(jitterGenLSM6DSRX6667Hz)
-
-    jitterGenLSMDSRX_09= realWordJitterGen(dataFileLSM6DSRX1667Hz_9,'0x60ad0000_LSM6DSRX',     r"\textbf{LSMDSRX $f_\text{sNom}$ = 1.667~kHz}")# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
-    jitterGensForSimulations.append(jitterGenLSMDSRX_09)
-    jitterGenADXL355= realWordJitterGen(dataFileADXL355,'0x0_ADXL_355',     r"\textbf{ADXL 355 $f_\text{sNom}$ = 4~kHz}")# $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
-    jitterGensForSimulations.append(jitterGenADXL355)
     #jitterGensForSimulations[0].plotAllanDev()
-    show=False
+    show=True
 
     def plot_graphs(jitterGensForSimulations, plots_params):
         for params in plots_params:
@@ -990,7 +938,7 @@ if __name__ == "__main__":
 
                 # Set show to True in the last iteration
                 if idx == len(jitterGensForSimulations) - 1:
-                    specific_params['show'] = True
+                    specific_params['show'] = show
                     specific_params['save'] = True
                     if 'plotSincSensForLength' in params.keys():
                         specific_params['plotSincSensForLength'] = params['plotSincSensForLength']
@@ -1000,106 +948,144 @@ if __name__ == "__main__":
                 elif params['type'] == 'phaseNoise':
                     fig, axs = jitter_gen.plotPhaseNoise(**specific_params)
                 # Add more conditions here for other types of plots
+            plt.close(fig)
+            del(fig)
+            del(axs)
+
+
+    phaseNoiseLW = 2.0
     plots_params = [
         {
             'type': 'deviation',
             'unit': r'\textmu s',
             'lengthInS': 10.0,
-            'plotInSamples': True
+            'plotInSamples': True,
+            'maxSegments':1
         },
         {
             'type': 'deviation',
             'unit': 'ms',
             'lengthInS': 1000.0,
-            'plotInSamples': True
+            'plotInSamples': True,
+            'maxSegments': 1
         },
         {
             'type': 'deviation',
             'unit': 'ms',
             'lengthInS': 100.0,
             'correctLinFreqDrift': False,
-            'plotInSamples': True
+            'plotInSamples': True,
+            'maxSegments': 1
         },
         {
             'type': 'deviation',
             'unit': 'ms',
             'lengthInS': 10.0,
             'correctLinFreqDrift': False,
-            'plotInSamples': True
+            'plotInSamples': True,
+            'maxSegments': 1
         },
         {
             'type': 'phaseNoise',
+            'lw':1.0
         },
         {
             'type': 'phaseNoise',
-            'signalFreq': 63
+            'signalFreq': 80,
+            'lw': phaseNoiseLW
         },
         {
             'type': 'phaseNoise',
-            'signalFreq': 63,
-            'xLims': [-1, 1]
-        },
-        {
-            'type': 'phaseNoise',
-            'signalFreq': 63,
+            'signalFreq': 80,
             'xLims': [-1, 1],
-            'plotSincSensForLength': {'length': [1.0, 10, 100], 'maxFreq': 0.2}
+            'lw': phaseNoiseLW
         },
         {
             'type': 'phaseNoise',
-            'signalFreq': 63,
+            'signalFreq': 80,
             'xLims': [-1, 1],
-            'plotSincSensForLength': {'length': [1.0,10, 30], 'poles':3}
+            'plotSincSensForLength': {'length': [1.0, 10, 100], 'maxFreq': 0.2},
+            'lw': phaseNoiseLW
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 80,
+            'xLims': [-1, 1],
+            'plotSincSensForLength': {'length': [1.0,10, 30], 'poles':5},
+            'lw': phaseNoiseLW
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 80,
+            'xLims': [-1, 1],
+            'plotSincSensForLength': {'length': [1.0, 10, 30], 'poles': 5},
+            'lw': phaseNoiseLW
         },
         {
         'type': 'phaseNoise',
-        'signalFreq': 500
-        },
-        {
-            'type': 'phaseNoise',
-            'signalFreq': 500,
-            'xLims': [-1.5, 1.5]
+        'signalFreq': 500,
+            'lw':1.0
         },
         {
             'type': 'phaseNoise',
             'signalFreq': 500,
             'xLims': [-1.5, 1.5],
-            'plotSincSensForLength': {'length':[1.0, 10, 100],'maxFreq':1.5}
+            'lw': phaseNoiseLW
         },
         {
             'type': 'phaseNoise',
             'signalFreq': 500,
-            'xLims': [-0.2, 0.2]
-        },
-        {
-            'type': 'phaseNoise',
-            'xLims': [-0.2/100, 0.2/100]
+            'xLims': [-1.5, 1.5],
+            'plotSincSensForLength': {'length':[1.0, 10, 100],'maxFreq':1.5},
+            'lw': phaseNoiseLW
         },
         {
             'type': 'phaseNoise',
             'signalFreq': 500,
             'xLims': [-0.2, 0.2],
-            'plotSincSensForLength': {'length':[1.0, 10, 100],'maxFreq':0.2}
+            'lw': phaseNoiseLW
+        },
+        {
+            'type': 'phaseNoise',
+            'xLims': [-0.2/100, 0.2/100],
+            'lw': phaseNoiseLW
         },
         {
             'type': 'phaseNoise',
             'signalFreq': 500,
             'xLims': [-0.2, 0.2],
-            'unit': 'A.U'
-        },
-        {
-            'type': 'phaseNoise',
-            'signalFreq': 63,
-            'xLims': [-1, 1],
-            'unit': 'A.U'
+            'plotSincSensForLength': {'length':[1.0, 10, 100],'maxFreq':0.2},
+            'lw': phaseNoiseLW
         },
         {
             'type': 'phaseNoise',
             'signalFreq': 500,
             'xLims': [-0.2, 0.2],
             'unit': 'A.U',
-            'plotSincSensForLength': {'length':[1.0, 10, 100],'maxFreq':0.2}
-        }
+            'lw': phaseNoiseLW
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 80,
+            'xLims': [-1, 1],
+            'unit': 'A.U',
+            'lw': phaseNoiseLW
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 500,
+            'xLims': [-0.2, 0.2],
+            'unit': 'A.U',
+            'plotSincSensForLength': {'length':[1.0, 10, 100],'maxFreq':0.2},
+            'lw': phaseNoiseLW
+        },
+        {
+            'type': 'phaseNoise',
+            'signalFreq': 80,
+            'xLims': [-0.2, 0.2],
+            'plotSincSensForLength': {'length': [5.0, 10, 30],'maxFreq': 0.2},
+            'lw': phaseNoiseLW
+        },
     ]
 
     plot_graphs(jitterGensForSimulations, plots_params)
