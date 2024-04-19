@@ -75,7 +75,7 @@ plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
 plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
-PLTSCALFACTOR = 3
+PLTSCALFACTOR = 1.5
 SMALL_SIZE = 9 * PLTSCALFACTOR
 MEDIUM_SIZE = 12 * PLTSCALFACTOR
 BIGGER_SIZE = 15 * PLTSCALFACTOR
@@ -85,7 +85,7 @@ plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
 plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
 plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc("legend", fontsize=SMALL_SIZE*0.66)  # legend fontsize
+plt.rc("legend", fontsize=MEDIUM_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 figSaveCounter = 70
 SAVEFOLDER = './imagesIMEKO2024'
@@ -712,8 +712,7 @@ class SineExcitationExperemeint:
         json.dump(result,open('SNRParams/'+self.name+'SNR_params.json','w'))
         return result
 
-    def plotFFTandSineFit(self,axisToPlot=[2],plotQoutient=False,markerSize=1,plotHighLeak=False,filterWidth=1):
-
+    def plotFFTandSineFit(self,axisToPlot=[2],plotQoutient=False,markerSize=1,plotHighLeak=False,filterWidth=0.5):
         fig=plt.figure()
         if plotQoutient:
             gs = gridspec.GridSpec(len(axisToPlot)*3,1)
@@ -734,12 +733,12 @@ class SineExcitationExperemeint:
             baxXlims.append([self.multisineFitFreqs[start],self.multisineFitFreqs[stop-1]])
         for i in range(len(axisToPlot)):
             ax.append(plt.subplot(gs[i*numPlotsPerQuant,0]))
-            bax.append(brokenaxes(xlims=baxXlims,subplot_spec=gs[i*numPlotsPerQuant+1,0],fig=fig))
+            bax.append(brokenaxes(xlims=baxXlims,subplot_spec=gs[i*numPlotsPerQuant+1,0],fig=fig,d=.005))
             if plotQoutient:
-                baxQuatient.append(brokenaxes(xlims=baxXlims, subplot_spec=gs[i * numPlotsPerQuant + 2, 0], fig=fig))
+                baxQuatient.append(brokenaxes(xlims=baxXlims, subplot_spec=gs[i * numPlotsPerQuant + 2, 0], fig=fig,d=.005))
         for i,idx in enumerate(axisToPlot):
-            ax[i].semilogy(self.fftFreqs[1:],sp.ndimage.gaussian_filter1d(np.abs(self.fft[idx,1:]),filterWidth),label=r'\textbf{FFT  high \textit{spectral leakage}}',lw=1)
-            bax[i].plot(self.fftFreqs[1:],np.abs(self.fft[idx,1:]),label=r'\textbf{FFT high \textit{spectral leakage}}',lw=1, marker='o',markersize=markerSize)
+            ax[i].semilogy(self.fftFreqs[1:],sp.ndimage.gaussian_filter1d(np.abs(self.fft[idx,1:]),filterWidth),label=r'\textbf{DFT  high \textit{spectral leakage}}',lw=1)
+            bax[i].plot(self.fftFreqs[1:],np.abs(self.fft[idx,1:]),label=r'\textbf{DFT high \textit{spectral leakage}}',lw=1, marker='o',markersize=markerSize)
             ax[i].semilogy(self.fftFreqslowLeak[1:],sp.ndimage.gaussian_filter1d(np.abs(self.fftLowLeak[idx,1:]),filterWidth),label=r'\textbf{DFT low \textit{spectral leakage}}',lw=1)
             bax[i].plot(self.fftFreqslowLeak[1:],np.abs(self.fftLowLeak[idx,1:]),label=r'\textbf{DFT low \textit{spectral leakage}}',lw=1, marker='o',markersize=markerSize)
         minFFT=np.power(10,np.floor(np.log10(np.min(np.abs(self.fft[axisToPlot,1:])))))
@@ -748,19 +747,14 @@ class SineExcitationExperemeint:
         maxSine=np.power(10,np.ceil(np.log10(np.max(np.abs(self.multiSineFitresults[axisToPlot,:])))))
         min=np.min([minFFT,minSine])
         max=np.max([maxFFT,maxSine])
-        for i,idx in enumerate(axisToPlot):
-            ax[i].set_xlim([self.fftFreqs[1],self.fftFreqs[-1]])
-            ax[i].grid(True,which="major", axis="both",ls="-",lw=PLTSCALFACTOR)
-            ax[i].grid(True, which="minor", axis="both", ls="--", lw=0.25*PLTSCALFACTOR,c='grey')
-            ax[i].set_ylim([min,max])
-            bax[i].set_ylim([min,max])
+
         for j,jdx in enumerate(axisToPlot):
-            for i in range(self.numOverTones):
+            for i in range(self.numOverTones+1):
                 start = i * (2 * self.numeLinesAround + 1)
                 stop = (i + 1) * (2 * self.numeLinesAround + 1)
                 if i==0:
                     firstPlot=ax[j].semilogy(self.multisineFitFreqs[start:stop],
-                                abs(self.multiSineFitresults[jdx][start:stop]), lw=1,label=r'\textbf{Multi sine approximation}')
+                                abs(self.multiSineFitresults[jdx][start:stop]), lw=1,label=r'\textbf{Multi-sine approximation}')
                 else:
                     ax[j].semilogy(self.multisineFitFreqs[start:stop],
                                 abs(self.multiSineFitresults[jdx][start:stop]), lw=1,color=firstPlot[0].get_color())
@@ -793,16 +787,30 @@ class SineExcitationExperemeint:
                                                          np.abs(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]),
                                                          label=r'\textbf{FFT '+str(interPolFactor)+' times ' + interpolMethod + ' Interpolation}', alpha=0.5,
                                                          lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1], color=lastBrokenPlot[0][-1].get_color())
-
+        for i,idx in enumerate(axisToPlot):
+            ax[i].set_xlim([self.fftFreqs[1],self.fftFreqs[-1]])
+            ax[i].grid(True,which="major", axis="both",ls="-",lw=PLTSCALFACTOR)
+            ax[i].grid(True, which="minor", axis="both", ls="--", lw=0.25*PLTSCALFACTOR,c='grey')
+            ax[i].set_ylim([min,max])
+            bax[i].set_ylim([min,max])
         for i, idx in enumerate(axisToPlot):
             for j,axis in enumerate(bax[i].axs):
                 axis.set_yscale('log')
-                axis.yaxis.set_minor_locator(LogLocator(base=10, subs='auto'))
-                axis.grid(True, which="minor", axis="both", ls="--", lw=0.25*PLTSCALFACTOR,c='grey')
-                axis.grid(True, which="major", axis="both",ls="-",lw=PLTSCALFACTOR)
+                axis.yaxis.set_minor_locator(LogLocator(base=10, subs=(0.25,0.5,0.75,1.0),numticks=20))
+                axis.grid(True, which="minor", axis="x", ls=":", lw=0.125*PLTSCALFACTOR,c='grey')
+                axis.grid(True, which="major", axis="x",ls=":",lw=0.25*PLTSCALFACTOR)
+
+                axis.grid(True, which="minor", axis="y", ls="--", lw=0.25*PLTSCALFACTOR,c='grey')
+                axis.grid(True, which="major", axis="y",ls="-",lw=PLTSCALFACTOR)
+                axis.set_yticklabels([], minor=True)# disable minor ticks for all
                 if j!=0:
-                    axis.set_yticklabels([])
-                    #axis.set_yticks([])
+                    axis.set_yticklabels([]) #disable major ticks for all but the first
+                    for tick in axis.xaxis.get_minor_ticks():
+                        tick.tick1line.set_visible(False)
+                        tick.tick2line.set_visible(False)
+                        tick.label1.set_visible(False)
+                        tick.label2.set_visible(False)
+
         for axis in ax:
             axis.legend()
             axis.set_ylabel(r"\textbf{Amplitude in} $\frac{\text{m}}{\text{s}^2}$")
@@ -815,13 +823,14 @@ class SineExcitationExperemeint:
                 axis.set_ylabel(r"\textbf{Amplitude FFT/Fit in R. U.}")
                 if j!=0:
                     axis.set_yticklabels([])
+                    axis.set_yticklabels([], minor=True)
                     #axis.set_yticks([])
             baxQuatient[-1].set_xlabel(r"\textbf{Frequency in Hz }")
         else:
             bax[-1].set_xlabel(r"\textbf{Frequency in Hz}")
-        fig.savefig(SAVEFOLDER+self.name + ".svg")
-        fig.savefig(SAVEFOLDER+self.name+".pdf")
-        fig.savefig(SAVEFOLDER+self.name+".png")
+        fig.savefig(os.path.join(SAVEFOLDER,self.name + ".svg"))
+        fig.savefig(os.path.join(SAVEFOLDER,self.name+".pdf"))
+        fig.savefig(os.path.join(SAVEFOLDER,self.name+".png"))
         fig.show()
 
 
@@ -832,9 +841,9 @@ if __name__ == "__main__":
         locale.setlocale(locale.LC_ALL, "de_DE.utf8")
     manager = mp.Manager()
 
-    measurmentFIle=h5py.File(r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250PTB_v5(2)(copy).hdf5",'r')
+    #measurmentFIle=h5py.File(r"/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250PTB_v5(2)(copy).hdf5",'r')
     #measurmentFIle = h5py.File('/run/media/seeger01/fe4ba5c2-817c-48d5-a013-5db4b37930aa/data/MPU9250CEM(2)(copy).hdf5','r')
-    leadSensorname='0x1fe40000_MPU_9250'
+    #leadSensorname='0x1fe40000_MPU_9250'
     pathPrefix = r'/home/seeger01/tmp'
     dataFileEXTREF = h5py.File(os.path.join(pathPrefix, 'extRev_single_GPS_1KHz_Edges.hfd5'), 'r')
     #dataFileLSM6DSRX = h5py.File(os.path.join(pathPrefix, 'ST_sensor_test_1667Hz_noTimeGlittCorr.hfd5'), 'r')
@@ -845,7 +854,7 @@ if __name__ == "__main__":
     dataFileLSM6DSRX6667Hz = h5py.File(os.path.join(pathPrefix,'ST_sensor_test_6667Hz_2.hfd5'), 'r')
     dataFileADXL355 = h5py.File(os.path.join(pathPrefix, 'ADXL355_4kHz.hfd5'), 'r')
 
-
+    """
     jitterGen1 = realWordJitterGen(dataFileINTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{DAU Timestamping Phasenoise}")  # nominalfreq=1000)
     jitterGensForSimulations.append(jitterGen1)
 
@@ -855,7 +864,7 @@ if __name__ == "__main__":
     jitterGenBMA280 = realWordJitterGen(dataFileBMA280, '0x1fe40000_BMA_280',r"\textbf{Accelerometer $f_\text{sNom}$ = 2~kHz}", offset=[int(1.7e6),2048])  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
     jitterGensForSimulations.append(jitterGenBMA280)
 
-    """
+    
     jitterGen2 = realWordJitterGen(dataFileINTREF, '0x60ad0100_STM32_GPIO_Input',r"\textbf{Board 2 int. clock}",offset=[0,5000000])#nominalfreq=1000)
     jitterGensForSimulations.append(jitterGen2)
 
@@ -885,17 +894,18 @@ if __name__ == "__main__":
     jitterGensForSimulations.append(jitterGenADXL355)
     """
 
-    jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=0.33,color=tubscolors[1])
+    #jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=0.33,color=tubscolors[1])
 
-    jitterGenBMA280.plotDeviation( lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True,unit=r'ms', plotInSamplesAxis=True, alpha=0.2,color=tubscolors[2])
+    #jitterGenBMA280.plotDeviation( lengthInS=30.0, show=True, correctLinFreqDrift=True, save=True,unit=r'ms', plotInSamplesAxis=True, alpha=0.2,color=tubscolors[2])
 
-    """
+    measurmentFIle=dataFileMPU9250
+    leadSensorname = '0x1fe40000_MPU_9250'
     def processfitCOmparison(idx):
         sinEX=SineExcitationExperemeint(measurmentFIle, idx, sensor=leadSensorname)
         sinEX.plotFFTandSineFit()
         snrParams=sinEX.getSNR()
         return snrParams
-    snrParams=process_map(processfitCOmparison, np.array(range(len(measurmentFIle['EXPERIMENTS']['Sine excitation'].keys())-116))+116, max_workers=8)
+    snrParams=process_map(processfitCOmparison, np.array(np.arange(1)+11), max_workers=1)
 
     sineESs=[]
     SNRS=[]            
@@ -906,7 +916,7 @@ if __name__ == "__main__":
     print("Debug")
     
     WORKER_NUMBER = 12
-    """
+
     """
     timeDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,10000:20000].astype(np.int64)
     ticksDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,10000:20000].astype(np.int64)
