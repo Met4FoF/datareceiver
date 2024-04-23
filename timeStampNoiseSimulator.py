@@ -67,11 +67,11 @@ else:
     locale.setlocale(locale.LC_NUMERIC,"en_US.utf8")
     locale.setlocale(locale.LC_ALL,"en_US.utf8")
     plt.rcParams['axes.formatter.use_locale'] = True
-plt.rcParams['mathtext.fontset'] = 'custom'
-plt.rcParams['mathtext.rm'] = 'NexusProSans'
-plt.rcParams['mathtext.it'] = 'NexusProSans:italic'
-plt.rcParams['mathtext.bf'] = 'NexusProSans:bold'
-plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
+#plt.rcParams['mathtext.fontset'] = 'custom'
+#plt.rcParams['mathtext.rm'] = 'NexusProSans'
+#plt.rcParams['mathtext.it'] = 'NexusProSans:italic'
+#plt.rcParams['mathtext.bf'] = 'NexusProSans:bold'
+#plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
 plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
@@ -85,10 +85,10 @@ plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
 plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
 plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc("legend", fontsize=MEDIUM_SIZE)  # legend fontsize
+plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 figSaveCounter = 70
-SAVEFOLDER = './imagesIMEKO2024'
+SAVEFOLDER = './imagesImeko2024V3'
 SHOW=False
 
 
@@ -626,7 +626,7 @@ class SineExcitationExperemeint:
         self.generateInterpolatedFFT()#interpolations=[ "linear", "nearest", "slinear", "quadratic", "cubic", "previous", "next"]
         self.generateMultiSineFit()
         self.name='MultiSineFFTComp_'+self.dataFile['RAWDATA'][sensor].attrs['Sensor_name'].replace(' ','_')+'_Exp_'+str(idx)+'_Axis_'+str(mainAxis)+'_freq_'+f'{self.freq:.2f}'+"_Hz"
-        self.getSNR()
+        #self.getSNR()
         print("INIT DONE")
 
 
@@ -671,14 +671,14 @@ class SineExcitationExperemeint:
                     result.append(2*np.fft.rfft(interpolatedData)/interpolatedData.size)
                 self.interpolatedFFT[interpolationFactor][interpolatorKind]=np.array(result)
 
-    def generateMultiSineFit(self,numeLinesAround=100,numOverTones=5):
-        self.numeLinesAround=numeLinesAround
+    def generateMultiSineFitOLD(self,numLinesAround=100,numOverTones=5):
+        self.numLinesAround=numLinesAround
         self.numOverTones=numOverTones
         self.binwidth=self.fftFreqs[1]-self.fftFreqs[0]
         freqs = []
-        freqs.append((np.arange(2*numeLinesAround+1)+1)*self.binwidth)
+        freqs.append((np.arange(2*numLinesAround+1)+1)*self.binwidth)
         for k in range(numOverTones):
-            freqs.append((np.arange(numeLinesAround * 2 + 1) - numeLinesAround) * self.binwidth + self.actualFreq * (k + 1))
+            freqs.append((np.arange(numLinesAround * 2 + 1) - numLinesAround) * self.binwidth + self.actualFreq * (k + 1))
         self.multisineFitFreqs = np.array(freqs).flatten()
         multiSineParams = []
         multiSineParamsABC = []
@@ -689,11 +689,75 @@ class SineExcitationExperemeint:
             multiSineParams.append(fitResult)
         self.multiSineFitresults=np.array(multiSineParams)
 
+    def generateMultiSineFit(self, numLinesAround=100, numOverTones=5):
+        self.numLinesAround = numLinesAround
+        self.numOverTones = numOverTones
+        self.binwidth = self.fftFreqs[1] - self.fftFreqs[0]
+        fs = self.fs
+
+        rawfreqs = []
+        rawfreqs.append((np.arange(2*numLinesAround+1)+1)*self.binwidth)
+        self.startStopFreqs=[(rawfreqs[0][0],rawfreqs[0][-1])]
+        self.startStopIDXs=[]
+        for k in range(numOverTones):
+            rawfreqs.append((np.arange(numLinesAround * 2 + 1) - numLinesAround) * self.binwidth + self.actualFreq * (k + 1))
+            self.startStopFreqs.append([self.actualFreq * (k + 1) - numLinesAround * self.binwidth, self.actualFreq * (k + 1) + numLinesAround * self.binwidth])
+        basebandFreqregions= []
+        def ConverToBasebandFreqs(region):
+            nyqistbandStart=np.round(region[0]/((self.fs)/2)-0.5)
+            nyqistbandStop=np.round(region[1]/((self.fs)/2)-0.5)
+            if nyqistbandStart!=nyqistbandStop:
+                print("WAAAA region is in two nyquist bands using upper band basband will be negative")
+            nyqistband=np.max([nyqistbandStart,nyqistbandStop])
+            basebandFreqs=np.array(region)-(nyqistband*(self.fs/2))
+            return basebandFreqs
+        def checkRegionOverlap(reg1,reg2):
+            baseBandReg1=ConverToBasebandFreqs(reg1)
+            baseBandReg2=ConverToBasebandFreqs(reg2)
+            width1=(reg1[1]-reg1[0])/2
+            witdh2=(reg2[1]-reg2[0])/2
+            mindistance=(width1+witdh2)/2
+            dist=np.mean(baseBandReg1)-np.mean(baseBandReg2)
+            if dist<mindistance:
+                return False
+            else:
+                return True #TO calculate non violating bands
+        freqs=[]
+        numskippedBands=0 # dirty hack to skip overlapping bands and decrease the number of all bands replace with actual start an stop handling and propper indexing thiw ditcs to contorl the regions
+        for i,band in enumerate(self.startStopFreqs):
+            if i==0:
+                basebandFreqregions.append([band[0], band[1]])
+                freqs.append(rawfreqs[i])
+            else:
+                overLapDetected=False
+                for region in basebandFreqregions:
+                    if checkRegionOverlap(region,band):
+                        overLapDetected=True
+                        print("Region overlap detected skipped fresquency band" + str(band) + "Due to overlap with" + str(region))
+                        break
+                if not overLapDetected:
+                    basebandFreqregions.append([band[0], band[1]])
+                    freqs.append(rawfreqs[i])
+                else:
+                    numskippedBands += 1
+
+        self.multisineFitFreqs = np.array(freqs).flatten()
+        self.numOverTones-=numskippedBands
+        multiSineParams = []
+        multiSineParamsABC = []
+        for i in range(self.data.shape[0]):
+            abc = st2.multi_threeparsinefit(self.data[i, :], self.reltime, self.multisineFitFreqs)
+            multiSineParamsABC.append(abc)
+            fitResult = st2.multi_complex(abc)
+            multiSineParams.append(fitResult)
+        self.multiSineFitresults = np.array(multiSineParams)
+
+
     def getSNR(self,axis=2):
-        refIDX=self.numeLinesAround * 3 + 1
+        refIDX=self.numLinesAround * 3 + 1
         referenceAMP=abs(self.multiSineFitresults[axis, refIDX])
-        referenceN=(np.sum(abs(self.multiSineFitresults[axis, refIDX-self.numeLinesAround:refIDX+self.numeLinesAround+1]))-referenceAMP)/(2*self.numeLinesAround)# we have the ref include so substract it
-        self.referenceFFTFreqsForSNR=self.multisineFitFreqs[refIDX-self.numeLinesAround:refIDX+self.numeLinesAround+1]
+        referenceN=(np.sum(abs(self.multiSineFitresults[axis, refIDX-self.numLinesAround:refIDX+self.numLinesAround+1]))-referenceAMP)/(2*self.numLinesAround)# we have the ref include so substract it
+        self.referenceFFTFreqsForSNR=self.multisineFitFreqs[refIDX-self.numLinesAround:refIDX+self.numLinesAround+1]
         self.fitSNR=referenceAMP/referenceN
         print("SineFit SNR is "+str(self.fitSNR))
         self.FFTSNR={}
@@ -701,10 +765,10 @@ class SineExcitationExperemeint:
             self.FFTSNR[interpolationFactor]={}
             for interpolatorKind in self.interpolations:
                 idxs=find_nearest_indices(self.interpolatedFFTFreqsLowLeak[interpolationFactor],self.referenceFFTFreqsForSNR)
-                centerIDX=idxs[self.numeLinesAround]
-                spectralData=abs(self.interpolatedFFTLowLeak[interpolationFactor][interpolatorKind][axis, centerIDX - self.numeLinesAround:centerIDX+self.numeLinesAround + 1])
-                fftAMP = abs(spectralData[self.numeLinesAround])
-                fftN = (np.sum(abs(self.interpolatedFFTLowLeak[interpolationFactor][interpolatorKind][axis, centerIDX - self.numeLinesAround:centerIDX+self.numeLinesAround + 1])) - fftAMP)/(2*self.numeLinesAround)
+                centerIDX=idxs[self.numLinesAround]
+                spectralData=abs(self.interpolatedFFTLowLeak[interpolationFactor][interpolatorKind][axis, centerIDX - self.numLinesAround:centerIDX+self.numLinesAround + 1])
+                fftAMP = abs(spectralData[self.numLinesAround])
+                fftN = (np.sum(abs(self.interpolatedFFTLowLeak[interpolationFactor][interpolatorKind][axis, centerIDX - self.numLinesAround:centerIDX+self.numLinesAround + 1])) - fftAMP)/(2*self.numLinesAround)
                 SNR=fftAMP/fftN
                 self.FFTSNR[interpolationFactor][interpolatorKind]=SNR
                 print("SNR for "+str(interpolationFactor)+" times "+interpolatorKind+" is "+str(SNR))
@@ -728,8 +792,8 @@ class SineExcitationExperemeint:
         numPlotsPerQuant=2+idxOffset
         baxXlims=[]
         for i in range(self.numOverTones+1):
-            start = i * (2 * self.numeLinesAround + 1)
-            stop = (i + 1) * (2 * self.numeLinesAround + 1)
+            start = i * (2 * self.numLinesAround+1)
+            stop = (i + 1) * (2 * self.numLinesAround+1)
             baxXlims.append([self.multisineFitFreqs[start],self.multisineFitFreqs[stop-1]])
         for i in range(len(axisToPlot)):
             ax.append(plt.subplot(gs[i*numPlotsPerQuant,0]))
@@ -750,8 +814,8 @@ class SineExcitationExperemeint:
 
         for j,jdx in enumerate(axisToPlot):
             for i in range(self.numOverTones+1):
-                start = i * (2 * self.numeLinesAround + 1)
-                stop = (i + 1) * (2 * self.numeLinesAround + 1)
+                start = i * (2 * self.numLinesAround+1)
+                stop = (i + 1) * (2 * self.numLinesAround+1)
                 if i==0:
                     firstPlot=ax[j].semilogy(self.multisineFitFreqs[start:stop],
                                 abs(self.multiSineFitresults[jdx][start:stop]), lw=1,label=r'\textbf{Multi-sine approximation}')
@@ -905,7 +969,7 @@ if __name__ == "__main__":
         sinEX.plotFFTandSineFit()
         snrParams=sinEX.getSNR()
         return snrParams
-    snrParams=process_map(processfitCOmparison, np.array(np.arange(1)+11), max_workers=1)
+    snrParams=process_map(processfitCOmparison, np.array(np.arange(18)), max_workers=3)
 
     sineESs=[]
     SNRS=[]            
