@@ -130,7 +130,8 @@ class Met4FOFADCCall:
         saveFigName=None,
         startStopFreq=None,
         lang=LANG,#'EN' or 'DE'
-        showTitle=True
+        showTitle=True,
+        showInterpolLabel=False
     ):
 
         BoardID = self.metadata["BordID"]
@@ -192,14 +193,20 @@ class Met4FOFADCCall:
             Fig.suptitle(title)
         elif 'DE':
             labelInterpol = r"\textbf{interpoliert}"
-            lableMeasVals = r"\textbf{gemessen}"
+            lableMeasVals = r''#r"\textbf{gemessen}"
             axisCapRelMag = r"$|S(\omega)|$"
             labelFreq = r"\textbf{Frequenz }$f$ \textbf{in Hz}"
             labelPhase = r"$\varphi(\omega)$ in °"
         if showTitle:
             title=r"\textbf{"+str(Channel)+"Transferfunction DAU ID "+ hex(int(BoardID/65536))+'}'+ TitleExtension
             Fig.suptitle(title)
-        ax1.plot(XInterPol, interPolAmp,ls='dotted',label=labelInterpol + LabelExtension)
+        ax1.plot(XInterPol,
+                 interPolAmp,
+                label=labelInterpol+LabelExtension if showInterpolLabel else '',
+                 ls=':',
+                 lw=1,
+                 alpha=0.1,# hack cant deaktivate this since i will use the color of this line later
+                 )
         lastcolor = ax1.get_lines()[-1].get_color()
         ax1.fill_between(
             XInterPol, interPolAmpErrMin, interPolAmpErrMax, alpha=0.3, color=lastcolor
@@ -220,8 +227,10 @@ class Met4FOFADCCall:
         ax2.plot(
             XInterPol,
             interPolPhase / np.pi * 180,
-            ls='dotted',
-            label=labelInterpol + LabelExtension,
+            ls=':',
+            lw=1,
+            alpha=0.1,# hack cant deaktivate this since i will use the color of this line later
+            label=labelInterpol + LabelExtension if showInterpolLabel else ''
         )
         ax2.fill_between(
             XInterPol,
@@ -244,8 +253,8 @@ class Met4FOFADCCall:
         ax2.set_xlabel(labelFreq)
         ax2.set_ylabel(labelPhase)
         ax2.grid(linestyle='dashed')
-        ax1.legend(numpoints=1, ncol=3,loc='lower left')
-        ax2.legend(numpoints=1, ncol=3,loc='lower left')
+        ax1.legend(numpoints=1, ncol=3,loc='lower center')
+        ax2.legend(numpoints=1, ncol=3,loc='lower center')
         if saveFigName!=None:
             if LANG == 'DE':
                 locale.setlocale(locale.LC_NUMERIC, "de_DE.utf8")
@@ -442,12 +451,12 @@ if __name__ == "__main__":
     ADCTF19V5 =  Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_19V5_1HZ_1MHZ.json'])
     ADCTF1V95 =  Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_1V95_1HZ_1MHZ.json'])
     ADCTF0V195 = Met4FOFADCCall(['../cal_data/1FE4_AC_CAL/200320_1FE4_ADC123_3CYCLES_V195_1HZ_1MHZ.json'])
-    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0,195~V$_{\mathrm{pp}}$}',lang='DE',showTitle=False)
-    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1,95~V$_{\mathrm{pp}}$}',lang='DE',showTitle=False)
-    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19,5~V$_{\mathrm{pp}}$}', lang='DE', saveFigName='ADCTF1MHz',showTitle=False)
-    Fig2, axs2=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0,195~V$_{\mathrm{pp}}$}',lang='DE',startStopFreq=[10,1000],showTitle=False)
-    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1,95~V$_{\mathrm{pp}}$}',lang='DE',startStopFreq=[10,1000],showTitle=False)
-    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig2, ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19,5~V$_{\mathrm{pp}}$}', lang='DE', saveFigName='ADCTF1KHz',startStopFreq=[10,1000],showTitle=False)
+    Fig, axs=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0,195~V}',lang='DE',showTitle=False)
+    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig,ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1,95~V}',lang='DE',showTitle=False)
+    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig, ax=axs, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19,5~V}', lang='DE', saveFigName='ADCTF1MHz',showTitle=False)
+    Fig2, axs2=ADCTF0V195.PlotTransferfunction('ADC1',interpolSteps=1000,PlotType="log",LabelExtension=r'\textbf{~0,195~V}',lang='DE',startStopFreq=[10,1000],showTitle=False)
+    ADCTF1V95.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~1,95~V}',lang='DE',startStopFreq=[10,1000],showTitle=False)
+    ADCTF19V5.PlotTransferfunction('ADC1', fig=Fig2, ax=axs2, interpolSteps=1000, PlotType="log",LabelExtension=r'\textbf{~19,5~V}', lang='DE', saveFigName='ADCTF1KHz',startStopFreq=[10,1000],showTitle=False)
 
     #Fig2, axs2=ADCTFFull.PlotTransferfunction('ADC1',interpolSteps=100,PlotType="log",LabelExtension=r'~19.5~V \& 1.95~V \& 0.195~V',lang='DE',startStopFreq=[1,10000])
     #ADCTF.PlotTransferfunction('ADC1',fig=Fig2,ax=axs2, interpolSteps=100, PlotType="log",LabelExtension=r'~19.5~V' ,lang='DE',saveFigName='ADCTFZoom',startStopFreq=[1,10000])
