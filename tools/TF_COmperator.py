@@ -27,7 +27,7 @@ plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
 plt.rc("figure", figsize=[20,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
-PLTSCALFACTOR = 2.5
+PLTSCALFACTOR = 2
 SMALL_SIZE = 9 * PLTSCALFACTOR
 MEDIUM_SIZE = 12 * PLTSCALFACTOR
 BIGGER_SIZE = 15 * PLTSCALFACTOR
@@ -42,7 +42,12 @@ plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 figSaveCounter = 0
 SAVEFOLDER = './tf_images'
 SHOW=False
-
+plotTitle=False
+useOwnXTicks=True
+xticks=[10,12.5, 16,20, 25,31.5, 40, 50,63, 80, 100, 125,160, 200, 250]
+xticksLabels=['$10$','$12,5$', '$16$','$20$', '$25$','$31,5$', '$40$', '$50$','$63$', '$80$', '$100$', '$125$','$160$', '$200$', '$250$']
+# Define minor ticks
+minor_xticks = [8,9,10,20,30,40,50,60,70,80,90,100,200]
 def modify_color(color):
     r, g, b = color
     # Convert RGB to HSV
@@ -76,7 +81,7 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
                 'Phase':r'$u(\varphi(\omega))$',
                 'DUT_amplitude': '$2\sigma(\hat{y}_\mathrm{DUT}(\omega))$',
                 'Excitation_amplitude': '$2\sigma(\hat{a}_\mathrm{ACS}(\omega))$',
-                'Magnitude': '$2\sigma(|S(\omega)|)$'
+                'Magnitude': '$2\sigma(Betrag |S(\omega)|)$'
             }
     alphas={'Delta_DUTSNYC_Phase':1,
                 'SSU_ADC_Phase':1,
@@ -192,13 +197,14 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
         if lang=='EN':
             ax.set_ylabel(r'\textbf{Type A components of}'+'\n' +r'\textbf{phase in $^\circ$}')
         elif lang=='DE':
-            ax.set_ylabel(r'\textbf{Phasenkomponenten Typ A in $^\circ$}')
+            ax.set_ylabel(r'\textbf{Phasen Unsicherheitsbeiträge in $^\circ$}')
     if type == 'Mag':
         if lang== 'EN':
             ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude in \%}')
         elif lang=='DE':
-            ax.set_ylabel(r'\textbf{Magnitudenkomponenten Typ A in \%}')
+            ax.set_ylabel(r'\textbf{Magnituden Unsicherheitsbeiträge in \%}')
     if title!=None and title != '':
+        if plotTitle:
             ax.set_title(r'\textbf{'+title+'}')
     if zoom!=False:
         if type != 'Phase':
@@ -298,8 +304,15 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
     if lang=='DE':
         ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax[0].set_xscale('log')
-    ax[0].set_ylabel(r"$|S(\omega)|$  \textbf{in} $\frac{\mathrm{m s}^-2}{\mathrm{m s}^-2}$")
-    ax[1].set_ylabel(r"$\varphi(\omega)$ \textbf{in} $^\circ$")
+    if useOwnXTicks:
+        ax[0].set_xticks(xticks,labels=xticksLabels)
+        # Set minor ticks
+        ax[0].set_xticks(minor_xticks, minor=True)
+
+        # Customizing the appearance of minor ticks
+        ax[0].tick_params(axis='x', which='minor', length=4)
+    ax[0].set_ylabel(r"\textbf{Betrag} |S(\omega)|$")
+    ax[1].set_ylabel(r"$\textbf{Phase} \varphi(\omega)$ \textbf{in} $^\circ$")
     ax[0].legend(ncol=3)
     ax[1].legend(ncol=3)
     ax[0].grid()
@@ -340,6 +353,13 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
     if lang=='DE':
         ax2[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax2[0].set_xscale('log')
+    if useOwnXTicks:
+        ax2[0].set_xticks(xticks,labels=xticksLabels)
+        # Set minor ticks
+        ax2[0].set_xticks(minor_xticks, minor=True)
+
+        # Customizing the appearance of minor ticks
+        ax2[0].tick_params(axis='x', which='minor', length=4)
     ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S|}$ \textbf{in \%}")
     ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
     ax2[0].legend(ncol=3)
@@ -390,8 +410,15 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
     if lang=='DE':
         ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax[0].set_xscale('log')
-    ax[0].set_ylabel(r"$|S(\omega)|$  \textbf{in} $\frac{\mathrm{m s}^-2}{\mathrm{m s}^-2}$")
-    ax[1].set_ylabel(r"$\varphi(\omega)$ \textbf{in} $^\circ$")
+    if useOwnXTicks:
+        ax[0].set_xticks(xticks,labels=xticksLabels)
+        # Set minor ticks
+        ax[0].set_xticks(minor_xticks, minor=True)
+
+        # Customizing the appearance of minor ticks
+        ax[0].tick_params(axis='x', which='minor', length=4)
+    ax[0].set_ylabel(r"\textbf{Betrag} $|S(\omega)|$  ")
+    ax[1].set_ylabel(r"\textbf{Phase} $\varphi(\omega)$ \textbf{in} $^\circ$")
     ax[0].legend(ncol=3)
     ax[1].legend(ncol=3)
     ax[0].grid()
@@ -442,6 +469,13 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
             ax2[0].fill_between(freqs, -difFills[0], difFills[0],label=r"\textbf{CMC Unsicherheit}",alpha=0.2,color='gray')
             ax2[1].fill_between(freqs, -difFills[1], difFills[1],label=r"\textbf{CMC Unsicherheit}",alpha=0.2,color='gray')
     ax2[0].set_xscale('log')
+    if useOwnXTicks:
+        ax2[0].set_xticks(xticks,labels=xticksLabels)
+        # Set minor ticks
+        ax2[0].set_xticks(minor_xticks, minor=True)
+
+        # Customizing the appearance of minor ticks
+        ax2[0].tick_params(axis='x', which='minor', length=4)
     ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S(\omega)|}$  \textbf{in \%}")
     ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
     ax2[0].legend(ncol=3)
@@ -565,8 +599,15 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test',excl
     if lang=='DE':
         ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax[0].set_xscale('log')
-    ax[0].set_ylabel(r"$|S(\omega)|$  \textbf{in} $\frac{\mathrm{m s}^-2}{\mathrm{m s}^-2}$")
-    ax[1].set_ylabel(r"$\varphi(\omega)$ \textbf{in} $^\circ$")
+    if useOwnXTicks:
+        ax[0].set_xticks(xticks,labels=xticksLabels)
+        # Set minor ticks
+        ax[0].set_xticks(minor_xticks, minor=True)
+
+        # Customizing the appearance of minor ticks
+        ax[0].tick_params(axis='x', which='minor', length=4)
+    ax[0].set_ylabel(r"\textbf{Betrag} $|S(\omega)|$  ")
+    ax[1].set_ylabel(r"\textbf{Phase} $\varphi(\omega)$ \textbf{in} $^\circ$")
     ax[0].legend(ncol=3)
     ax[1].legend(ncol=3)
     ax[0].grid(axis='x',which = 'minor', linestyle = '--')
@@ -577,7 +618,8 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test',excl
     ax[1].yaxis.set_minor_locator(AutoMinorLocator(4))
     ax[0].grid(lw=PLTSCALFACTOR*0.66)
     ax[1].grid(lw=PLTSCALFACTOR*0.66)
-    ax[0].set_title(r"\textbf{ÜF "+titleExpansion+'}')
+    if plotTitle:
+        ax[0].set_title(r"\textbf{ÜF "+titleExpansion+'}')
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL,"de_DE.utf8")
     fig.savefig(os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_TFComparison1.png'), dpi=300,bbox_inches='tight')
@@ -595,11 +637,18 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test',excl
     if lang=='DE':
         ax2[1].set_xlabel(r"\textbf{Frequenz in Hz}")
     ax2[0].set_xscale('log')
+    if useOwnXTicks:
+        ax2[0].set_xticks(xticks,labels=xticksLabels)
+        # Set minor ticks
+        ax2[0].set_xticks(minor_xticks, minor=True)
+
+        # Customizing the appearance of minor ticks
+        ax2[0].tick_params(axis='x', which='minor', length=4)
     ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S(\omega)|}$  \textbf{in \%}")
     ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
     if not all(usedTFSIDX):
         if lang=='DE':
-            ax2[0].set_xlabel(r"$^\ast$ Nicht für das gewichtet Mittel verwendet")
+            ax2[0].set_xlabel(r"$^\ast$ Nicht für das gewichtete Mittel verwendet")
         if lang=='EN':
             ax2[0].set_xlabel(r"$^\ast$ Not used for weighted mean")
     ax2[0].legend(ncol=3)
@@ -612,7 +661,8 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test',excl
     ax2[1].yaxis.set_minor_locator(AutoMinorLocator(4))
     ax2[0].grid(lw=PLTSCALFACTOR*0.66)
     ax2[1].grid(lw=PLTSCALFACTOR*0.66)
-    ax2[0].set_title(r"\textbf{Abw. vom gewichteten Mittel der ÜF " + titleExpansion + '}')
+    if plotTitle:
+        ax2[0].set_title(r"\textbf{Abw. vom gewichteten Mittel der ÜF " + titleExpansion + '}')
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL,"de_DE.utf8")
     fig2.savefig(os.path.join(SAVEFOLDER,str(int(globals()['figSaveCounter'])).zfill(2)+'_TFComparison2.png'), dpi=300,bbox_inches='tight')
