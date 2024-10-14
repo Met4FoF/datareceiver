@@ -40,7 +40,7 @@ plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 figSaveCounter = 0
-SAVEFOLDER = './tf_images'
+SAVEFOLDER = './tf_imagesNeu'
 SHOW=False
 plotTitle=False
 useOwnXTicks=True
@@ -73,15 +73,15 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
     ampGroupNames=['Magnitude','DUT_amplitude','Excitation_amplitude']
     phaseGroupNamesNestingDict={'Phase':{'REF_Phase':None,'Delta_DUTSNYC_Phase':{'DUT_SNYNC_Phase':None,'DUT_Phase':None}}}#,'SSU_ADC_Phase':None
     magGroupNamesNestingDict={'Magnitude':{'Excitation_amplitude':None,'DUT_amplitude':None}}
-    labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
-                'SSU_ADC_Phase':r'$2u(\varphi_{ADC_{DAU}}(\omega))$',
-                'REF_Phase':r'$2\sigma(\varphi_\mathrm{ACS}(\omega)-\varphi_\mathrm{Sync_{DAU}}(\omega))$',
-                'DUT_Phase':r'$2\sigma(\varphi_{\mathrm{DUT}}(\omega))$',
-                'DUT_SNYNC_Phase':r'$2\sigma(\varphi_{\mathrm{Sync_{DAU}}}(\omega))$',
-                'Phase':r'$u(\varphi(\omega))$',
-                'DUT_amplitude': '$2\sigma(\hat{y}_\mathrm{DUT}(\omega))$',
-                'Excitation_amplitude': '$2\sigma(\hat{a}_\mathrm{ACS}(\omega))$',
-                'Magnitude': '$2\sigma(Betrag |S(\omega)|)$'
+    labels={'Delta_DUTSNYC_Phase':r'$2\sigma(\varphi_\mathrm{DUT}(f)-\varphi_\mathrm{Sync_{DAU}}(f))$',
+                'SSU_ADC_Phase':r'$2u(\varphi_{ADC_{DAU}}(f))$',
+                'REF_Phase':r'$2\sigma(\varphi_\mathrm{ACS}(f)-\varphi_\mathrm{Sync_{DAU}}(f))$',
+                'DUT_Phase':r'$2\sigma(\varphi_{\mathrm{DUT}}(f))$',
+                'DUT_SNYNC_Phase':r'$2\sigma(\varphi_{\mathrm{Sync_{DAU}}}(f))$',
+                'Phase':r'$u(\varphi(f))$',
+                'DUT_amplitude': '$2\sigma(\hat{y}_\mathrm{DUT}(f))$',
+                'Excitation_amplitude': '$2\sigma(\hat{a}_\mathrm{ACS}(f))$',
+                'Magnitude': '$2\sigma(Betrag |S(f)|)$'
             }
     alphas={'Delta_DUTSNYC_Phase':1,
                 'SSU_ADC_Phase':1,
@@ -190,19 +190,19 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
         boldFreqlabels.append(r'$'+locale.format_string('%g',freq) +'$')
     ax.set_xticklabels(boldFreqlabels, rotation=0)
     if lang=='EN':
-        ax.set_xlabel(r'\textbf{Excitation frequency} $\omega$ \textbf{in Hz}')
+        ax.set_xlabel(r'\textbf{Excitation frequency} $f$ \textbf{in Hz}')
     elif lang=='DE':
-        ax.set_xlabel(r'\textbf{Anregungsfrequenz $\omega$ in Hz}')
+        ax.set_xlabel(r'\textbf{Anregungsfrequenz $f$ in Hz}')
     if type == 'Phase':
         if lang=='EN':
             ax.set_ylabel(r'\textbf{Type A components of}'+'\n' +r'\textbf{phase in $^\circ$}')
         elif lang=='DE':
-            ax.set_ylabel(r'\textbf{Phasen Unsicherheitsbeiträge in $^\circ$}')
+            ax.set_ylabel(r'\textbf{Phasen-Unsicherheitsbeiträge in $^\circ$}')
     if type == 'Mag':
         if lang== 'EN':
             ax.set_ylabel(r'\textbf{Type A components of }'+'\n'+r'\textbf{magnitude in \%}')
         elif lang=='DE':
-            ax.set_ylabel(r'\textbf{Magnituden Unsicherheitsbeiträge in \%}')
+            ax.set_ylabel(r'\textbf{Magnituden-Unsicherheitsbeiträge in \%}')
     if title!=None and title != '':
         if plotTitle:
             ax.set_title(r'\textbf{'+title+'}')
@@ -255,9 +255,9 @@ def plotRAWTFUncerComps(datafile,type='Phase',sensorName='0xbccb0000_MPU_9250',s
             # for minor ticks
             ax2.set_xticks([], minor=True)
             if lang=='EN':
-                ax2.set_xlabel(r'\textbf{Frequency '+str(freqs[zoom])+' Hz}')
+                ax2.set_xlabel(r'\textbf{Frequency $f$'+str(freqs[zoom])+' Hz}')
             elif lang=='DE':
-                ax2.set_xlabel(r'\textbf{Frequenz ' + str(freqs[zoom]) + ' Hz}')
+                ax2.set_xlabel(r'\textbf{Frequenz $f$' + str(freqs[zoom]) + ' Hz}')
             #ax2.set_ylabel(r'$^\circ$')
         """
     ax.legend(loc='upper right')
@@ -300,9 +300,9 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
         overallAmpMeanData[loopIDX,:]=ampMean
         overallPhaseMeanData[loopIDX,:]=phaseMean
     if lang=='EN':
-        ax[1].set_xlabel(r"\textbf{Frequency in Hz}")
+        ax[1].set_xlabel(r"\textbf{Frequency $f$ in Hz}")
     if lang=='DE':
-        ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+        ax[1].set_xlabel(r"\textbf{Frequenz  $f$ in Hz}")
     ax[0].set_xscale('log')
     if useOwnXTicks:
         ax[0].set_xticks(xticks,labels=xticksLabels)
@@ -311,8 +311,8 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
 
         # Customizing the appearance of minor ticks
         ax[0].tick_params(axis='x', which='minor', length=4)
-    ax[0].set_ylabel(r"\textbf{Betrag} |S(\omega)|$")
-    ax[1].set_ylabel(r"$\textbf{Phase} \varphi(\omega)$ \textbf{in} $^\circ$")
+    ax[0].set_ylabel(r"\textbf{Betrag} |S(f)|$")
+    ax[1].set_ylabel(r"$\textbf{Phase} \varphi(f)$ \textbf{in} $^\circ$")
     ax[0].legend(ncol=3)
     ax[1].legend(ncol=3)
     ax[0].grid()
@@ -349,9 +349,9 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
         ax2[1].errorbar(freqs*(1+0.002*(loopIDX+1)), (phaseMean-overallPhaseMean)/np.pi*180, yerr=(2 * phaseSTD)/np.pi*180, label=repName[loopIDX],fmt='o')
         loopsProcessed+=loopsInThisBlock
     if lang=='EN':
-        ax2[1].set_xlabel(r"\textbf{Frequency in Hz}")
+        ax2[1].set_xlabel(r"\textbf{Frequency $f$ in Hz}")
     if lang=='DE':
-        ax2[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+        ax2[1].set_xlabel(r"\textbf{Frequenz $f$ in Hz}")
     ax2[0].set_xscale('log')
     if useOwnXTicks:
         ax2[0].set_xticks(xticks,labels=xticksLabels)
@@ -360,8 +360,8 @@ def plotMeanTfs(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop=17,loo
 
         # Customizing the appearance of minor ticks
         ax2[0].tick_params(axis='x', which='minor', length=4)
-    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S|}$ \textbf{in \%}")
-    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
+    ax2[0].set_ylabel(r"$|S(f)|-\overline{|S|}$ \textbf{in \%}")
+    ax2[1].set_ylabel(r"$\varphi(f) -\overline{\varphi(f) }$ \textbf{in $^\circ$}")
     ax2[0].legend(ncol=3)
     ax2[1].legend(ncol=3)
     ax2[0].grid()
@@ -406,9 +406,9 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
         overallAmpMeanData[loopIDX,:]=ampMean
         overallPhaseMeanData[loopIDX,:]=phaseMean
     if lang=='EN':
-        ax[1].set_xlabel(r"\textbf{Frequency in Hz}")
+        ax[1].set_xlabel(r"\textbf{Frequency $f$ in Hz}")
     if lang=='DE':
-        ax[1].set_xlabel(r"\textbf{Frequenz in Hz}")
+        ax[1].set_xlabel(r"\textbf{Frequenz $f$ in Hz}")
     ax[0].set_xscale('log')
     if useOwnXTicks:
         ax[0].set_xticks(xticks,labels=xticksLabels)
@@ -417,8 +417,8 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
 
         # Customizing the appearance of minor ticks
         ax[0].tick_params(axis='x', which='minor', length=4)
-    ax[0].set_ylabel(r"\textbf{Betrag} $|S(\omega)|$  ")
-    ax[1].set_ylabel(r"\textbf{Phase} $\varphi(\omega)$ \textbf{in} $^\circ$")
+    ax[0].set_ylabel(r"\textbf{Betrag} $|S(f)|$  ")
+    ax[1].set_ylabel(r"\textbf{Phase} $\varphi(f)$ \textbf{in} $^\circ$")
     ax[0].legend(ncol=3)
     ax[1].legend(ncol=3)
     ax[0].grid()
@@ -476,8 +476,8 @@ def plotMeanTfsOneFile(datafile,sensorName='0xbccb0000_MPU_9250',numofexpPerLoop
 
         # Customizing the appearance of minor ticks
         ax2[0].tick_params(axis='x', which='minor', length=4)
-    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S(\omega)|}$  \textbf{in \%}")
-    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
+    ax2[0].set_ylabel(r"$|S(f)|-\overline{|S(f)|}$  \textbf{in \%}")
+    ax2[1].set_ylabel(r"$\varphi(f) -\overline{\varphi(f) }$ \textbf{in $^\circ$}")
     ax2[0].legend(ncol=3)
     ax2[1].legend(ncol=3)
     ax2[0].grid(axis='x',which = 'minor', linestyle = '--')
@@ -606,8 +606,8 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test',excl
 
         # Customizing the appearance of minor ticks
         ax[0].tick_params(axis='x', which='minor', length=4)
-    ax[0].set_ylabel(r"\textbf{Betrag} $|S(\omega)|$  ")
-    ax[1].set_ylabel(r"\textbf{Phase} $\varphi(\omega)$ \textbf{in} $^\circ$")
+    ax[0].set_ylabel(r"\textbf{Betrag} $|S(f)|$  ")
+    ax[1].set_ylabel(r"\textbf{Phase} $\varphi(f)$ \textbf{in} $^\circ$")
     ax[0].legend(ncol=3)
     ax[1].legend(ncol=3)
     ax[0].grid(axis='x',which = 'minor', linestyle = '--')
@@ -644,8 +644,8 @@ def plotTFCOmparison(dict,lang='DE',uncerType='typeA',titleExpansion='Test',excl
 
         # Customizing the appearance of minor ticks
         ax2[0].tick_params(axis='x', which='minor', length=4)
-    ax2[0].set_ylabel(r"$|S(\omega)|-\overline{|S(\omega)|}$  \textbf{in \%}")
-    ax2[1].set_ylabel(r"$\varphi(\omega) -\overline{\varphi(\omega) }$ \textbf{in $^\circ$}")
+    ax2[0].set_ylabel(r"$|S(f)|-\overline{|S(f)|}$  \textbf{in \%}")
+    ax2[1].set_ylabel(r"$\varphi(f) -\overline{\varphi(f) }$ \textbf{in $^\circ$}")
     if not all(usedTFSIDX):
         if lang=='DE':
             ax2[0].set_xlabel(r"$^\ast$ Nicht für das gewichtete Mittel verwendet")
