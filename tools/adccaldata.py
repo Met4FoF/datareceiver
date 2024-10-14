@@ -38,7 +38,7 @@ plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 figSaveCounter = 0
-SAVEFOLDER = './tf_images'
+SAVEFOLDER = './tf_imagesNeu'
 SHOW=False
 def findNearestIDX(array,value):
      idx = (np.abs(array-value)).argmin()
@@ -194,9 +194,9 @@ class Met4FOFADCCall:
         elif 'DE':
             labelInterpol = r"\textbf{interpoliert}"
             lableMeasVals = r''#r"\textbf{gemessen}"
-            axisCapRelMag = r"$|S(\omega)|$"
+            axisCapRelMag = r"$|S(f)|$"
             labelFreq = r"\textbf{Frequenz }$f$ \textbf{in Hz}"
-            labelPhase = r"$\varphi(\omega)$ in °"
+            labelPhase = r"$\varphi(f)$ in °"
         if showTitle:
             title=r"\textbf{"+str(Channel)+"Transferfunction DAU ID "+ hex(int(BoardID/65536))+'}'+ TitleExtension
             Fig.suptitle(title)
