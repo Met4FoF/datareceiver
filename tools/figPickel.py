@@ -4,7 +4,7 @@ import pickle
 import tkinter as tk
 from tkinter import filedialog
 import bz2
-
+r"""
 tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/255), (81/255,18/255,70/255),(102/255,180/255,211/255),(255/255,200/255,41/255),(172/255,193/255,58/255),(138/255,48/255,127/255)]
 tubsred=(176/255,0/255,70/255)
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
@@ -36,6 +36,7 @@ plt.rc("xtick", labelsize=BIGGER_SIZE)  # fontsize of the tick labels
 plt.rc("ytick", labelsize=BIGGER_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=BIGGER_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
+"""
 figPickleVersion="0.2.0"
 filetypes=[("Comressed pickled Image Dict", ".cpid")]
 def saveImagePickle(name,fig,axs):

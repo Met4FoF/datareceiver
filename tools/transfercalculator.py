@@ -1898,7 +1898,7 @@ if __name__ == "__main__":
     #plotRAWTFUncerComps(datafile, type='Mag', sensorName=leadSensorname,
     #                    title='Uncertainty of the magnitude components CEM measurments', startIDX=2, stopIDX=19)
 
-    movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration','RAWDATA/' + leadSensorname + '/Absolutetime', treshold=1.0,blocksinrow=100, blocksize=100, plot=False,plotLabels={'y':r'\textbf{Blockweise Standardabweichung der\\ Beschleunigungs Amplitude in} $\frac{m}{s^2}$','x':'Test','title':'test'})#\\$\sigma(\sqrt{X[0..100]^2+Z[0..100]^2+Z[0..100]^2}$
+    movementidx, movementtimes = test.detectmovment('RAWDATA/' + leadSensorname + '/Acceleration','RAWDATA/' + leadSensorname + '/Absolutetime', treshold=1.0,blocksinrow=100, blocksize=100, plot=True,plotLabels={'y':r'\textbf{Blockweise Standardabweichung der\\ Beschleunigungsamplitude in} $\frac{m}{s^2}$','x':'Test','title':'test'})#\\$\sigma(\sqrt{X[0..100]^2+Z[0..100]^2+Z[0..100]^2}$
     numofexperiemnts = movementtimes.shape[0]
 
     if is1DPrcoessing:

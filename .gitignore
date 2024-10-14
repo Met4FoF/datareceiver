@@ -12,3 +12,7 @@ tools/tmp/
 *.svg
 
 bokeh.log
+
+SNRParams/
+
+tmp/

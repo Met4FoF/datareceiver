@@ -31,7 +31,7 @@ plt.rcParams['mathtext.tt'] = 'NexusProSans:monospace'
 plt.rc('text', usetex=True)
 plt.rc("figure", figsize=[16,9])  # fontsize of the figure title
 plt.rc("figure", dpi=300)
-PLTSCALFACTOR = 1.5
+PLTSCALFACTOR = 1.66
 SMALL_SIZE = 9 * PLTSCALFACTOR
 MEDIUM_SIZE = 12 * PLTSCALFACTOR
 BIGGER_SIZE = 15 * PLTSCALFACTOR
@@ -39,17 +39,20 @@ plt.rc("font", weight='bold') # controls default text sizes
 plt.rc("font", size=SMALL_SIZE)
 plt.rc("axes", titlesize=MEDIUM_SIZE)  # fontsize of the axes title
 plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc("xtick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 figSaveCounter = 0
 SAVEFOLDER = './timeDefImages'
 SHOW=False
-
+USETITLES=False
 def plotHist(data,bins):
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+        # Modify locale settings to use no thousand separator
+        conv = locale.localeconv()
+        conv['thousands_sep'] = ''
     mu, std = norm.fit(data)
     # Plot the histogram.
     fig,ax=plt.subplots()
@@ -59,13 +62,14 @@ def plotHist(data,bins):
     x = np.linspace(xmin, xmax, bins)
     p = norm.pdf(x, mu, std)
     ax.plot(x, p)
-    title = r'\begin{center}\textbf{Abweichung zwischen den zwei SmartUp-Units}\\ $\mu='+locale.format_string('%2.2f',mu)+r'$~\textbf{ns}  $\sigma='+locale.format_string('%2.2f',std)+r'$~\textbf{ns}\end{center}'
+    title = r'\begin{center}\textbf{Zeitabweichung zwischen den zwei SmartUp-Units}\\ $\mu='+locale.format_string('%2.2f',mu)+r'$~\textbf{ns}  $\sigma='+locale.format_string('%2.2f',std)+r'$~\textbf{ns}\end{center}'
     ax.grid(linestyle='dashed')
     ax.set_xlabel(r"\textbf{Differenz der Zeitstempel in ns}")
     ax.set_ylabel(r"\textbf{Releative Häufigkeit}")
     xlimMax=np.max(abs(np.array(ax.get_xlim())))
-    ax.set_xlim([-xlimMax,xlimMax])#
-    fig.suptitle(title)
+    ax.set_xlim([-xlimMax,xlimMax])
+    if USETITLES:
+        fig.suptitle(title)
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL,"de_DE.utf8")
     fig.savefig(os.path.join(SAVEFOLDER, str(int(globals()['figSaveCounter'])).zfill(2)+'_TimeDiffHist.png'), dpi=300,bbox_inches='tight')
@@ -78,6 +82,9 @@ def plotHist(data,bins):
 def plottimediffWithUncerAndZoom(data,uncer,period=(1e8+0.0005950575459905795),zoomArea=(910000,920000)):
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+        # Modify locale settings to use no thousand separator
+        conv = locale.localeconv()
+        conv['thousands_sep'] = ''
     timeMinusExpectedTime1 = data.astype(np.int64)-data[0].astype(np.int64) - (period * np.arange(data.size))
     reltime=(data-data[0])/1e9 #since time is in nanoseconds
     UncerMissmatcesBool = np.where(abs(timeMinusExpectedTime1)  > uncer, True, False)
@@ -92,22 +99,23 @@ def plottimediffWithUncerAndZoom(data,uncer,period=(1e8+0.0005950575459905795),z
     reltimeOut[invertUncerMissmatcesBool]=np.NaN
     fig,ax=plt.subplots(2, 1)
     title=r'\begin{center}\textbf{Abweichung der Zeitstempel vom erwarteten Wert.\\ Die Unsicherheit überdeck '+locale.format_string('%2.2f',matchInPercent)+r' \% der Messwerte}\end{center}'
-    fig.suptitle(title)
+    if USETITLES:
+        fig.suptitle(title)
     ax[0].plot(reltime,uncer,label=r'\textbf{Von DAU berechnete Zeitunsicherheit} $u_t(t)$',color=TUBSNamedColors['TUBSOrange'])
     ax[0].plot(reltime,-1*uncer, color=TUBSNamedColors['TUBSOrange'])
-    ax[0].plot(reltime,reltimeIn,label=r'\textbf{Zeitabweichung} $\Delta t(t) <u_t(t)$', color=TUBSNamedColors['TUBSBlue'])
-    ax[0].plot(reltime,reltimeOut,label=r'\textbf{Zeitabweichung} $\Delta t(t) >u_t(t)$', color=TUBSNamedColors['TUBSViolet'])
+    ax[0].plot(reltime,reltimeIn,label=r'\textbf{Zeitabweichung TIE} $\Delta t(t) <u_t(t)$', color=TUBSNamedColors['TUBSBlue'])
+    ax[0].plot(reltime,reltimeOut,label=r'\textbf{Zeitabweichung TIE} $\Delta t(t) >u_t(t)$', color=TUBSNamedColors['TUBSViolet'])
     ax[0].axvline(x=reltime[zoomArea[0]], color=TUBSNamedColors['TUBSGreen'], linestyle='-')
     ax[0].axvline(x=reltime[zoomArea[1]], color=TUBSNamedColors['TUBSGreen'], linestyle='-')
     ax[0].grid(linestyle='dashed')
     #ax[0].legend(loc='upper right')
-    ax[0].set_ylabel(r"$\mathbf{\Delta t}$\textbf{ in ns}")
+    ax[0].set_ylabel(r"\textbf{TIE}~$\mathbf{\Delta t}$\textbf{ in ns}")
     ax[1].plot(reltime[zoomArea[0]:zoomArea[1]],uncer[zoomArea[0]:zoomArea[1]],label=r'\textbf{Von DAU berechnete Zeitunsicherheit} $u_t(t)$',color=TUBSNamedColors['TUBSOrange'])
     ax[1].plot(reltime[zoomArea[0]:zoomArea[1]],-1*uncer[zoomArea[0]:zoomArea[1]], color=TUBSNamedColors['TUBSOrange'])
     ax[1].plot(reltime[zoomArea[0]:zoomArea[1]],reltimeIn[zoomArea[0]:zoomArea[1]],label=r'\textbf{Zeitabweichung} $\Delta t(t) <u_t(t)$', color=TUBSNamedColors['TUBSBlue'])
     ax[1].plot(reltime[zoomArea[0]:zoomArea[1]],reltimeOut[zoomArea[0]:zoomArea[1]],label=r'\textbf{Zeitabweichung} $\Delta t(t) >u_t(t)$', color=TUBSNamedColors['TUBSViolet'])
     ax[1].set_xlabel(r"\textbf{Relative Zeit in s}")
-    ax[1].set_ylabel(r"$\mathbf{\Delta t}$\textbf{ in ns}")
+    ax[1].set_ylabel(r"\textbf{TIE}~$\mathbf{\Delta t}$\textbf{ in ns}")
     ax[1].grid(linestyle='dashed')
     ax[1].legend(loc='upper left')
     yLowAX0=ax[0].get_ylim()[0]
@@ -132,6 +140,10 @@ def plottimediffWithUncerAndZoom(data,uncer,period=(1e8+0.0005950575459905795),z
 def plotGPSTimeSyncAlgo(hdfDset):
     if LANG=='DE':
         locale.setlocale(locale.LC_ALL,"de_DE.utf8")
+        # Modify locale settings to use no thousand separator
+        conv = locale.localeconv()
+        conv['thousands_sep'] = ''
+
     #TODO implenet gliding window
     relTicks=hdfDset[0,1:121]-hdfDset[0,1]
     deltaTicks=np.diff(hdfDset[0,:120])
@@ -165,7 +177,7 @@ def plotGPSTimeSyncAlgo(hdfDset):
 
 
 
-hdf=h5py.File('20210721MultiBoard_GPS_test.hfd5', "r+")
+hdf=h5py.File('./20210721MultiBoard_GPS_test.hfd5', "r+")
 timediffBetweanBoards=hdf['RAWDATA/0x60ad0100_BMA_280/Absolutetime'][0,12:-998].astype(np.int64)-hdf['RAWDATA/0xf1030100_BMA_280/Absolutetime'][0,11:-999].astype(np.int64)
 timeDiffMean=np.mean(timediffBetweanBoards)
 timeDiffStd=np.std(timediffBetweanBoards)
