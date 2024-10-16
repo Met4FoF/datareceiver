@@ -53,7 +53,7 @@ tubscolors=[(0/255,112/255,155/255),(250/255,110/255,0/255), (109/255,131/255,0/
 plt.rcParams['axes.prop_cycle'] = colorCycler=plt.cycler(color=tubscolors) #TUBS Blue,Orange,Green,Violet,Light Blue,Light Orange,Lieght green,Light Violet
 plt.rcParams['axes.formatter.useoffset'] = False
 plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}\boldmath'
-LANG='EN'
+LANG='DE'
 if LANG=='DE':
     import locale
     trueFalseAnAus = {True: 'An', False: 'Aus'}
@@ -61,6 +61,8 @@ if LANG=='DE':
     locale.setlocale(locale.LC_ALL,"de_DE.utf8")
     plt.rcParams['text.latex.preamble'] = r'\usepackage{icomma}\usepackage{amsmath}\boldmath' # remove nasty Space behind comma in de_DE.utf8 locale https://stackoverflow.com/questions/50657326/matplotlib-locale-de-de-latex-space-btw-decimal-separator-and-number
     plt.rcParams['axes.formatter.use_locale'] = True
+    # Customize formatting to not include thousand separators
+    locale._override_localeconv.update({'grouping': [], 'thousands_sep': ''})
 else:
     import locale
     trueFalseAnAus = {True: 'On', False: 'Off'}
@@ -89,8 +91,8 @@ plt.rc("xtick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("ytick", labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
-figSaveCounter = 33
-SAVEFOLDER = './imagesV7'
+figSaveCounter = 30
+SAVEFOLDER = './imagesV8'
 SHOW=False
 
 
@@ -221,10 +223,13 @@ class realWordJitterGen:
 
         segment_length = int(lengthInS * self.fs) if lengthInS is not None else self.expectedTime.size
         total_possible_segments = int(np.ceil(self.expectedTime.size / segment_length))
-
-        # Calculate colors for the maximum possible segments
-        cmap = plt.get_cmap('rainbow')
-        all_colors = [cmap(i / total_possible_segments) for i in range(total_possible_segments)]
+        if color:
+            #if color is given use the same color for all segments
+            all_colors=total_possible_segments*[color]
+        else:
+            # Calculate rainbow colors for the maximum possible segments since no color was given
+            cmap = plt.get_cmap('rainbow')
+            all_colors = [cmap(i / total_possible_segments) for i in range(total_possible_segments)]
 
         # Determine the number of segments to plot using equal spacing
         if total_possible_segments > maxSegments:
@@ -453,14 +458,14 @@ class realWordJitterGen:
         if plotSincSensForLength!=None:
             #create shadow axis to optain second legend
             axSincSens=axs.twinx()
-            labelPrefixDict={'EN':'Sine approx. sensitivity ','DE':'Sinus Approximation Sensitivität '}
+            labelPrefixDict={'EN':'Sine approx. sensitivity ','DE':'Sinus-Approximation, Sensitivität, '}
             if isinstance(plotSincSensForLength, list):
                 sincFreqs=np.linspace(-signalFreq*0.5,signalFreq*0.5,num=100000,endpoint=True)
                 for length in plotSincSensForLength:
                     WindowAmps = abs(np.sinc(sincFreqs * length))
                     if unit == 'dBc':
                         WindowAmps=10 * np.log10(WindowAmps)
-                    line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',color=axs._get_lines.get_next_color())
+                    line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+'{:g}'.format(length)+' s}',color=axs._get_lines.get_next_color())
                     line[0].set_zorder(-1)
             if isinstance(plotSincSensForLength, dict):
                 if 'poles' in plotSincSensForLength.keys():
@@ -472,7 +477,7 @@ class realWordJitterGen:
                         WindowAmps = abs(np.sinc(sincFreqs * length))
                         if unit == 'dBc':
                             WindowAmps=10 * np.log10(WindowAmps)
-                        line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5,color=axs._get_lines.get_next_color())
+                        line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+'{:g}'.format(length)+' s}',lw=lw*0.5,color=axs._get_lines.get_next_color())
                         line[0].set_zorder(-1)
                 else:
                     sincFreqs=np.linspace(-plotSincSensForLength['maxFreq'],plotSincSensForLength['maxFreq'],num=100000,endpoint=True)
@@ -480,7 +485,7 @@ class realWordJitterGen:
                         WindowAmps = abs(np.sinc(sincFreqs * length))
                         if unit == 'dBc':
                             WindowAmps=10 * np.log10(WindowAmps)
-                        line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+str(length)+' s}',lw=lw*0.5,color=axs._get_lines.get_next_color())
+                        line=axSincSens.plot(sincFreqs,WindowAmps,ls='--',label=r'\textbf{'+labelPrefixDict[LANG]+'{:g}'.format(length)+' s}',lw=lw*0.5,color=axs._get_lines.get_next_color())
                         line[0].set_zorder(-1)
             axSincSens.set_ylim(axs.get_ylim()) #scale axis like the original
             axSincSens.get_yaxis().set_visible(False)# deactivate gost axis visibility
@@ -507,7 +512,7 @@ class realWordJitterGen:
                 if LANG == 'EN':
                     axs.set_xlabel(r'\textbf{Offset~frequency to '+str(signalFreq)+' Hz Signal in Hz}')
                 if LANG == 'DE':
-                    axs.set_xlabel(r'\textbf{Frequenzdifferenz zu einem ' + locale.format_string('%g',signalFreq) + ' Hz Signal in Hz}')
+                    axs.set_xlabel(r'\textbf{Frequenzdifferenz zu einem ' + locale.format_string('%g',signalFreq) + '-Hz-Signal in Hz}')
             else:
                 if LANG== 'EN':
                     axs.set_xlabel(r'$\frac{{\text{\textbf{Offset~frequency}}}}{\text{\textbf{Signal~frequency}}}$ \textbf{in} $\frac{\text{\textbf{Hz}}}{\text{\textbf{Hz}}}$')
@@ -936,14 +941,14 @@ if __name__ == "__main__":
     dataFileLSM6DSRX6667Hz = h5py.File(os.path.join(pathPrefix,'ST_sensor_test_6667Hz_2.hfd5'), 'r')
     dataFileADXL355 = h5py.File(os.path.join(pathPrefix, 'ADXL355_4kHz.hfd5'), 'r')
 
-    """
+
     jitterGen1 = realWordJitterGen(dataFileINTREF, '0x39f50100_STM32_GPIO_Input',r"\textbf{DAU interner Oszillator}")  # nominalfreq=1000)
     jitterGensForSimulations.append(jitterGen1)
-    """
-    jitterGenMPU9250 = realWordJitterGen(dataFileMPU9250, '0x1fe40000_MPU_9250',r"\textbf{MEMS with PLL-Oszillator $f_\text{sNom}$ = 1~kHz}")  # $f_s=$ \textbf{1001.0388019191 Hz}")
+
+    jitterGenMPU9250 = realWordJitterGen(dataFileMPU9250, '0x1fe40000_MPU_9250',r"\textbf{MPU9250, $f_\text{sNom}$ = 1~kHz}")  # $f_s=$ \textbf{1001.0388019191 Hz}")
     jitterGensForSimulations.append(jitterGenMPU9250)
 
-    jitterGenBMA280 = realWordJitterGen(dataFileBMA280, '0x1fe40000_BMA_280',r"\textbf{MEMS with RC-Oszillator $f_\text{sNom}$ = 2~kHz}", offset=[int(1.7e6),2048])  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGenBMA280 = realWordJitterGen(dataFileBMA280, '0x1fe40000_BMA_280',r"\textbf{BMA280, $f_\text{sNom}$ = 2~kHz}", offset=[int(1.7e6),2048])  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
     jitterGensForSimulations.append(jitterGenBMA280)
 
     """
@@ -955,8 +960,7 @@ if __name__ == "__main__":
 
     jitterGen4 = realWordJitterGen(dataFileEXTREF, '0x60ad0100_STM32_GPIO_Input',r"\textbf{Board 2 ext. clock}")#nominalfreq=1000)
     jitterGensForSimulations.append(jitterGen4)
-    """
-    """
+    
     jitterGenLSM6DSRX = realWordJitterGen(dataFileLSM6DSRX, '0x60ad0000_LSM6DSRX', r"\textbf{LSM6DSRX $f_s$=1.667~kHz}")
     jitterGensForSimulations.append(jitterGenLSM6DSRX)
 
@@ -965,22 +969,46 @@ if __name__ == "__main__":
 
     jitterGenLSM6DSRXLongTerm = realWordJitterGen(dataFileLSM6DSRXlongTerm, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX long observation time}")
     jitterGensForSimulations.append(jitterGenLSM6DSRXLongTerm)
-    
-    jitterGenLSM6DSRX6667Hz = realWordJitterGen(dataFileLSM6DSRX6667Hz, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX $f_\text{sNom}$ = 6,667~kHz}")
+    """
+    jitterGenLSM6DSRX6667Hz = realWordJitterGen(dataFileLSM6DSRX6667Hz, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX, $f_\text{sNom}$ = 6,667~kHz}")
     jitterGensForSimulations.append(jitterGenLSM6DSRX6667Hz)
 
-    jitterGenLSMDSRX_09 = realWordJitterGen(dataFileLSM6DSRX1667Hz_9, '0x60ad0000_LSM6DSRX',r"\textbf{LSMDSRX $f_\text{sNom}$ = 1,667~kHz}")  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGenLSMDSRX_09 = realWordJitterGen(dataFileLSM6DSRX1667Hz_9, '0x60ad0000_LSM6DSRX',r"\textbf{LSM6DSRX, $f_\text{sNom}$ = 1,667~kHz}")  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
     jitterGensForSimulations.append(jitterGenLSMDSRX_09)
     
-    jitterGenADXL355 = realWordJitterGen(dataFileADXL355, '0x0_ADXL_355',r"\textbf{ADXL 355 $f_\text{sNom}$ = 4~kHz}")  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
+    jitterGenADXL355 = realWordJitterGen(dataFileADXL355, '0x0_ADXL_355',r"\textbf{ADXL355, $f_\text{sNom}$ = 4~kHz}")  # $f_s=$ \textbf{2064.9499858147 Hz} ",)#offset=[100000,1560000+13440562+20])
     jitterGensForSimulations.append(jitterGenADXL355)
-    """
-    jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=1,color=tubscolors[1],maxSegments=1,yLims=[-40,40])
-    jitterGenBMA280.plotDeviation( lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True,unit=r'\textmu s', plotInSamplesAxis=True, alpha=1,color=tubscolors[2],maxSegments=1,yLims=[-2500,2500])
-    jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=1,color=tubscolors[1],maxSegments=10,yLims=[-40,40])
-    jitterGenBMA280.plotDeviation( lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True,unit=r'\textmu s', plotInSamplesAxis=True, alpha=1,color=tubscolors[2],maxSegments=10,yLims=[-2500,2500])
-    jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=0.33,color=tubscolors[1],yLims=[-40,40])
-    jitterGenBMA280.plotDeviation( lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True,unit=r'\textmu s', plotInSamplesAxis=True, alpha=0.2,color=tubscolors[2],yLims=[-2500,2500])
+
+    jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=1,maxSegments=1,yLims=[-40,40])
+    jitterGenBMA280.plotDeviation( lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True,unit=r'\textmu s', plotInSamplesAxis=True, alpha=1,maxSegments=1,yLims=[-2500,2500])
+    jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=1,maxSegments=10,yLims=[-40,40])
+    jitterGenBMA280.plotDeviation( lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True,unit=r'\textmu s', plotInSamplesAxis=True, alpha=1,maxSegments=10,yLims=[-2500,2500])
+    jitterGenMPU9250.plotDeviation(lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True, unit=r'\textmu s',plotInSamplesAxis=True,alpha=0.33,yLims=[-40,40])
+    jitterGenBMA280.plotDeviation( lengthInS=30.0, show=False, correctLinFreqDrift=True, save=True,unit=r'\textmu s', plotInSamplesAxis=True, alpha=0.2,yLims=[-2500,2500])
+
+    # Define a list of argument dictionaries for the different parameter sets
+    plot_params = [
+        {'lengthInS': 1000, 'lw': 2, 'maxSegments': 1, 'color': tubscolors[0], 'unit': 'ms'},
+        {'lengthInS': 10, 'lw': 2, 'maxSegments': 1, 'color': tubscolors[0], 'unit': r'\textmu s'},
+        {'lengthInS': 10, 'lw': 2, 'maxSegments': 1, 'color': tubscolors[0], 'unit': r'\textmu s','yLims' : [-0.75,0.75]}
+    ]
+
+    # Iterate over the list of plot parameters
+    for params in plot_params:
+        # Create a new figure and axes for each parameter set
+        figDviation, axDeviation = jitterGensForSimulations[0].plotDeviation(**params)
+
+        # Iterate over the remaining jitter generators
+        for i, jitterGen in enumerate(jitterGensForSimulations[1:], start=1):
+            # Adjust color for each plot
+            params['color'] = tubscolors[i % len(tubscolors)]
+            # Special handling for the last jitter generator (save and show the plot)
+            if jitterGen == jitterGensForSimulations[-1]:
+                jitterGen.plotDeviation(fig=figDviation, axs=axDeviation, save=True, show=True, **params)
+            else:
+                # Plot the deviation with the current parameter set
+                jitterGen.plotDeviation(fig=figDviation, axs=axDeviation, **params)
+
 
     measurmentFIle=dataFileMPU9250
     leadSensorname = '0x1fe40000_MPU_9250'
@@ -991,25 +1019,8 @@ if __name__ == "__main__":
     #    return snrParams
     #snrParams=process_map(processfitCOmparison, np.array(np.arange(20)), max_workers=3)
 
-
-    
     WORKER_NUMBER = 12
 
-    """
-    timeDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,10000:20000].astype(np.int64)
-    ticksDiffDF1=dataFile1['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,9990-14:20000-24].astype(np.int64)-dataFile1['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,10000:20000].astype(np.int64)
-    ticksDiffDF1=ticksDiffDF1-ticksDiffDF1[0]
-    dataFile2 = h5py.File('/home/benedikt/repos/datareceiver/intRev_multi_GPS_1KHz_Edges.hfd5','r')
-    timeDiffDF2=dataFile2['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,10000:20000].astype(np.int64)-dataFile2['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,11999:21999].astype(np.int64)
-    ticksDiffDF2 = dataFile2['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,10000:20000].astype(np.int64)-dataFile2['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,0,11999:21999].astype(np.int64)
-    ticksDiffDF2=ticksDiffDF2-np.mean(ticksDiffDF2)
-    dataFile3 = h5py.File('/home/benedikt/repos/datareceiver/datalossTest.hfd5','r')
-    timeDiffDF3=dataFile3['RAWDATA/0x39f50100_STM32_GPIO_Input/Absolutetime'][0,10013:20013].astype(np.int64)-dataFile3['RAWDATA/0x60ad0100_STM32_GPIO_Input/Absolutetime'][0,12020:22020].astype(np.int64)
-    ticksDiffDF3=dataFile3['RAWDATA/0x39f50100_STM32_GPIO_Input/Time_Ticks'][0,10013:20013].astype(np.int64)-dataFile3['RAWDATA/0x60ad0100_STM32_GPIO_Input/Time_Ticks'][0,12020:22020].astype(np.int64)
-    ticksDiffDF2=ticksDiffDF2-np.mean(ticksDiffDF3)
-    """
-
-    #jitterGensForSimulations[0].plotAllanDev()
     show=True
     def plot_graphs(jitterGensForSimulations, plots_params):
         for params in plots_params:
@@ -1039,6 +1050,13 @@ if __name__ == "__main__":
             del(fig)
             del(axs)
 
+    #
+    for actualjiterGen in jitterGensForSimulations:
+        tmp=copy.copy(actualjiterGen.title)
+        splitted=tmp.split(r', $f')[0].strip()
+        if not tmp==splitted:
+            if 'LSM6DSRX' not in splitted:
+                actualjiterGen.title=splitted+'}'
 
     phaseNoiseLW = 2.0
     plots_params = [
@@ -1046,7 +1064,7 @@ if __name__ == "__main__":
             'type': 'deviation',
             'unit': r'\textmu s',
             'lengthInS': 10.0,
-            'plotInSamples': True,
+            'plotInSamples': False,
             'maxSegments':1
         },
         #{
@@ -1059,7 +1077,7 @@ if __name__ == "__main__":
             'type': 'deviation',
             'unit': 'ms',
             'lengthInS': 1000.0,
-            'plotInSamples': True,
+            'plotInSamples': False,
             'maxSegments': 1
         },
         {
@@ -1067,7 +1085,7 @@ if __name__ == "__main__":
             'unit': 'ms',
             'lengthInS': 100.0,
             'correctLinFreqDrift': False,
-            'plotInSamples': True,
+            'plotInSamples': False,
             'maxSegments': 1
         },
         {
@@ -1075,7 +1093,7 @@ if __name__ == "__main__":
             'unit': 'ms',
             'lengthInS': 10.0,
             'correctLinFreqDrift': False,
-            'plotInSamples': True,
+            'plotInSamples': False,
             'maxSegments': 1
         },
         {
@@ -1189,12 +1207,6 @@ if __name__ == "__main__":
             'plotInSamples': True,
             'maxSegments': 1
         },
-        #{
-        #    'type': 'deviation',
-        #    'unit': 'ms',
-        #    'lengthInS': 10.0,
-        #    'maxSegments': 10000
-       #},
         {
             'type': 'deviation',
             'unit': r'\textmu s',
@@ -1207,7 +1219,7 @@ if __name__ == "__main__":
             'type': 'deviation',
             'unit': 'ms',
             'lengthInS': 10.0,
-            'plotInSamples': True,
+            'plotInSamples': False,
             'maxSegments': 1,
             'yLims':[-1.0,2.0]
         },
@@ -1247,39 +1259,11 @@ if __name__ == "__main__":
             'lw': phaseNoiseLW
         }
     ]
-    #plot_graphs(jitterGensForSimulations, plots_params_diss)
+    plot_graphs(jitterGensForSimulations, plots_params_diss)
+    print("Debug")
+    #    def plotDeviation(self, fig=None, axs=None, lengthInS=None, show=False, lw=PLTSCALFACTOR, correctLinFreqDrift=True,plotInSamples=False, save=False, unit='ns', yLims=None, plotInSamplesAxis=False, alpha=1,color=None, maxSegments=1e4):
 
-    """
-    jitterGen1.plotDeviation(fig=figDviation,ax=axDeviation,length=150000,lw=1)
-    
-    shorterDsetLength=150000#np.min([jitterGen1.dataPoints,jitterGen2.dataPoints])-1024
 
-    axDeviation.plot(jitterGen1.expectedTime[:shorterDsetLength], (
-                jitterGen1.AbsoluteTime[:shorterDsetLength].astype(np.int64) - jitterGen2.AbsoluteTime[
-                                                                               :shorterDsetLength].astype(np.int64)),
-                     label="Time difference multi GNSS int. clock",lw=1)
-    axDeviation.plot(jitterGen3.expectedTime[:shorterDsetLength], (
-                jitterGen3.AbsoluteTime[:shorterDsetLength].astype(np.int64) - jitterGen4.AbsoluteTime[
-                                                                               :shorterDsetLength].astype(np.int64)),
-                     label="Time difference single GNSS ext. clock",lw=2.5)
-    jitterGen3.plotDeviation(fig=figDviation,ax=axDeviation,length=150000,lw=2.5)
-    jitterGen4.plotDeviation(fig=figDviation, ax=axDeviation,length=150000,show=True,lw=2.5)
-    
-    jitterGenMPU9250.plotDeviation(fig=figDviation, axs=axDeviation,lengthInS=deviationPlotlength)
-    jitterGenBMA280.plotDeviation(fig=figDviation, axs=axDeviation,lengthInS=deviationPlotlength, show=True)
-    #jitterGenLSM6DSRX.plotDeviation(fig=figDviation, axs=axDeviation,lengthInS=deviationPlotlength, show=True)
-    jitterGenLSM6DSRX6667Hz.plotDeviation(fig=figDviation, axs=axDeviation,lengthInS=deviationPlotlength, show=True)
-    """
-    """
-    figPhaseNoise,axPhaseNoise=jitterGen1.plotPhaseNoise(plotRaw=False)
-    #jitterGen4.plotPhaseNoise(fig=figPhaseNoise,ax=axPhaseNoise,plotRaw=False)
-    jitterGenMPU9250.plotPhaseNoise(fig=figPhaseNoise,axs=axPhaseNoise,plotRaw=False)
-    jitterGenBMA280.plotPhaseNoise(fig=figPhaseNoise, axs=axPhaseNoise, plotRaw=False)
-    jitterGenLSMDSRX_09.plotPhaseNoise(fig=figPhaseNoise, axs=axPhaseNoise, plotRaw=False)
-    jitterGenLSM6DSRX6667Hz.plotPhaseNoise(fig=figPhaseNoise, axs=axPhaseNoise, plotRaw=False)
-    jitterGenADXL355.plotPhaseNoise(fig=figPhaseNoise, axs=axPhaseNoise, plotRaw=False)
-    """
-    """
     freqPoints=500
     ampPoints=0
     SimuPoints =     ampPoints+len(jitterGensForSimulations)
@@ -1330,7 +1314,7 @@ if __name__ == "__main__":
             if plotErrors:
                 dataPlot=ax.plot(tmpFreqs,
                        AMPS,
-                       label=r"\textbf{Median }"+label,lw=PLTSCALFACTOR*2,color=tubscolors[i])
+                       label=r"\textbf{Median, }"+label,lw=PLTSCALFACTOR*2,color=tubscolors[i])
 
                 errorPlot2 = ax.fill_between(tmpFreqs,
                                    AMPSErrorBottom,
@@ -1495,7 +1479,7 @@ if __name__ == "__main__":
         noiseLevel[i * freqPoints:(i + 1) * freqPoints] = tmpNoiseLevel
         length[i * freqPoints:(i + 1) * freqPoints]=StartLength/((i+1)*(i+1))
     testparams=np.array([freqs,noiseLevel,length]).transpose()
-    results=process_map(getmuAndSTdForFreq, testparams, max_workers=WORKER_NUMBER)
+    results=process_map(getmuAndSTdForFreq, testparams, max_workers=WORKER_NUMBER,chunksize=10)
     results=np.array(results)
 
 
@@ -1540,8 +1524,8 @@ if __name__ == "__main__":
     ax[1].grid(True)
     fig3.tight_layout()
     fig3.show()
-    """
 
+    """
     sineESs=[]
     SNRS=[]
     for i in [11]:
@@ -1549,5 +1533,5 @@ if __name__ == "__main__":
         sineESs[-1].plotFFTandSineFit()
         SNRS.append(sineESs[-1].getSNR())
     print("Debug")
-
+    """
     print("Hello")
