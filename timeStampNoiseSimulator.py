@@ -9,6 +9,8 @@ import matplotlib.animation as animation
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator,LogLocator
 from brokenaxes import brokenaxes
 import sinetools.SineTools as st
+import scipy.stats
+from scipy.stats import vonmises
 from multiprocessing import Pool
 from contextlib import closing
 import multiprocessing as mp
@@ -28,6 +30,7 @@ import h5py as h5py
 import functools
 #import allantools
 import sineTools2 as st2
+import hashlib
 #____________________ GLobal config begin_____________
 # jitterGensForSimulations=manager.list()
 jitterGensForSimulations = []
@@ -835,6 +838,10 @@ class SineExcitationExperiment:
             'startStopFreqs': None
         }
 
+        # Disk cache settings
+        self.cache_dir = os.path.join(os.getcwd(), 'multisine_cache')
+        os.makedirs(self.cache_dir, exist_ok=True)
+
         self.generateFFT()
         self.interPolationFactors = interpolationFactors
         self.interpolations = interpolations
@@ -908,9 +915,258 @@ class SineExcitationExperiment:
         self._interpolated_fft_computed = True
         print("Interpolated FFT computed and cached")
 
-    def generateMultiSineFit(self, numLinesAround=100, numOverTones=5, force_recompute=False):
+    def _generate_multisine_cache_key(self, numLinesAround, numOverTones):
         """
-        Generate multi-sine fit with caching support
+        Generate a unique cache key for multi-sine fit parameters
+
+        Parameters:
+        -----------
+        numLinesAround : int
+            Number of frequency lines around each harmonic
+        numOverTones : int
+            Number of harmonic overtones to analyze
+
+        Returns:
+        --------
+        str : Unique cache key for this configuration
+        """
+        # Create a hash based on critical parameters that affect the calculation
+        # Convert numpy types to native Python types for JSON serialization
+        cache_data = {
+            'experimentIDX': int(self.experimentIDX),
+            'actualFreq': float(self.actualFreq),
+            'fs': float(self.fs),
+            'data_shape': [int(x) for x in self.data.shape],
+            'numLinesAround': int(numLinesAround),
+            'numOverTones': int(numOverTones),
+            'reltime_hash': hashlib.md5(self.reltime.tobytes()).hexdigest()[:8],
+            'data_hash': hashlib.md5(self.data.tobytes()).hexdigest()[:8]
+        }
+
+        # Create unique string and hash it
+        cache_string = json.dumps(cache_data, sort_keys=True)
+        cache_hash = hashlib.md5(cache_string.encode()).hexdigest()
+
+        return f"multisine_exp{int(self.experimentIDX):05d}_{cache_hash}.npz"
+
+    def _save_multisine_to_disk(self, cache_key, multiSineParamsABC, multiSineFitresults,
+                                multisineFitFreqs, numOverTones, numLinesAround, startStopFreqs):
+        """
+        Save multi-sine fit results to disk
+
+        Parameters:
+        -----------
+        cache_key : str
+            Unique identifier for this cache file
+        multiSineParamsABC : list
+            ABC parameters from multi_threeparsinefit
+        multiSineFitresults : np.array
+            Complex results from multi_complex
+        multisineFitFreqs : np.array
+            Frequency array for multi-sine fit
+        numOverTones : int
+            Number of overtones used
+        numLinesAround : int
+            Number of lines around each harmonic
+        startStopFreqs : list
+            Start and stop frequencies for each band
+        """
+        try:
+            cache_filepath = os.path.join(self.cache_dir, cache_key)
+
+            # Prepare data for saving
+            save_data = {
+                'multiSineFitresults': multiSineFitresults,
+                'multisineFitFreqs': multisineFitFreqs,
+                'numOverTones': int(numOverTones),
+                'numLinesAround': int(numLinesAround),
+                'startStopFreqs': np.array(startStopFreqs, dtype=object),
+                'actualFreq': float(self.actualFreq),
+                'fs': float(self.fs),
+                'experimentIDX': int(self.experimentIDX),
+                'cache_version': '1.0'
+            }
+
+            # Save ABC parameters separately (they might contain different data types)
+            for i, abc in enumerate(multiSineParamsABC):
+                save_data[f'multiSineParamsABC_{i}'] = np.array(abc, dtype=object)
+            save_data['num_axes'] = len(multiSineParamsABC)
+
+            # Save with compression
+            np.savez_compressed(cache_filepath, **save_data)
+            print(f"Multi-sine results saved to: {cache_key}")
+
+        except Exception as e:
+            print(f"Warning: Could not save multi-sine cache to disk: {e}")
+
+    def _load_multisine_from_disk(self, cache_key):
+        """
+        Load multi-sine fit results from disk
+
+        Parameters:
+        -----------
+        cache_key : str
+            Unique identifier for this cache file
+
+        Returns:
+        --------
+        dict or None : Loaded data dictionary or None if loading failed
+        """
+        try:
+            cache_filepath = os.path.join(self.cache_dir, cache_key)
+
+            if not os.path.exists(cache_filepath):
+                return None
+
+            # Load the data
+            loaded = np.load(cache_filepath, allow_pickle=True)
+
+            # Reconstruct ABC parameters
+            num_axes = int(loaded['num_axes'])
+            multiSineParamsABC = []
+            for i in range(num_axes):
+                abc_key = f'multiSineParamsABC_{i}'
+                if abc_key in loaded:
+                    multiSineParamsABC.append(loaded[abc_key].tolist())
+
+            result = {
+                'multiSineParamsABC': multiSineParamsABC,
+                'multiSineFitresults': loaded['multiSineFitresults'],
+                'multisineFitFreqs': loaded['multisineFitFreqs'],
+                'numOverTones': int(loaded['numOverTones']),
+                'numLinesAround': int(loaded['numLinesAround']),
+                'startStopFreqs': loaded['startStopFreqs'].tolist(),
+                'actualFreq': float(loaded['actualFreq']),
+                'fs': float(loaded['fs']),
+                'experimentIDX': int(loaded['experimentIDX'])
+            }
+
+            print(f"Multi-sine results loaded from: {cache_key}")
+            return result
+
+        except Exception as e:
+            print(f"Warning: Could not load multi-sine cache from disk: {e}")
+            return None
+
+    def _check_disk_cache_validity(self, loaded_data):
+        """
+        Check if loaded cache data is still valid for current experiment
+
+        Parameters:
+        -----------
+        loaded_data : dict
+            Data loaded from disk cache
+
+        Returns:
+        --------
+        bool : True if cache is valid, False otherwise
+        """
+        try:
+            # Check critical parameters match with detailed logging
+            exp_id_match = loaded_data['experimentIDX'] == self.experimentIDX
+            freq_match = abs(loaded_data['actualFreq'] - self.actualFreq) < 1e-6  # More lenient tolerance
+            fs_match = abs(loaded_data['fs'] - self.fs) < 1e-6  # More lenient tolerance
+
+            # Debug output
+            if not exp_id_match:
+                print(
+                    f"Cache invalid: Experiment ID mismatch. Cached: {loaded_data['experimentIDX']}, Current: {self.experimentIDX}")
+            if not freq_match:
+                print(
+                    f"Cache invalid: Frequency mismatch. Cached: {loaded_data['actualFreq']}, Current: {self.actualFreq}, Diff: {abs(loaded_data['actualFreq'] - self.actualFreq)}")
+            if not fs_match:
+                print(
+                    f"Cache invalid: Sampling rate mismatch. Cached: {loaded_data['fs']}, Current: {self.fs}, Diff: {abs(loaded_data['fs'] - self.fs)}")
+
+            checks = [exp_id_match, freq_match, fs_match]
+            is_valid = all(checks)
+
+            if is_valid:
+                print("Disk cache validation passed - all parameters match")
+
+            return is_valid
+
+        except (KeyError, TypeError) as e:
+            print(f"Cache invalid: Missing key or type error: {e}")
+            return False
+
+    def _calculate_vonmises_phase_stats(self, phase_data, window_size=5):
+        """
+        Calculate Von-Mises distribution parameters for phase data using sliding window
+
+        Parameters:
+        -----------
+        phase_data : array
+            1D array of phase values in radians
+        window_size : int
+            Size of sliding window (default: 6)
+
+        Returns:
+        --------
+        dict : Dictionary containing unwrapped mean phases, kappa values, and sigma equivalents
+        """
+        n_points = len(phase_data)
+        mean_phases = np.zeros(n_points)
+        kappa_values = np.zeros(n_points)
+        sigma_equivalents = np.zeros(n_points)
+
+        # Calculate Von-Mises parameters for the first window (will be used for edge handling)
+        first_window_phases = phase_data[:window_size]
+        first_kappa, first_loc, first_scale = vonmises.fit(first_window_phases, fscale=1)
+        first_mean = first_loc
+        first_sigma_eq = np.sqrt(1.0 / first_kappa) if first_kappa > 0 else 1.0
+
+        # Fill first 6 values with the same parameters (filter not settled)
+        for i in range(min(window_size, n_points)):
+            mean_phases[i] = first_mean
+            kappa_values[i] = first_kappa
+            sigma_equivalents[i] = first_sigma_eq
+
+        # Sliding window calculation for remaining points
+        for i in range(window_size, n_points):
+            # Extract window around current point
+            start_idx = max(0, i - window_size + 1)
+            end_idx = min(n_points, i + 1)
+            window_phases = phase_data[start_idx:end_idx]
+
+            try:
+                # Fit Von-Mises distribution to window
+                kappa, loc, scale = vonmises.fit(window_phases, fscale=1)
+                mean_phase = loc
+
+                # Convert kappa to sigma equivalent: σ² = 1/κ
+                sigma_eq = np.sqrt(1.0 / kappa) if kappa > 0 else 1.0
+
+                mean_phases[i] = mean_phase
+                kappa_values[i] = kappa
+                sigma_equivalents[i] = sigma_eq
+
+            except (ValueError, RuntimeError, np.linalg.LinAlgError):
+                # Fallback to previous values if fitting fails
+                if i > 0:
+                    mean_phases[i] = mean_phases[i - 1]
+                    kappa_values[i] = kappa_values[i - 1]
+                    sigma_equivalents[i] = sigma_equivalents[i - 1]
+                else:
+                    mean_phases[i] = np.mean(window_phases)
+                    kappa_values[i] = 1.0
+                    sigma_equivalents[i] = 1.0
+
+        # Unwrap phases and apply modulo to keep in [-π, π]
+        unwrapped_mean = np.unwrap(mean_phases)
+        unwrapped_mean = np.mod(unwrapped_mean + np.pi, 2 * np.pi) - np.pi
+
+        return {
+            'mean_phases': unwrapped_mean,
+            'kappa_values': kappa_values,
+            'sigma_equivalents': sigma_equivalents,
+            'upper_bound': unwrapped_mean + sigma_equivalents,
+            'lower_bound': unwrapped_mean - sigma_equivalents
+        }
+
+    def generateMultiSineFit(self, numLinesAround=100, numOverTones=5, force_recompute=False, use_disk_cache=True):
+        """
+        Generate multi-sine fit with memory and disk caching support
 
         Parameters:
         -----------
@@ -920,13 +1176,18 @@ class SineExcitationExperiment:
             Number of harmonic overtones to analyze
         force_recompute : bool
             If True, force recomputation even if cached results exist
+        use_disk_cache : bool
+            If True, try to load/save results from/to disk
         """
-        # Check if we can use cached results
+        # Generate cache key for disk storage
+        cache_key = self._generate_multisine_cache_key(numLinesAround, numOverTones)
+
+        # Check memory cache first
         if (self._multisine_cache['computed'] and
                 not force_recompute and
                 self._multisine_cache['numLinesAround'] == numLinesAround and
                 self._multisine_cache['numOverTones'] == numOverTones):
-            print("Multi-sine fit already computed with same parameters, using cached results")
+            print("Multi-sine fit already computed with same parameters, using memory cache")
             # Restore cached results to instance variables
             self.multiSineFitresults = self._multisine_cache['multiSineFitresults']
             self.multisineFitFreqs = self._multisine_cache['multisineFitFreqs']
@@ -934,6 +1195,33 @@ class SineExcitationExperiment:
             self.numLinesAround = self._multisine_cache['numLinesAround']
             self.startStopFreqs = self._multisine_cache['startStopFreqs']
             return
+
+        # Try to load from disk cache
+        if use_disk_cache and not force_recompute:
+            loaded_data = self._load_multisine_from_disk(cache_key)
+            if loaded_data is not None and self._check_disk_cache_validity(loaded_data):
+                print("Multi-sine fit loaded from disk cache")
+
+                # Restore from disk cache to instance variables
+                self.multiSineFitresults = loaded_data['multiSineFitresults']
+                self.multisineFitFreqs = loaded_data['multisineFitFreqs']
+                self.numOverTones = loaded_data['numOverTones']
+                self.numLinesAround = loaded_data['numLinesAround']
+                self.startStopFreqs = loaded_data['startStopFreqs']
+
+                # Also update memory cache
+                self._multisine_cache.update({
+                    'computed': True,
+                    'multiSineParamsABC': loaded_data['multiSineParamsABC'],
+                    'multiSineFitresults': self.multiSineFitresults.copy(),
+                    'multisineFitFreqs': self.multisineFitFreqs.copy(),
+                    'numOverTones': self.numOverTones,
+                    'numLinesAround': self.numLinesAround,
+                    'startStopFreqs': self.startStopFreqs.copy()
+                })
+                return
+            elif loaded_data is not None:
+                print("Disk cache found but invalid, recomputing...")
 
         print("Computing multi-sine fit (expensive matrix inversion)...")
 
@@ -1012,10 +1300,16 @@ class SineExcitationExperiment:
 
         self.multiSineFitresults = np.array(multiSineParams)
 
-        # Cache the results
+        # Save to disk cache
+        if use_disk_cache:
+            self._save_multisine_to_disk(cache_key, multiSineParamsABC, self.multiSineFitresults,
+                                         self.multisineFitFreqs, self.numOverTones,
+                                         self.numLinesAround, self.startStopFreqs)
+
+        # Update memory cache
         self._multisine_cache.update({
             'computed': True,
-            'multiSineParamsABC': multiSineParamsABC.copy(),
+            'multiSineParamsABC': [abc.copy() if hasattr(abc, 'copy') else abc for abc in multiSineParamsABC],
             'multiSineFitresults': self.multiSineFitresults.copy(),
             'multisineFitFreqs': self.multisineFitFreqs.copy(),
             'numOverTones': self.numOverTones,
@@ -1023,7 +1317,7 @@ class SineExcitationExperiment:
             'startStopFreqs': self.startStopFreqs.copy()
         })
 
-        print("Multi-sine fit computed and cached successfully")
+        print("Multi-sine fit computed and cached successfully (memory + disk)")
 
     def getMultiSineFitResults(self, numLinesAround=None, numOverTones=None):
         """
@@ -1059,8 +1353,15 @@ class SineExcitationExperiment:
             'fs': self.fs
         }
 
-    def clearMultiSineCache(self):
-        """Clear the multi-sine fit cache to force recomputation"""
+    def clearMultiSineCache(self, clear_disk_cache=False):
+        """
+        Clear the multi-sine fit cache to force recomputation
+
+        Parameters:
+        -----------
+        clear_disk_cache : bool
+            If True, also remove disk cache files for this experiment
+        """
         self._multisine_cache = {
             'computed': False,
             'multiSineParamsABC': None,
@@ -1070,6 +1371,19 @@ class SineExcitationExperiment:
             'numLinesAround': None,
             'startStopFreqs': None
         }
+
+        if clear_disk_cache:
+            try:
+                # Remove all cache files for this experiment
+                cache_pattern = f"multisine_exp{self.experimentIDX}_"
+                for filename in os.listdir(self.cache_dir):
+                    if filename.startswith(cache_pattern):
+                        cache_filepath = os.path.join(self.cache_dir, filename)
+                        os.remove(cache_filepath)
+                        print(f"Removed disk cache: {filename}")
+            except Exception as e:
+                print(f"Warning: Could not clear disk cache: {e}")
+
         print("Multi-sine cache cleared")
 
     def getCacheStatus(self):
@@ -1084,7 +1398,43 @@ class SineExcitationExperiment:
             } if self._multisine_cache['computed'] else None
         }
 
-    # Rest of the methods remain the same but can now benefit from cached multi-sine results
+    def get_cache_info(self):
+        """
+        Get information about cache usage and disk storage
+
+        Returns:
+        --------
+        dict : Cache information including disk usage
+        """
+        memory_status = self.getCacheStatus()
+
+        # Check disk cache
+        disk_cache_files = []
+        disk_cache_size = 0
+        try:
+            cache_pattern = f"multisine_exp{self.experimentIDX}_"
+            for filename in os.listdir(self.cache_dir):
+                if filename.startswith(cache_pattern):
+                    filepath = os.path.join(self.cache_dir, filename)
+                    size = os.path.getsize(filepath)
+                    disk_cache_files.append({
+                        'filename': filename,
+                        'size_mb': size / (1024 * 1024),
+                        'modified': os.path.getmtime(filepath)
+                    })
+                    disk_cache_size += size
+        except Exception as e:
+            print(f"Warning: Could not read disk cache info: {e}")
+
+        return {
+            'memory_cache': memory_status,
+            'disk_cache': {
+                'files': disk_cache_files,
+                'total_size_mb': disk_cache_size / (1024 * 1024),
+                'cache_directory': self.cache_dir
+            }
+        }
+
     def getSNR(self, axis=2):
         """Calculate SNR using cached multi-sine results"""
         # Ensure multi-sine fit is computed
@@ -1143,6 +1493,8 @@ class SineExcitationExperiment:
             If True, plot phase; if False, plot amplitude
         """
         # Ensure multi-sine fit is computed
+        import numpy as np
+
         if not self._multisine_cache['computed']:
             self.generateMultiSineFit()
 
@@ -1199,15 +1551,46 @@ class SineExcitationExperiment:
                                label=r'\textbf{DFT wening Leckeffekt}', lw=1)
                 bax[i].plot(self.fftFreqslowLeak[1:], np.abs(self.fftLowLeak[idx, 1:]),
                             label=r'\textbf{DFT wening Leckeffekt}', lw=1, marker='o', markersize=markerSize)
-            else:  # phase plot
-                ax[i].plot(self.fftFreqs[1:], np.angle(self.fft[idx, 1:]),
-                           label=r'\textbf{DFT }', lw=1, zorder=0)
-                bax[i].plot(self.fftFreqs[1:], np.angle(self.fft[idx, 1:]),
-                            label=r'\textbf{DFT wening Leckeffekt}', lw=1, marker='o', markersize=markerSize, zorder=0)
-                ax[i].plot(self.fftFreqslowLeak[1:], np.angle(self.fftLowLeak[idx, 1:]),
-                           label=r'\textbf{DFT wening Leckeffekt}', lw=1, zorder=0)
-                bax[i].plot(self.fftFreqslowLeak[1:], np.angle(self.fftLowLeak[idx, 1:]),
-                            label=r'\textbf{DFT wening Leckeffekt}', lw=1, marker='o', markersize=markerSize, zorder=0)
+            else:  # phase plot with Von-Mises enhancement
+                # Calculate Von-Mises statistics for FFT data
+                fft_stats = self._calculate_vonmises_phase_stats(np.angle(self.fft[idx, 1:]))
+                fft_lowleak_stats = self._calculate_vonmises_phase_stats(np.angle(self.fftLowLeak[idx, 1:]))
+
+                # Plot FFT phase with uncertainty bands (color will be auto-assigned)
+                fft_line = ax[i].plot(self.fftFreqs[1:], fft_stats['mean_phases'],
+                                      label=r'\textbf{DFT}', lw=1, zorder=2)
+                fft_color = fft_line[0].get_color()
+                ax[i].fill_between(self.fftFreqs[1:], fft_stats['lower_bound'], fft_stats['upper_bound'],
+                                   alpha=0.2, color=fft_color, zorder=1)
+
+                # Plot mean as line and raw phases as scatter for broken axes (zoom regions)
+                bax[i].plot(self.fftFreqs[1:], fft_stats['mean_phases'],
+                            color=fft_color, lw=1, zorder=2)
+                # Scatter raw phase values
+                bax[i].scatter(self.fftFreqs[1:], np.angle(self.fft[idx, 1:]),
+                               color=fft_color, s=markerSize * 10, alpha=0.7, zorder=3)
+                # Add uncertainty bands to broken axes
+                bax[i].fill_between(self.fftFreqs[1:], fft_stats['lower_bound'], fft_stats['upper_bound'],
+                                    alpha=0.2, color=fft_color, zorder=1)
+
+                # Plot low leak FFT phase with uncertainty bands
+                fft_lowleak_line = ax[i].plot(self.fftFreqslowLeak[1:], fft_lowleak_stats['mean_phases'],
+                                              label=r'\textbf{DFT wening Leckeffekt}', lw=1, zorder=2)
+                fft_lowleak_color = fft_lowleak_line[0].get_color()
+                ax[i].fill_between(self.fftFreqslowLeak[1:], fft_lowleak_stats['lower_bound'],
+                                   fft_lowleak_stats['upper_bound'],
+                                   alpha=0.2, color=fft_lowleak_color, zorder=1)
+
+                # Plot mean as line and raw phases as scatter for broken axes (zoom regions)
+                bax[i].plot(self.fftFreqslowLeak[1:], fft_lowleak_stats['mean_phases'],
+                            color=fft_lowleak_color, lw=1, zorder=2)
+                # Scatter raw phase values
+                bax[i].scatter(self.fftFreqslowLeak[1:], np.angle(self.fftLowLeak[idx, 1:]),
+                               color=fft_lowleak_color, s=markerSize * 10, alpha=0.7, zorder=3)
+                # Add uncertainty bands to broken axes
+                bax[i].fill_between(self.fftFreqslowLeak[1:], fft_lowleak_stats['lower_bound'],
+                                    fft_lowleak_stats['upper_bound'],
+                                    alpha=0.2, color=fft_lowleak_color, zorder=1)
 
         minFFT = np.power(10, np.floor(np.log10(np.min(np.abs(self.fft[axisToPlot, 1:])))))
         maxFFT = np.power(10, np.ceil(np.log10(np.max(np.abs(self.fft[axisToPlot, 1:])))))
@@ -1224,27 +1607,63 @@ class SineExcitationExperiment:
                     if not phase:
                         firstPlot = ax[j].semilogy(self.multisineFitFreqs[start:stop],
                                                    abs(self.multiSineFitresults[jdx][start:stop]),
-                                                   lw=1, label=r'\textbf{Multisine-Approximation}')
+                                                   lw=1, label=r'\textbf{Multi-Sinus-Approximation}')
                     else:
+                        # Phase plot with Von-Mises enhancement for multi-sine fit
+                        multisine_stats = self._calculate_vonmises_phase_stats(
+                            np.angle(self.multiSineFitresults[jdx][start:stop]))
+
+                        # Plot mean line and get color
                         firstPlot = ax[j].plot(self.multisineFitFreqs[start:stop],
-                                               np.angle(self.multiSineFitresults[jdx][start:stop]),
-                                               lw=1, label=r'\textbf{Multisine-Approximation}', zorder=0)
+                                               multisine_stats['mean_phases'],
+                                               lw=1, label=r'\textbf{Multi-Sinus-Approximation}', zorder=2)
+                        multisine_color = firstPlot[0].get_color()
+                        # Plot uncertainty bands with matching color
+                        ax[j].fill_between(self.multisineFitFreqs[start:stop],
+                                           multisine_stats['lower_bound'], multisine_stats['upper_bound'],
+                                           alpha=0.2, color=multisine_color, zorder=1)
                 else:
                     if not phase:
                         ax[j].semilogy(self.multisineFitFreqs[start:stop],
                                        abs(self.multiSineFitresults[jdx][start:stop]),
                                        lw=1, color=firstPlot[0].get_color())
                     else:
+                        # Phase plot with Von-Mises enhancement for multi-sine fit (continuation)
+                        multisine_stats = self._calculate_vonmises_phase_stats(
+                            np.angle(self.multiSineFitresults[jdx][start:stop]))
+
+                        # Continue with same color from first plot
+                        multisine_color = firstPlot[0].get_color()
                         ax[j].plot(self.multisineFitFreqs[start:stop],
-                                   np.angle(self.multiSineFitresults[jdx][start:stop]),
-                                   lw=1, color=firstPlot[0].get_color(), zorder=0)
+                                   multisine_stats['mean_phases'],
+                                   lw=1, color=multisine_color, zorder=2)
+                        ax[j].fill_between(self.multisineFitFreqs[start:stop],
+                                           multisine_stats['lower_bound'], multisine_stats['upper_bound'],
+                                           alpha=0.2, color=multisine_color, zorder=1)
 
             if not phase:
                 bax[j].plot(self.multisineFitFreqs, abs(self.multiSineFitresults[jdx]),
                             lw=1, marker='o', markersize=markerSize)
             else:
-                bax[j].plot(self.multisineFitFreqs, np.angle(self.multiSineFitresults[jdx]),
-                            lw=1, marker='o', markersize=markerSize, zorder=0)
+                # Enhanced phase plot for broken axes with Von-Mises statistics - line for mean, scatter for raw
+                all_multisine_stats = self._calculate_vonmises_phase_stats(np.angle(self.multiSineFitresults[jdx]))
+                # Try to get the color from the top plot
+                try:
+                    # Get the color from the first multi-sine plot line
+                    multisine_color = firstPlot[0].get_color()
+                except (NameError, IndexError):
+                    multisine_color = 'C2'  # Default color if not available
+
+                # Plot mean as line
+                bax[j].plot(self.multisineFitFreqs, all_multisine_stats['mean_phases'],
+                            color=multisine_color, lw=1, zorder=2)
+                # Scatter raw phase values
+                bax[j].scatter(self.multisineFitFreqs, np.angle(self.multiSineFitresults[jdx]),
+                               color=multisine_color, s=markerSize * 10, alpha=0.7, zorder=3)
+                # Add uncertainty bands to broken axes
+                bax[j].fill_between(self.multisineFitFreqs, all_multisine_stats['lower_bound'],
+                                    all_multisine_stats['upper_bound'],
+                                    alpha=0.2, color=multisine_color, zorder=1)
 
             if plotQoutient and not phase:
                 nearestIDX = find_nearest_indices(self.fftFreqs, self.multisineFitFreqs)
@@ -1265,16 +1684,16 @@ class SineExcitationExperiment:
                             sp.ndimage.gaussian_filter1d(abs(
                                 self.interpolatedFFTLowLeak[interPolFactor][interpolMethod][idx,
                                 1:pointsToPlotLowLeak]), filterWidth),
-                            label=r'\textbf{FFT ' + str(
-                                interPolFactor) + ' times ' + interpolMethod + ' Interpolation low Leak}',
+                            label=r'\textbf{DFT ' + str(
+                                interPolFactor) + '*' + interpolMethod + ' Interpolation }',
                             alpha=0.5, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1])
 
                         lastBrokenPlot = bax[j].semilogy(
                             self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
                             np.abs(self.interpolatedFFTLowLeak[interPolFactor][interpolMethod][idx,
                                    1:pointsToPlotLowLeak]),
-                            label=r'\textbf{FFT ' + str(
-                                interPolFactor) + ' times ' + interpolMethod + ' Interpolation low Leak}',
+                            label=r'\textbf{DFT ' + str(
+                                interPolFactor) + '*' + interpolMethod + ' Interpolation }',
                             alpha=0.5, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1])
 
                         if plotHighLeak:
@@ -1284,50 +1703,88 @@ class SineExcitationExperiment:
                                 sp.ndimage.gaussian_filter1d(
                                     np.abs(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]),
                                     filterWidth),
-                                label=r'\textbf{FFT ' + str(
-                                    interPolFactor) + ' times ' + interpolMethod + ' Interpolation}',
+                                label=r'\textbf{DFT ' + str(
+                                    interPolFactor) + '*' + interpolMethod + ' Interpolation}',
                                 alpha=0.5, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1],
                                 color=lastNormalPlot[-1].get_color())
                             bax[j].semilogy(
                                 self.interpolatedFFTFreqs[interPolFactor][1:pointsToPlot],
                                 np.abs(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]),
-                                label=r'\textbf{FFT ' + str(
-                                    interPolFactor) + ' times ' + interpolMethod + ' Interpolation}',
+                                label=r'\textbf{DFT ' + str(
+                                    interPolFactor) + '*' + interpolMethod + ' Interpolation}',
                                 alpha=0.5, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1],
                                 color=lastBrokenPlot[0][-1].get_color())
-                    else:  # phase plot
-                        lastNormalPlot = ax[j].plot(
-                            self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
+                    else:  # phase plot with Von-Mises enhancement for interpolated data
+                        # Calculate Von-Mises statistics for interpolated data
+                        interp_stats = self._calculate_vonmises_phase_stats(
                             np.angle(self.interpolatedFFTLowLeak[interPolFactor][interpolMethod][idx,
-                                     1:pointsToPlotLowLeak]),
-                            label=r'\textbf{FFT ' + str(
-                                interPolFactor) + ' times ' + interpolMethod + ' Interpolation low Leak}',
-                            alpha=0.5, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1], zorder=0)
+                                     1:pointsToPlotLowLeak]))
 
-                        lastBrokenPlot = bax[j].plot(
+                        # Plot line and get color
+                        lastNormalPlot_line = ax[j].plot(
+                            self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
+                            interp_stats['mean_phases'],
+                            label=r'\textbf{DFT ' + str(interPolFactor) + '*' + interpolMethod + '}',
+                            alpha=0.7, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1], zorder=2)
+
+                        interp_color = lastNormalPlot_line[0].get_color()
+
+                        # Add uncertainty bands with matching color
+                        ax[j].fill_between(
+                            self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
+                            interp_stats['lower_bound'], interp_stats['upper_bound'],
+                            alpha=0.1, color=interp_color, zorder=1)
+
+                        # Line for mean and scatter for raw phases in broken axes (zoom regions)
+                        bax[j].plot(
+                            self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
+                            interp_stats['mean_phases'],
+                            color=interp_color, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1], zorder=2)
+                        # Scatter raw phase values
+                        bax[j].scatter(
                             self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
                             np.angle(self.interpolatedFFTLowLeak[interPolFactor][interpolMethod][idx,
                                      1:pointsToPlotLowLeak]),
-                            label=r'\textbf{FFT ' + str(
-                                interPolFactor) + ' times ' + interpolMethod + ' Interpolation low Leak}',
-                            alpha=0.5, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1], zorder=0)
+                            color=interp_color, s=markerSize * 8, alpha=0.7, zorder=3)
+                        # Add uncertainty bands to broken axes
+                        bax[j].fill_between(
+                            self.interpolatedFFTFreqsLowLeak[interPolFactor][1:pointsToPlotLowLeak],
+                            interp_stats['lower_bound'], interp_stats['upper_bound'],
+                            alpha=0.1, color=interp_color, zorder=1)
 
                         if plotHighLeak:
                             pointsToPlot = int(self.interpolatedFFTFreqs[interPolFactor].size / interPolFactor) - 1
+                            interp_highleak_stats = self._calculate_vonmises_phase_stats(
+                                np.angle(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]))
+
+                            # Plot high leak line
                             ax[j].plot(
                                 self.interpolatedFFTFreqs[interPolFactor][1:pointsToPlot],
-                                np.angle(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]),
-                                label=r'\textbf{FFT ' + str(
-                                    interPolFactor) + ' times ' + interpolMethod + ' Interpolation}',
+                                interp_highleak_stats['mean_phases'],
                                 alpha=0.5, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1],
-                                color=lastNormalPlot[-1].get_color(), zorder=0)
+                                color=interp_color, zorder=2)
+                            # Add uncertainty bands
+                            ax[j].fill_between(
+                                self.interpolatedFFTFreqs[interPolFactor][1:pointsToPlot],
+                                interp_highleak_stats['lower_bound'], interp_highleak_stats['upper_bound'],
+                                alpha=0.1, color=interp_color, zorder=1)
+
+                            # Line for mean and scatter for raw phases in broken axes
                             bax[j].plot(
                                 self.interpolatedFFTFreqs[interPolFactor][1:pointsToPlot],
-                                np.angle(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]),
-                                label=r'\textbf{FFT ' + str(
-                                    interPolFactor) + ' times ' + interpolMethod + ' Interpolation}',
+                                interp_highleak_stats['mean_phases'],
                                 alpha=0.5, lw=1, ls=lineSyles[1 + (i % len(lineSyles))][1],
-                                color=lastBrokenPlot[0][-1].get_color(), zorder=0)
+                                color=interp_color, zorder=2)
+                            # Scatter raw phase values
+                            bax[j].scatter(
+                                self.interpolatedFFTFreqs[interPolFactor][1:pointsToPlot],
+                                np.angle(self.interpolatedFFT[interPolFactor][interpolMethod][idx, 1:pointsToPlot]),
+                                color=interp_color, s=markerSize * 6, alpha=0.5, zorder=3)
+                            # Add uncertainty bands to broken axes
+                            bax[j].fill_between(
+                                self.interpolatedFFTFreqs[interPolFactor][1:pointsToPlot],
+                                interp_highleak_stats['lower_bound'], interp_highleak_stats['upper_bound'],
+                                alpha=0.1, color=interp_color, zorder=1)
 
         # Set plot limits and formatting
         for i, idx in enumerate(axisToPlot):
@@ -1346,6 +1803,13 @@ class SineExcitationExperiment:
                 for decade in decade_values:
                     if min_val <= decade <= max_val:
                         ax[i].axhline(y=decade, color='lightgray', linestyle='-', linewidth=0.8, alpha=0.7, zorder=1)
+            else:
+                # Set phase plot limits and ticks
+                import numpy as np
+                ax[i].set_ylim([-1.05 * np.pi, 1.05 * np.pi])
+                ax[i].set_yticks([-np.pi, 0, np.pi])
+                ax[i].set_yticklabels([r'$-\pi$', '0', r'$\pi$'])
+                bax[i].set_ylim([-1.05 * np.pi, 1.05 * np.pi])
 
         # Format broken axes
         for i, idx in enumerate(axisToPlot):
@@ -1361,14 +1825,26 @@ class SineExcitationExperiment:
                     for decade in decade_values:
                         if min_val <= decade <= max_val:
                             axis.axhline(y=decade, color='lightgray', linestyle='-', linewidth=0.8, alpha=0.7, zorder=1)
+                else:
+                    # Set phase plot ticks for broken axes
+                    import numpy as np
+                    axis.set_yticks([-np.pi, 0, np.pi])
+                    if j == 0:  # Only label the first broken axis
+                        axis.set_yticklabels([r'$-\pi$', '0', r'$\pi$'])
+                    else:
+                        axis.set_yticklabels([])
 
                 axis.grid(True, which="minor", axis="x", ls=":", lw=0.125 * PLTSCALFACTOR, c='grey')
                 axis.grid(True, which="major", axis="x", ls=":", lw=0.25 * PLTSCALFACTOR)
                 axis.grid(True, which="minor", axis="y", ls="--", lw=0.25 * PLTSCALFACTOR, c='grey')
                 axis.grid(True, which="major", axis="y", ls="-", lw=PLTSCALFACTOR)
-                axis.set_yticklabels([], minor=True)  # disable minor ticks for all
+
+                if not phase:
+                    axis.set_yticklabels([], minor=True)  # disable minor ticks for all
+                    if j != 0:
+                        axis.set_yticklabels([])  # disable major ticks for all but the first
+
                 if j != 0:
-                    axis.set_yticklabels([])  # disable major ticks for all but the first
                     for tick in axis.xaxis.get_minor_ticks():
                         tick.tick1line.set_visible(False)
                         tick.tick2line.set_visible(False)
@@ -1408,8 +1884,6 @@ class SineExcitationExperiment:
         fig.savefig(os.path.join(SAVEFOLDER, prefix + '_' + self.name + ".pdf"))
         fig.savefig(os.path.join(SAVEFOLDER, prefix + '_' + self.name + ".png"))
         fig.show()
-
-
 
 if __name__ == "__main__":
     if LANG=='DE':
